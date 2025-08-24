@@ -1,7 +1,8 @@
 const CACHE_NAME = 'penguinflix-cache-v1';
+// ZMIANA: Dodano kropki, aby ścieżki były relatywne
 const URLS_TO_CACHE = [
-  '/',
-  'index.html'
+  './',
+  './index.html'
 ];
 
 // Instalacja Service Workera i buforowanie zasobów
@@ -37,7 +38,7 @@ self.addEventListener('fetch', event => {
   if (event.request.url.includes('api.themoviedb.org')) {
     return;
   }
-
+  
   event.respondWith(
     caches.match(event.request)
       .then(response => {
