@@ -1,22 +1,22 @@
-const CACHE_NAME = 'penguinflix-cache-v1';
-// ZMIANA: Dodano kropki, aby ścieżki były relatywne
+const CACHE_NAME = 'penguinflix-cache-v2'; // Zmieniona nazwa, żeby wymusić aktualizację!
 const URLS_TO_CACHE = [
   './',
-  './index.html'
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
-// Instalacja Service Workera i buforowanie zasobów
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Otwarto cache');
+        console.log('Otwarto cache. Dodawanie zasobów: ', URLS_TO_CACHE);
         return cache.addAll(URLS_TO_CACHE);
       })
   );
 });
 
-// Aktywacja Service Workera i czyszczenie starych cache
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -24,6 +24,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('Usuwanie starego cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -32,9 +33,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Przechwytywanie zapytań sieciowych
 self.addEventListener('fetch', event => {
-  // Ignoruj zapytania do API, aby zawsze pobierać świeże dane
   if (event.request.url.includes('api.themoviedb.org')) {
     return;
   }
@@ -42,12 +41,7 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Jeśli zasób jest w cache, zwróć go
-        if (response) {
-          return response;
-        }
-        // W przeciwnym razie, pobierz z sieci
-        return fetch(event.request);
+        return response || fetch(event.request);
       })
   );
 });
