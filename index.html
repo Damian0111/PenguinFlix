@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>PenguinFlix - Twój Dziennik Filmowy</title>
     
-    <!-- === Ustawienia PWA === -->
-    <meta name="theme-color" content="#101114"/>
-    <!-- === NOWOŚĆ: Meta tag do wymuszania motywu przeglądarki === -->
+    <!-- === ZMIANA: Dodano ID do theme-color dla dynamicznej zmiany === -->
+    <meta name="theme-color" content="#101114" id="theme-color-meta"/>
     <meta name="color-scheme" content="dark" id="color-scheme-meta">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -327,9 +326,36 @@
     <div id="customAlertContainer"></div>
 
     <script>
-        // ...
-        // Reszta kodu JavaScript pozostaje BEZ ZMIAN
-        // ...
+        // === ZMIANA: Zaktualizowane funkcje applyTheme i toggleTheme ===
+        const applyTheme = () => {
+            const storedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+            
+            document.body.dataset.theme = theme;
+            document.getElementById('theme-toggle').innerHTML = theme === 'dark' ? ICONS.sun : ICONS.moon;
+
+            // Ustaw meta tagi
+            document.getElementById('color-scheme-meta').setAttribute('content', theme);
+            const themeColor = theme === 'dark' ? '#101114' : '#f0f2f5';
+            document.getElementById('theme-color-meta').setAttribute('content', themeColor);
+        };
+        
+        const toggleTheme = () => {
+            const currentTheme = document.body.dataset.theme;
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            document.body.dataset.theme = newTheme;
+            localStorage.setItem('theme', newTheme);
+            document.getElementById('theme-toggle').innerHTML = newTheme === 'dark' ? ICONS.sun : ICONS.moon;
+            
+            // Ustaw meta tagi
+            document.getElementById('color-scheme-meta').setAttribute('content', newTheme);
+            const themeColor = newTheme === 'dark' ? '#101114' : '#f0f2f5';
+            document.getElementById('theme-color-meta').setAttribute('content', themeColor);
+        };
+        
+        // --- Pozostały kod JavaScript (bez zmian) ---
         const API_BASE_URL = 'https://api.themoviedb.org/3';
         const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
         
@@ -545,25 +571,6 @@
         }
         
         const generateStarRatingDisplay = (rating) => { let starsHTML = ''; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for (let i = 1; i <= 5; i++) { if (rating >= i) { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--warning-color)"><path d="${starPath}"/></svg>`; } else if (rating >= i - 0.5) { starsHTML += `<svg viewBox="0 0 24 24"><defs><linearGradient id="half_grad_${i}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="50%" stop-color="var(--warning-color)"/><stop offset="50%" stop-color="var(--border-color)"/></linearGradient></defs><path d="${starPath}" fill="url(#half_grad_${i})"/></svg>`; } else { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--border-color)"><path d="${starPath}"/></svg>`; } } return `<div class="star-rating-display">${starsHTML}</div>`; };
-        
-        // === ZMIANA: Dodano aktualizację meta tagu ===
-        const applyTheme = () => {
-            const storedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const theme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
-            document.body.dataset.theme = theme;
-            document.getElementById('theme-toggle').innerHTML = theme === 'dark' ? ICONS.sun : ICONS.moon;
-            document.getElementById('color-scheme-meta').setAttribute('content', theme);
-        };
-        const toggleTheme = () => {
-            const currentTheme = document.body.dataset.theme;
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.body.dataset.theme = newTheme;
-            localStorage.setItem('theme', newTheme);
-            document.getElementById('theme-toggle').innerHTML = newTheme === 'dark' ? ICONS.sun : ICONS.moon;
-            document.getElementById('color-scheme-meta').setAttribute('content', newTheme);
-        };
-
         const getListAndItem = (id, type) => { for (const listName in data) { if(Array.isArray(data[listName])) { const item = data[listName].find(i => i.id == id && i.type == type); if (item) return { listName, item }; } } return { listName: null, item: null }; };
         const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'block'; };
         const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const configSection = document.getElementById('configSection'); configSection.style.display = 'block'; configSection.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer; font-weight:bold;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Sukces!', 'Klucz API został zapisany.', 'success'); init(); } else { showCustomAlert('Błąd', 'Proszę wprowadzić prawidłowy klucz API.', 'error'); } }); };
