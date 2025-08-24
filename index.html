@@ -45,8 +45,6 @@
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         html { scroll-behavior: smooth; }
-
-        /* === ZMIANA: Twarde nadpisanie kolorów tła dla spójności motywu === */
         html, body {
             background-color: var(--bg-color);
         }
@@ -130,7 +128,15 @@
         .search-item .info span { color: var(--text-secondary); font-size: 0.9em; }
         .search-item .actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
 
-        #app { max-width: 800px; margin: 0 auto; padding: 24px; }
+        /* === ZMIANA: Wymuszenie minimalnej wysokości === */
+        #app {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px;
+            min-height: calc(100dvh - (var(--header-height) + var(--safe-top)));
+            display: flex;
+            flex-direction: column;
+        }
         
         .view-controls { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 16px; }
         .view-controls .button { background-color: var(--card-color); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px 16px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: color 0.2s, border-color 0.2s; }
@@ -276,11 +282,52 @@
 </head>
 <body>
     <header id="fixed-header">
-        <!-- ... (reszta nagłówka bez zmian) ... -->
+        <div class="header-content">
+            <div class="top-bar">
+                <svg class="app-logo-icon" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg>
+                <div class="search-wrapper">
+                    <input type="search" id="searchInput" placeholder="Szukaj..." autocomplete="off"/>
+                    <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </div>
+                <div class="header-actions">
+                    <button id="theme-toggle" class="icon-button" title="Zmień motyw"></button>
+                    <label for="restoreInput" class="icon-button" title="Importuj"><svg viewBox="0 0 24 24"><path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z" /></svg></label>
+                    <input type="file" id="restoreInput" accept=".json" style="display:none">
+                    <button id="backupButton" class="icon-button" title="Eksportuj"><svg viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" /></svg></button>
+                </div>
+            </div>
+            <div class="list-tabs">
+                <button class="tab-button" data-tab="moviesToWatch">
+                    <svg viewBox="0 0 24 24"><path d="M2,6V20H16V22H18V20H22V6H2M16,11H13V8H11V11H8V13H11V16H13V13H16V11M20,18H4V8H20V18Z" /></svg>
+                    <span>Filmy do obejrzenia</span>
+                </button>
+                <button class="tab-button" data-tab="moviesWatched">
+                    <svg viewBox="0 0 24 24"><path d="M4,6H2V20A2,2 0 0,0 4,22H18V20H4V6M20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M12.4,14L10,11.6L11.4,10.2L12.4,11.2L15.6,8L17,9.4L12.4,14Z" /></svg>
+                    <span>Filmy obejrzane</span>
+                </button>
+                 <button class="tab-button" data-tab="seriesToWatch">
+                    <svg viewBox="0 0 24 24"><path d="M21,17H3V5H21M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3M16,11H13V8H11V11H8V13H11V16H13V13H16V11Z" /></svg>
+                    <span>Seriale do obejrzenia</span>
+                </button>
+                <button class="tab-button" data-tab="seriesWatched">
+                    <svg viewBox="0 0 24 24"><path d="M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3M11.29,15.29L7.8,11.8L9.21,10.38L11.29,12.46L15.25,8.5L16.67,9.92L11.29,15.29Z" /></svg>
+                    <span>Seriale obejrzane</span>
+                </button>
+            </div>
+             <div id="searchResults"></div>
+        </div>
     </header>
 
     <main id="app">
-        <!-- ... (reszta aplikacji bez zmian) ... -->
+        <div id="configSection"></div>
+        <div id="mainContent" style="display: none;">
+            <div id="lists-section">
+                <div id="moviesToWatchListContainer" class="list-container active"></div>
+                <div id="moviesWatchedListContainer" class="list-container"></div>
+                <div id="seriesToWatchListContainer" class="list-container"></div>
+                <div id="seriesWatchedListContainer" class="list-container"></div>
+            </div>
+        </div>
     </main>
     
     <button id="info-fab" class="icon-button" title="O aplikacji">
@@ -290,11 +337,7 @@
     <div id="customAlertContainer"></div>
 
     <script>
-        // --- CAŁY KOD JAVASCRIPT POZOSTAJE BEZ ZMIAN ---
-        // Wklej tutaj cały kod JS z poprzedniej odpowiedzi, ponieważ jest on w 100% poprawny
-        // i już zawierał logikę do zmiany obu meta tagów.
-        
-        // Dla pewności, kluczowe funkcje powinny wyglądać tak:
+        // CAŁY KOD JAVASCRIPT POZOSTAJE BEZ ZMIAN - JEST POPRAWNY
         const applyTheme = () => {
             const storedTheme = localStorage.getItem('theme');
             const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -321,8 +364,6 @@
             document.getElementById('theme-color-meta').setAttribute('content', themeColor);
         };
         
-        // ... (reszta kodu JavaScript)
-        // ... wklej tutaj cały kod JS z poprzedniej wiadomości
         const API_BASE_URL = 'https://api.themoviedb.org/3';
         const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
         
