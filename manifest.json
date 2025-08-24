@@ -1,7 +1,9 @@
 {
   "name": "PenguinFlix - Twój Dziennik Filmowy",
   "short_name": "PenguinFlix",
-  "start_url": ".",
+  "scope": "/PenguinFlix/",
+  "start_url": "/PenguinFlix/",
+  "id": "/PenguinFlix/",
   "display": "standalone",
   "background_color": "#101114",
   "theme_color": "#101114",
