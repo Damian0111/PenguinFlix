@@ -126,6 +126,7 @@
         .search-item { display: flex; align-items: center; padding: 12px 16px; gap: 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background-color var(--transition-speed); }
         .search-item:last-child { border-bottom: none; }
         .search-item:hover { background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); }
+        .show-all-results-btn:hover { color: var(--primary-color); }
         .search-item img { width: 40px; height: 60px; object-fit: cover; border-radius: var(--radius-sm); }
         .search-item .info { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
         .search-item .info strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -541,6 +542,7 @@
 
         let API_KEY = '';
         let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
+        let fullSearchResults = [];
         let viewState = {
             activeTab: 'moviesToWatch',
             moviesToWatch: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false },
@@ -806,8 +808,145 @@
         const showCustomAlert = (title, message, type = 'info') => { const icons = { success: `<svg viewBox="0 0 52 52" style="width:60px;margin-bottom:16px;"><circle cx="26" cy="26" r="25" fill="none" stroke="var(--success-color)" stroke-width="4"/><path fill="none" stroke="var(--success-color)" stroke-width="4" d="M14.1 27.2l7.1 7.2 16.7-16.8"/></svg>`, error: `<svg viewBox="0 0 52 52" style="width:60px;margin-bottom:16px;"><circle cx="26" cy="26" r="25" fill="none" stroke="var(--primary-color)" stroke-width="4"/><path fill="none" stroke="var(--primary-color)" stroke-width="4" d="M16 16 36 36 M36 16 16 36"/></svg>`, }; const alertHTML = `<div class="modal-overlay" id="customAlert"><div class="modal-content">${icons[type] || ''}<h2>${title}</h2><p>${message}</p><div class="alert-button-group"><button class="alert-button-confirm" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background:var(--primary-color);color:white;">OK</button></div></div></div>`; const customAlertContainer = document.getElementById('customAlertContainer'); customAlertContainer.innerHTML = alertHTML; customAlertContainer.querySelector('.alert-button-confirm').onclick = () => customAlertContainer.innerHTML = ''; };
         const showCustomConfirm = (title, message) => { return new Promise((resolve) => { const confirmHTML = `<div class="modal-overlay" id="customAlert"><div class="modal-content"><h2>${title}</h2><p>${message}</p><div class="alert-button-group" style="display:flex;justify-content:center;gap:12px;margin-top:24px;"><button class="alert-button-cancel" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background-color: var(--border-color);color:var(--text-color);">Anuluj</button><button class="alert-button-confirm" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background:var(--primary-color);color:white;">Potwierdź</button></div></div></div>`; const customAlertContainer = document.getElementById('customAlertContainer'); customAlertContainer.innerHTML = confirmHTML; customAlertContainer.querySelector('.alert-button-confirm').onclick = () => { customAlertContainer.innerHTML = ''; resolve(true); }; customAlertContainer.querySelector('.alert-button-cancel').onclick = () => { customAlertContainer.innerHTML = ''; resolve(false); }; }); };
         const debounce = (func, delay) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => func(...a), delay) } };
-        const debouncedSearch = debounce(async (query) => { const searchResults = document.getElementById('searchResults'); if (!query) { searchResults.style.display = 'none'; return; } searchResults.style.display = 'block'; searchResults.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`; try { const response = await fetch(`${API_BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=pl-PL&include_adult=false`); if (!response.ok) throw new Error(response.status === 401 ? 'Nieprawidłowy klucz API.' : 'Błąd sieci.'); const resData = await response.json(); displaySearchResults(resData.results); } catch (error) { searchResults.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">${error.message}</div>`; } }, 400);
-        const displaySearchResults = (results) => { const searchResults = document.getElementById('searchResults'); searchResults.innerHTML = ''; const validResults = results.filter(item => (item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path).slice(0, 5); if (validResults.length === 0) { searchResults.innerHTML = '<div class="placeholder" style="padding:20px; text-align:center;">Brak wyników.</div>'; return; } validResults.forEach(item => { const div = document.createElement('div'); div.className = 'search-item'; const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER; div.innerHTML = `<img src="${posterSrc}" alt="Okładka" loading="lazy" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${item.title || item.name}</strong><span>${(item.release_date || item.first_air_date || '').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Dodaj do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Dodaj do obejrzanych"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button></div>`; searchResults.appendChild(div); }); };
+
+        const debouncedSearch = debounce(async (query) => {
+            const searchResultsContainer = document.getElementById('searchResults');
+            if (!query) {
+                searchResultsContainer.style.display = 'none';
+                fullSearchResults = [];
+                return;
+            }
+            searchResultsContainer.style.display = 'block';
+            searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`;
+
+            let searchTerm = query;
+            let year = null;
+            const yearMatch = query.match(/\b(\d{4})\b$/);
+            if (yearMatch) {
+                year = yearMatch[1];
+                searchTerm = query.replace(/\b\d{4}\b$/, '').trim();
+            }
+
+            try {
+                let finalResults = [];
+                if (year && searchTerm) {
+                    // Jeśli jest rok, wykonaj dwa osobne, precyzyjne zapytania
+                    const movieUrl = `${API_BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&year=${year}`;
+                    const seriesUrl = `${API_BASE_URL}/search/tv?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&first_air_date_year=${year}`;
+
+                    const [movieResponse, seriesResponse] = await Promise.all([ fetch(movieUrl), fetch(seriesUrl) ]);
+                    if (!movieResponse.ok || !seriesResponse.ok) throw new Error('Błąd sieci podczas wyszukiwania.');
+
+                    const movieData = await movieResponse.json();
+                    const seriesData = await seriesResponse.json();
+
+                    movieData.results.forEach(item => item.media_type = 'movie');
+                    seriesData.results.forEach(item => item.media_type = 'tv');
+
+                    finalResults = [...movieData.results, ...seriesData.results].sort((a, b) => b.popularity - a.popularity);
+
+                } else {
+                    // Jeśli nie ma roku, użyj standardowego /search/multi
+                    const multiUrl = `${API_BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false`;
+                    const response = await fetch(multiUrl);
+                    if (!response.ok) throw new Error(response.status === 401 ? 'Nieprawidłowy klucz API.' : 'Błąd sieci.');
+                    const resData = await response.json();
+                    finalResults = resData.results;
+                }
+
+                fullSearchResults = finalResults;
+                displaySearchResults(fullSearchResults);
+
+            } catch (error) {
+                searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">${error.message}</div>`;
+            }
+        }, 400);
+
+        const displaySearchResults = (results) => {
+            const searchResultsContainer = document.getElementById('searchResults');
+            searchResultsContainer.innerHTML = '';
+            const filteredResults = results.filter(item => (item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path);
+
+            if (filteredResults.length === 0) {
+                searchResultsContainer.innerHTML = '<div class="placeholder" style="padding:20px; text-align:center;">Brak wyników.</div>';
+                return;
+            }
+
+            const topResults = filteredResults.slice(0, 5);
+
+            topResults.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'search-item';
+                const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
+                div.innerHTML = `<img src="${posterSrc}" alt="Okładka" loading="lazy" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${item.title || item.name}</strong><span>${(item.release_date || item.first_air_date || '').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Dodaj do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Dodaj do obejrzanych"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button></div>`;
+                searchResultsContainer.appendChild(div);
+            });
+
+            if (filteredResults.length > 5) {
+                const showAllBtn = document.createElement('div');
+                showAllBtn.className = 'search-item show-all-results-btn';
+                showAllBtn.innerHTML = `<span>Pokaż wszystkie ${filteredResults.length} wyników</span>`;
+                showAllBtn.style.justifyContent = 'center';
+                showAllBtn.style.fontWeight = '600';
+                showAllBtn.style.cursor = 'pointer';
+                searchResultsContainer.appendChild(showAllBtn);
+
+                showAllBtn.addEventListener('click', showAllResultsModal);
+            }
+        };
+
+        function showAllResultsModal() {
+            const query = document.getElementById('searchInput').value;
+            const modalContainer = document.getElementById('detailsModalContainer');
+
+            const filteredResults = fullSearchResults.filter(item => (item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path);
+
+            const resultsHTML = filteredResults.map(item => {
+                const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
+                return `
+                    <div class="search-item">
+                        <img src="${posterSrc}" alt="Okładka" loading="lazy" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
+                        <div class="info">
+                            <strong>${item.title || item.name}</strong>
+                            <span>${(item.release_date || item.first_air_date || '').substring(0, 4)}</span>
+                        </div>
+                        <div class="actions">
+                            <button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Dodaj do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>
+                            <button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Dodaj do obejrzanych"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            const modalHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content" style="max-width: 700px; max-height: 85vh; display: flex; flex-direction: column;">
+                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+                        <h2 style="margin: 0 0 16px; text-align: center; font-size: 1.2rem;">Wyniki wyszukiwania dla: "${query}"</h2>
+                        <div class="all-results-list" style="overflow-y: auto; padding-right: 10px;">
+                            ${resultsHTML}
+                        </div>
+                    </div>
+                </div>`;
+
+            modalContainer.innerHTML = modalHTML;
+            document.getElementById('searchResults').style.display = 'none';
+
+            const modal = modalContainer.querySelector('.modal-overlay');
+            const closeModal = () => modalContainer.innerHTML = '';
+
+            modal.addEventListener('click', e => {
+                if (e.target === modal) closeModal();
+            });
+            modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
+            modal.querySelector('.all-results-list').addEventListener('click', async (e) => {
+                const button = e.target.closest('.add-item');
+                if (button) {
+                    await handleAddItemClick(e);
+                    closeModal();
+                }
+            });
+        }
+
         async function handleAddItemClick(e) { const button = e.target.closest('.add-item'); if (!button) return; button.disabled = true; const { id, type, list } = button.dataset; const alreadyExists = Object.values(data).flat().some(item => String(item.id) === String(id) && item.type === type); if (alreadyExists) { showCustomAlert('Informacja', 'Ten tytuł już jest na jednej z list.', 'error'); button.disabled = false; return; } const itemDetails = await getItemDetails(id, type); if (!itemDetails) { showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów tytułu.', 'error'); button.disabled = false; return; } itemDetails.dateAdded = Date.now(); const targetListName = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`; if (list === 'watched') { itemDetails.rating = null; itemDetails.review = ""; } data[targetListName].unshift(itemDetails); await saveData(); switchActiveList(viewState.activeTab); document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none'; showCustomAlert('Sukces!', 'Dodano do listy!', 'success'); }
         async function getItemDetails(id, type) { try { const response = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images&include_image_language=pl,en,null`); if (!response.ok) return null; const d = await response.json(); const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), overview: d.overview, genres: d.genres.map(g => g.name), isFavorite: false }; if (type === 'tv') { item.seasons = d.seasons; item.numberOfSeasons = d.number_of_seasons; item.numberOfEpisodes = d.number_of_episodes; item.progress = {}; } return item; } catch { return null; } }
         async function getCredits(id, type) { if (String(id).startsWith('custom_')) return []; try { const response = await fetch(`${API_BASE_URL}/${type}/${id}/credits?api_key=${API_KEY}&language=pl-PL`); if (!response.ok) return []; const data = await response.json(); return data.cast.slice(0, 15); } catch { return []; } }
@@ -857,20 +996,15 @@
                     } catch (e) { console.error('Błąd parsowania starych danych z localStorage', e); }
                 }
             }
-            // ZMIANA: Wywołanie funkcji migracji danych po ich wczytaniu
             migrateData(data);
         }
 
-        // ZMIANA: Nowa funkcja do migracji/naprawiania danych
         function migrateData(dataToMigrate) {
             Object.keys(dataToMigrate).forEach(key => {
                 if(Array.isArray(dataToMigrate[key])) {
                     dataToMigrate[key].forEach(item => {
-                        // Istniejące migracje
                         if (item.dateAdded === undefined) item.dateAdded = Date.now() - Math.floor(Math.random()*100000);
                         if (item.isFavorite === undefined) item.isFavorite = false;
-
-                        // Nowa migracja dla ścieżek do plakatów
                         if (item.poster && item.poster.startsWith('/')) {
                             item.poster = IMAGE_BASE_URL + item.poster;
                         }
@@ -895,9 +1029,7 @@
         function isDataEmpty() { return Object.values(data).every(list => !list || list.length === 0); }
         function backupData() { if (isDataEmpty()) { showCustomAlert('Informacja', 'Brak danych do utworzenia kopii zapasowej.', 'info'); return; } const dataStr = JSON.stringify({ data, viewState }, null, 2); const blob = new Blob([dataStr], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `penguinflix_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href); }
         async function restoreData(e) { const file = e.target.files[0]; if (!file) return; const confirmed = await showCustomConfirm('Przywracanie kopii', 'Spowoduje to nadpisanie wszystkich obecnych danych. Kontynuować?'); if (!confirmed) { e.target.value = ''; return; } const reader = new FileReader(); reader.onload = async (event) => { try { const restored = JSON.parse(event.target.result); if (restored.data && restored.data.moviesToWatch !== undefined) {
-            // ZMIANA: Wywołanie funkcji migracji na wczytanych danych PRZED zapisaniem i wyświetleniem
             migrateData(restored.data);
-
             data = restored.data;
             viewState = restored.viewState || viewState;
             await saveData();
@@ -906,17 +1038,15 @@
             } else { throw new Error('Nieprawidłowy format pliku.'); } } catch(err) { showCustomAlert('Błąd', err.message || 'Błąd odczytu pliku.', 'error'); } }; reader.readAsText(file); e.target.value = ''; }
 
         async function populateAndRenderSeriesSections(item, container) {
-            // If it's a custom entry, it won't have seasons.
             if (String(item.id).startsWith('custom_')) {
                  container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Śledzenie odcinków nie jest dostępne dla wpisów niestandardowych.</p></div>`;
                  return;
             }
-            // If data from old backup is missing season info, fetch it now.
             if (!item.seasons) {
                 container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p class="loading-episodes">Aktualizowanie danych serialu...</p></div>`;
                 const freshDetails = await getItemDetails(item.id, item.type);
                 if (freshDetails) {
-                    Object.assign(item, freshDetails); // Merge new data into the existing item
+                    Object.assign(item, freshDetails);
                     await saveData();
                 } else {
                     container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color:var(--primary-color)">Nie udało się pobrać danych o sezonach.</p></div>`;
