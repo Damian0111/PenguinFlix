@@ -290,20 +290,13 @@
             display: flex;
             gap: 16px;
             overflow-x: auto;
-            padding-bottom: 12px; /* Daje przestrzeń dla paska przewijania */
+            padding-bottom: 12px;
             scrollbar-width: thin;
             scrollbar-color: var(--border-color) transparent;
         }
-        .cast-scroller::-webkit-scrollbar, .known-for-scroller::-webkit-scrollbar {
-            height: 6px;
-        }
-        .cast-scroller::-webkit-scrollbar-track, .known-for-scroller::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .cast-scroller::-webkit-scrollbar-thumb, .known-for-scroller::-webkit-scrollbar-thumb {
-            background-color: var(--border-color);
-            border-radius: 10px;
-        }
+        .cast-scroller::-webkit-scrollbar, .known-for-scroller::-webkit-scrollbar { height: 6px; }
+        .cast-scroller::-webkit-scrollbar-track, .known-for-scroller::-webkit-scrollbar-track { background: transparent; }
+        .cast-scroller::-webkit-scrollbar-thumb, .known-for-scroller::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; }
         .cast-member {
             flex-shrink: 0;
             width: 90px;
@@ -311,10 +304,7 @@
             cursor: pointer;
             transition: transform 0.2s, opacity 0.2s;
         }
-        .cast-member:hover {
-            transform: scale(1.05);
-            opacity: 0.9;
-        }
+        .cast-member:hover { transform: scale(1.05); opacity: 0.9; }
         .cast-member img, .cast-member .placeholder-svg {
             width: 80px;
             height: 80px;
@@ -325,85 +315,94 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             margin: 0 auto;
         }
-         .cast-member .placeholder-svg {
-            padding: 16px;
-            fill: var(--text-secondary);
-        }
-        .cast-member strong {
-            display: block;
-            margin-top: 8px;
-            font-size: 0.9em;
-            line-height: 1.3;
-            font-weight: 600;
-        }
-        .cast-member span {
-            font-size: 0.8em;
-            color: var(--text-secondary);
-            line-height: 1.2;
-        }
+         .cast-member .placeholder-svg { padding: 16px; fill: var(--text-secondary); }
+        .cast-member strong { display: block; margin-top: 8px; font-size: 0.9em; line-height: 1.3; font-weight: 600; }
+        .cast-member span { font-size: 0.8em; color: var(--text-secondary); line-height: 1.2; }
         /* === KONIEC STYLI OBSADY === */
 
         /* === POCZĄTEK STYLI MODALA AKTORA === */
-        .actor-modal-overlay {
-            z-index: 3000; /* Wyżej niż modal filmu */
-        }
-        .actor-modal-content {
-            max-width: 620px;
-            padding: 24px;
-        }
-        .actor-header {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 24px;
-        }
-        .actor-header img {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 4px solid var(--border-color);
-        }
-        .actor-header h2 {
-            margin: 0;
-            font-size: 1.8rem;
-            text-align: center;
-        }
-        .actor-bio {
-            line-height: 1.6;
-            color: var(--text-secondary);
-            max-height: 150px;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-        .known-for-item {
-            flex-shrink: 0;
-            width: 100px;
-        }
-        .known-for-item img {
-            width: 100px;
-            height: 150px;
-            object-fit: cover;
-            border-radius: var(--radius-sm);
-        }
-        .known-for-item strong {
-            display: block;
-            font-size: 0.85em;
-            margin-top: 6px;
-            white-space: normal;
-        }
+        .actor-modal-overlay { z-index: 3000; }
+        .actor-modal-content { max-width: 620px; padding: 24px; }
+        .actor-header { display: flex; flex-direction: column; align-items: center; gap: 20px; margin-bottom: 24px; }
+        .actor-header img { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 4px solid var(--border-color); }
+        .actor-header h2 { margin: 0; font-size: 1.8rem; text-align: center; }
+        .actor-bio { line-height: 1.6; color: var(--text-secondary); max-height: 150px; overflow-y: auto; padding-right: 10px; }
+        .known-for-item { flex-shrink: 0; width: 100px; }
+        .known-for-item img { width: 100px; height: 150px; object-fit: cover; border-radius: var(--radius-sm); }
+        .known-for-item strong { display: block; font-size: 0.85em; margin-top: 6px; white-space: normal; }
          @media (min-width: 600px) {
-            .actor-header {
-                flex-direction: row;
-                text-align: left;
-            }
-             .actor-header h2 {
-                text-align: left;
-             }
+            .actor-header { flex-direction: row; text-align: left; }
+             .actor-header h2 { text-align: left; }
         }
         /* === KONIEC STYLI MODALA AKTORA === */
 
+        /* === POCZĄTEK STYLI PEŁNEJ FILMOGRAFII === */
+        .filmography-controls { margin-top: 24px; text-align: center; }
+        .filmography-button { background-color: var(--border-color); color: var(--text-color); border: none; padding: 10px 20px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; transition: background-color var(--transition-speed); }
+        .filmography-button:hover { background-color: color-mix(in srgb, var(--border-color) 80%, var(--bg-color)); }
+        #full-filmography-container { margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 10px; }
+
+        .filmography-item {
+            border-bottom: 1px solid var(--border-color);
+        }
+        .filmography-item:last-child { border-bottom: none; }
+        .filmography-item-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 4px;
+            cursor: pointer;
+        }
+        .filmography-item-header:hover { background-color: color-mix(in srgb, var(--card-color) 50%, var(--border-color)); }
+
+        .filmography-item img {
+            width: 50px;
+            height: 75px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            flex-shrink: 0;
+            background-color: var(--border-color);
+        }
+        .filmography-item-info { display: flex; flex-direction: column; gap: 4px; }
+        .filmography-item-info strong { font-size: 1em; }
+        .filmography-item-info span { font-size: 0.9em; color: var(--text-secondary); }
+        .filmography-item-info .character { font-style: italic; }
+
+        .filmography-item-details {
+            display: none;
+            padding: 0 12px 16px;
+            animation: fadeIn 0.4s;
+        }
+        .filmography-overview {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 12px;
+            overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
+        }
+        .filmography-actions { text-align: right; }
+        .add-filmography-item-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.85em;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+        }
+        .add-filmography-item-btn:disabled { background-color: var(--border-color); cursor: not-allowed; }
+        .already-added-info {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--success-color);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+        .already-added-info svg { width: 18px; height: 18px; fill: var(--success-color); }
+        /* === KONIEC STYLI PEŁNEJ FILMOGRAFII === */
 
         @media (max-width: 600px) {
             #fixed-header { padding-left: 12px; padding-right: 12px; }
@@ -745,13 +744,9 @@
 
             const closeModal = () => detailsModalContainer.innerHTML = '';
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closeModal();
-                }
+                if (e.target === modal) { closeModal(); }
                 const castMember = e.target.closest('.cast-member[data-actor-id]');
-                if (castMember) {
-                    openActorDetailsModal(castMember.dataset.actorId);
-                }
+                if (castMember) { openActorDetailsModal(castMember.dataset.actorId); }
             });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
 
@@ -762,22 +757,13 @@
                 if (cast && cast.length > 0) {
                     const castHTML = cast.map(member => `
                         <div class="cast-member" data-actor-id="${member.id}">
-                            ${member.profile_path
-                                ? `<img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${member.profile_path}" alt="${member.name}" loading="lazy">`
-                                : ICONS.person}
+                            ${member.profile_path ? `<img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${member.profile_path}" alt="${member.name}" loading="lazy">` : ICONS.person}
                             <strong>${member.name}</strong>
                             <span>${member.character}</span>
                         </div>
                     `).join('');
-                    castContainer.innerHTML = `
-                        <div class="cast-section">
-                            <h3>Obsada</h3>
-                            <div class="cast-scroller">${castHTML}</div>
-                        </div>
-                    `;
-                } else {
-                    castContainer.innerHTML = '';
-                }
+                    castContainer.innerHTML = `<div class="cast-section"><h3>Obsada</h3><div class="cast-scroller">${castHTML}</div></div>`;
+                } else { castContainer.innerHTML = ''; }
             });
 
             if (isWatched) {
@@ -799,42 +785,35 @@
             }
         }
 
-        // === ZMODYFIKOWANA FUNKCJA Z FALLBACKIEM DLA BIOGRAFII ===
         async function getActorDetails(actorId) {
             try {
-                // Najpierw próbujemy pobrać dane po polsku
                 const plDetailsRes = await fetch(`${API_BASE_URL}/person/${actorId}?api_key=${API_KEY}&language=pl-PL`);
                 if (!plDetailsRes.ok) throw new Error('Błąd odpowiedzi sieciowej dla danych PL.');
                 let details = await plDetailsRes.json();
 
-                // Jeśli biografia po polsku jest pusta, dociągamy dane po angielsku
                 if (!details.biography) {
-                    console.log(`Brak biografii PL dla aktora ${actorId}. Próbuję pobrać EN...`);
                     const enDetailsRes = await fetch(`${API_BASE_URL}/person/${actorId}?api_key=${API_KEY}&language=en-US`);
                     if (enDetailsRes.ok) {
                         const enDetails = await enDetailsRes.json();
-                        // Używamy angielskiej biografii jako fallback
                         details.biography = enDetails.biography;
                     }
                 }
 
-                // Niezależnie pobieramy filmografię (credits) po polsku
                 const creditsRes = await fetch(`${API_BASE_URL}/person/${actorId}/combined_credits?api_key=${API_KEY}&language=pl-PL`);
                 if (!creditsRes.ok) throw new Error('Błąd odpowiedzi sieciowej dla filmografii.');
                 const credits = await creditsRes.json();
 
-                // Sortowanie filmografii po popularności i wybranie 10 najlepszych z plakatem
-                const knownFor = credits.cast
-                    .filter(item => item.poster_path)
-                    .sort((a, b) => b.popularity - a.popularity)
-                    .slice(0, 10);
+                const uniqueCast = credits.cast.filter((item, index, self) => index === self.findIndex(t => t.id === item.id));
 
-                return {
-                    name: details.name,
-                    biography: details.biography,
-                    profile_path: details.profile_path,
-                    known_for: knownFor
-                };
+                const knownFor = [...uniqueCast].filter(item => item.poster_path).sort((a, b) => b.vote_count - a.vote_count).slice(0, 10);
+
+                const fullFilmography = [...uniqueCast].filter(item => item.release_date || item.first_air_date).sort((a, b) => {
+                    const dateA = a.release_date || a.first_air_date;
+                    const dateB = b.release_date || b.first_air_date;
+                    return new Date(dateB) - new Date(dateA);
+                });
+
+                return { name: details.name, biography: details.biography, profile_path: details.profile_path, known_for: knownFor, full_filmography: fullFilmography };
             } catch (error) {
                 console.error("Błąd pobierania danych o aktorze:", error);
                 return null;
@@ -853,43 +832,104 @@
                 return;
             }
 
-            const knownForHTML = actorData.known_for.map(item => `
-                <div class="known-for-item">
-                    <img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${item.poster_path}" alt="${item.title || item.name}" loading="lazy">
-                    <strong>${item.title || item.name}</strong>
-                </div>
-            `).join('');
+            const knownForHTML = actorData.known_for.map(item => `<div class="known-for-item"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${item.poster_path}" alt="${item.title || item.name}" loading="lazy"><strong>${item.title || item.name}</strong></div>`).join('');
 
             const modalHTML = `
                 <div class="modal-overlay actor-modal-overlay">
                     <div class="modal-content actor-modal-content">
-                        <button class="icon-button modal-top-close-btn" title="Zamknij">
-                            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                        </button>
+                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
                         <div class="actor-header">
-                            ${actorData.profile_path
-                                ? `<img src="${IMAGE_BASE_URL}${actorData.profile_path}" alt="${actorData.name}">`
-                                : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')
-                            }
+                            ${actorData.profile_path ? `<img src="${IMAGE_BASE_URL}${actorData.profile_path}" alt="${actorData.name}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
                             <h2>${actorData.name}</h2>
                         </div>
-                        <div class="actor-bio">
-                            ${actorData.biography || 'Brak dostępnej biografii.'}
-                        </div>
-                        ${knownForHTML ? `
-                        <div class="known-for-section">
-                            <h3>Znany/a z</h3>
-                            <div class="known-for-scroller">${knownForHTML}</div>
-                        </div>
-                        ` : ''}
+                        <div class="actor-bio">${actorData.biography || 'Brak dostępnej biografii.'}</div>
+                        ${knownForHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${knownForHTML}</div></div>` : ''}
+                        ${actorData.full_filmography && actorData.full_filmography.length > 0 ? `<div class="filmography-controls"><button id="toggle-filmography-btn" class="filmography-button">Pokaż pełną filmografię</button></div><div id="full-filmography-container" style="display: none;"></div>` : ''}
                     </div>
                 </div>`;
-
             actorModalContainer.innerHTML = modalHTML;
+
+            const filmographyBtn = document.getElementById('toggle-filmography-btn');
+            if (filmographyBtn) {
+                filmographyBtn.addEventListener('click', () => {
+                    const container = document.getElementById('full-filmography-container');
+                    if (container.style.display === 'block') {
+                        container.style.display = 'none';
+                        filmographyBtn.textContent = 'Pokaż pełną filmografię';
+                    } else {
+                        if (container.innerHTML === '') {
+                             const filmographyHTML = actorData.full_filmography.map(item => {
+                                const year = (item.release_date || item.first_air_date || '----').substring(0, 4);
+                                const poster = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w92') + item.poster_path : 'data:image/gif;base64,R0lGODlhAQABAIAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                                const isAlreadyAdded = Object.values(data).flat().some(i => i.id == item.id);
+                                const actionHTML = isAlreadyAdded
+                                    ? `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Już na liście</span>`
+                                    : `<button class="add-filmography-item-btn" data-id="${item.id}" data-type="${item.media_type}">Dodaj do obejrzenia</button>`;
+
+                                return `
+                                <div class="filmography-item">
+                                    <div class="filmography-item-header">
+                                        <img src="${poster}" alt="" loading="lazy">
+                                        <div class="filmography-item-info">
+                                            <strong>${item.title || item.name}</strong>
+                                            <span>${year}</span>
+                                            <span class="character">jako: ${item.character || 'Brak informacji'}</span>
+                                        </div>
+                                    </div>
+                                    <div class="filmography-item-details">
+                                        <p class="filmography-overview">${item.overview || 'Brak opisu.'}</p>
+                                        <div class="filmography-actions">${actionHTML}</div>
+                                    </div>
+                                </div>`;
+                             }).join('');
+                             container.innerHTML = filmographyHTML;
+                        }
+                        container.style.display = 'block';
+                        filmographyBtn.textContent = 'Ukryj filmografię';
+                    }
+                });
+            }
+
             const modal = actorModalContainer.querySelector('.modal-overlay');
             const closeModal = () => actorModalContainer.innerHTML = '';
-            modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+            modal.addEventListener('click', e => {
+                if (e.target === modal) closeModal();
+
+                const header = e.target.closest('.filmography-item-header');
+                if(header) {
+                    const details = header.nextElementSibling;
+                    if(details && details.classList.contains('filmography-item-details')) {
+                        details.style.display = details.style.display === 'block' ? 'none' : 'block';
+                    }
+                }
+
+                const addButton = e.target.closest('.add-filmography-item-btn');
+                if(addButton) {
+                    addItemFromFilmography(addButton);
+                }
+            });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
+        }
+
+        async function addItemFromFilmography(button) {
+            button.disabled = true;
+            button.textContent = 'Dodawanie...';
+            const { id, type } = button.dataset;
+
+            const itemDetails = await getItemDetails(id, type);
+            if (!itemDetails) {
+                button.textContent = 'Błąd!';
+                setTimeout(() => { button.textContent = 'Dodaj do obejrzenia'; button.disabled = false; }, 2000);
+                return;
+            }
+
+            itemDetails.dateAdded = Date.now();
+            const targetListName = (type === 'movie' ? 'movies' : 'series') + 'ToWatch';
+            data[targetListName].unshift(itemDetails);
+            await saveData();
+
+            const actionContainer = button.parentElement;
+            actionContainer.innerHTML = `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Dodano!</span>`;
         }
 
         function setupInteractiveStars(item) { const container = document.querySelector('.star-rating-interactive'); if(!container) return; const ratingDisplay = document.getElementById('rating-display'); const decBtn = document.getElementById('rating-decrement'); const incBtn = document.getElementById('rating-increment'); let currentRating = item.rating || 0; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for(let i=1; i<=5; i++){ const star = document.createElement('div'); star.className = 'star'; star.innerHTML = `<svg class="star-background" viewBox="0 0 24 24"><path d="${starPath}"/></svg><svg class="star-foreground" viewBox="0 0 24 24"><path d="${starPath}"/></svg>`; container.appendChild(star); } const updateRatingUI = (rating) => { currentRating = rating; container.dataset.rating = currentRating; container.querySelectorAll('.star-foreground').forEach((star, index) => { const score = currentRating - index; if (score >= 1) { star.style.clipPath = 'inset(0 0 0 0)'; } else if (score > 0) { star.style.clipPath = `inset(0 ${100 - score * 100}% 0 0)`; } else { star.style.clipPath = 'inset(0 100% 0 0)'; } }); ratingDisplay.textContent = `Twoja ocena: ${currentRating.toFixed(1)} / 5.0`; decBtn.disabled = currentRating <= 0; incBtn.disabled = currentRating >= 5; }; const calculateRatingFromEvent = (e) => { const rect = container.getBoundingClientRect(); const mouseX = e.clientX - rect.left; const rawRating = (mouseX / rect.width) * 5; return Math.max(0, Math.min(5, Math.round(rawRating * 2) / 2)); }; container.addEventListener('mousemove', e => updateRatingUI(calculateRatingFromEvent(e))); container.addEventListener('mouseleave', () => updateRatingUI(parseFloat(container.dataset.rating))); container.addEventListener('click', e => { const newRating = calculateRatingFromEvent(e); updateRatingUI(newRating); }); decBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating > 0) { updateRatingUI(rating - 0.5); } }); incBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating < 5) { updateRatingUI(rating + 0.5); } }); updateRatingUI(currentRating); }
