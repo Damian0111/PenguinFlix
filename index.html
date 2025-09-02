@@ -59,6 +59,8 @@
             margin: 0;
             padding-top: calc(var(--header-height) + var(--safe-top));
             transition: background-color var(--transition-speed), color var(--transition-speed);
+            /* --- NOWOŚĆ --- Zapobiega przewijaniu strony w poziomie podczas gestu */
+            overflow-x: hidden;
         }
 
         #fixed-header {
@@ -157,7 +159,20 @@
         .list-container { display: none; }
         .list-container.active { display: block; animation: fadeIn 0.3s; }
         ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-        .list-item { display: flex; padding: 12px; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); gap: 16px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s; }
+        .list-item {
+            display: flex;
+            padding: 12px;
+            background-color: var(--card-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            gap: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
         .list-item:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
         .list-item img { width: 60px; height: 90px; object-fit: cover; border-radius: var(--radius-sm); flex-shrink: 0; }
         .list-item .info { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -167,6 +182,22 @@
         .star-rating-display { display: flex; gap: 2px; margin-top: auto; padding-top: 6px; }
         .star-rating-display svg { width: 18px; height: 18px; }
         .list-item .item-actions { margin-left: auto; align-self: center; display: flex; }
+
+        /* Zaktualizowane style dla SortableJS */
+        .list-item.sortable-ghost {
+            opacity: 0.4;
+            background: var(--border-color);
+        }
+        .list-item.sortable-chosen {
+            cursor: grabbing !important;
+            box-shadow: var(--shadow);
+            transform: scale(1.02);
+            opacity: 1 !important;
+        }
+        .list-item[style*="cursor: move;"] {
+            background-color: color-mix(in srgb, var(--card-color) 80%, var(--border-color));
+        }
+
 
         .list-item.unreleased {
             opacity: 0.75;
@@ -416,7 +447,6 @@
         .episode-item:last-child { border-bottom: none; }
         .episode-info { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex-grow: 1; min-width: 0; }
 
-        /* Zaktualizowane style dla listy odcinków */
         .episode-title-line {
             display: flex;
             align-items: baseline;
@@ -428,7 +458,7 @@
             display: flex;
             align-items: baseline;
             gap: 8px;
-            min-width: 0; /* Ważne dla zawijania tekstu w flexbox */
+            min-width: 0;
         }
         .episode-number {
             color: var(--text-secondary);
@@ -613,6 +643,7 @@
     <div id="customAlertContainer"></div>
     <div id="trailerModalContainer"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script>
         const applyTheme = () => {
             const storedTheme = localStorage.getItem('theme');
@@ -647,11 +678,12 @@
         let API_KEY = '';
         let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
         let fullSearchResults = [];
+        let sortableInstance = null;
         let viewState = {
             activeTab: 'moviesToWatch',
-            moviesToWatch: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false },
+            moviesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterFavoritesOnly: false },
             moviesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false },
-            seriesToWatch: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false },
+            seriesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterFavoritesOnly: false },
             seriesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false },
         };
         const LIST_NAMES = {
@@ -660,6 +692,9 @@
             seriesToWatch: 'Seriale do Obejrzenia',
             seriesWatched: 'Seriale Obejrzane',
         };
+        // --- NOWOŚĆ --- Definicja kolejności list do nawigacji gestami
+        const TAB_ORDER = ['moviesToWatch', 'moviesWatched', 'seriesToWatch', 'seriesWatched'];
+
         const ICONS = {
             sun: `<svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45 1 1zM5.64 5.64c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41L5.64 2.81c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l1.41 1.42zm12.72 12.72c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41l-1.41-1.41c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l1.41 1.41zM4.22 18.36c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41l-1.41-1.41c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l1.41 1.41zm14.14-14.14c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41l-1.41-1.41c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l1.41 1.41z"/></svg>`,
             moon: `<svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.62-.14 2.37-.38-.43-.97-.7-2.13-.7-3.37 0-3.68 2.5-6.8 5.86-7.82C18.17 4.19 15.21 3 12 3z"/></svg>`,
@@ -714,14 +749,19 @@
             }
 
             const [sortBy, direction] = state.sortBy.split('_');
-            itemsToRender.sort((a, b) => {
-                let valA, valB;
-                switch (sortBy) {
-                    case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-                    case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA;
-                    default: return 0;
-                }
-            });
+
+            if (sortBy === 'custom') {
+                itemsToRender.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0));
+            } else {
+                itemsToRender.sort((a, b) => {
+                    let valA, valB;
+                    switch (sortBy) {
+                        case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                        case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA;
+                        default: return 0;
+                    }
+                });
+            }
 
             const listHTML = itemsToRender.map(item => {
                 const isWatched = listId.includes('Watched');
@@ -773,22 +813,68 @@
                     </li>`;
             }).join('');
 
-            const sortOptionsActive = state.sortBy !== 'dateAdded_desc' ? 'active' : '';
+            const isCustomSortActive = state.sortBy === 'custom_asc';
+            let sortOptionsActive = state.sortBy !== 'dateAdded_desc';
+            if (isCustomSortActive && (listId === 'moviesToWatch' || listId === 'seriesToWatch')) {
+                sortOptionsActive = false;
+            }
             const filterOptionsActive = (state.filterByGenre !== 'all' || state.filterFavoritesOnly) ? 'active' : '';
 
             container.innerHTML = `
                 <div class="view-controls">
-                    <button class="button ${sortOptionsActive}" data-action="open-sort-options">
+                    <button class="button ${sortOptionsActive ? 'active' : ''}" data-action="open-sort-options">
                         <svg viewBox="0 0 24 24"><path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/></svg>
                         <span>Sortuj</span>
                     </button>
-                    <button class="button ${filterOptionsActive}" data-action="open-filter-options">
+                    <button class="button ${filterOptionsActive ? 'active' : ''}" data-action="open-filter-options">
                        <svg viewBox="0 0 24 24"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
                        <span>Filtruj</span>
                     </button>
                 </div>
                 <ul>${itemsToRender.length > 0 ? listHTML : `<div class="placeholder" style="padding:40px 0; color:var(--text-secondary); text-align:center;">Brak pozycji do wyświetlenia.</div>`}</ul>`;
+
+            if (sortableInstance) {
+                sortableInstance.destroy();
+                sortableInstance = null;
+            }
+            const isCustomSortableList = listId === 'moviesToWatch' || listId === 'seriesToWatch';
+            if (isCustomSortableList && isCustomSortActive) {
+                initializeSortable(listId);
+            }
         }
+
+        function initializeSortable(listId) {
+            const listEl = document.querySelector(`#${listId}ListContainer ul`);
+            if (!listEl || listEl.children.length < 2) return;
+
+            sortableInstance = new Sortable(listEl, {
+                animation: 150,
+                delay: 200,
+                delayOnTouchOnly: true,
+                handle: '.list-item',
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: async (evt) => {
+                    const newOrderInfo = Array.from(evt.target.children).map(li => ({
+                        id: li.dataset.id,
+                        type: li.dataset.type
+                    }));
+
+                    const oldList = data[listId];
+                    const newList = newOrderInfo.map((info, index) => {
+                        const item = oldList.find(i => String(i.id) === info.id && i.type === info.type);
+                        if (item) {
+                            item.customOrder = index;
+                        }
+                        return item;
+                    }).filter(Boolean);
+
+                    data[listId] = newList;
+                    await saveData();
+                }
+            });
+        }
+
 
         function setupEventListeners() {
             document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
@@ -817,19 +903,78 @@
                     if (action === 'open-sort-options') openSortModal();
                     else if (action === 'open-filter-options') openFilterModal();
                 } else if (e.target.closest('.list-item')) {
-                    handleListActions(e);
+                    if (!e.target.closest('.sortable-chosen')) {
+                        handleListActions(e);
+                    }
                 }
             });
 
             document.getElementById('backupButton').addEventListener('click', backupData);
             document.getElementById('restoreInput').addEventListener('change', restoreData);
             document.getElementById('info-fab').addEventListener('click', showInfoModal);
+
+            // --- NOWOŚĆ --- Inicjalizacja gestów nawigacji
+            setupSwipeNavigation();
+        }
+
+        // --- NOWA FUNKCJA DO OBSŁUGI GESTÓW NAWIGACJI ---
+        function setupSwipeNavigation() {
+            const swipeArea = document.getElementById('lists-section');
+            let startX = 0;
+            let currentX = 0;
+            let isSwiping = false;
+            const swipeThreshold = 75; // Minimalna odległość przesunięcia w pikselach, aby uznać to za gest
+
+            swipeArea.addEventListener('touchstart', (e) => {
+                // Nie rozpoczynaj przesuwania, jeśli użytkownik przeciąga element listy
+                if (e.target.closest('.sortable-chosen')) {
+                    return;
+                }
+                startX = e.touches[0].clientX;
+                currentX = startX;
+                isSwiping = true;
+            }, { passive: true });
+
+            swipeArea.addEventListener('touchmove', (e) => {
+                if (!isSwiping) return;
+                currentX = e.touches[0].clientX;
+            }, { passive: true });
+
+            swipeArea.addEventListener('touchend', () => {
+                if (!isSwiping) return;
+                isSwiping = false;
+
+                const deltaX = currentX - startX;
+
+                if (Math.abs(deltaX) > swipeThreshold) {
+                    const currentIndex = TAB_ORDER.indexOf(viewState.activeTab);
+                    let newIndex;
+
+                    if (deltaX < 0) { // Przesunięcie w lewo
+                        newIndex = (currentIndex + 1) % TAB_ORDER.length;
+                    } else { // Przesunięcie w prawo
+                        newIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+                    }
+
+                    const newTabId = TAB_ORDER[newIndex];
+                    switchActiveList(newTabId);
+                }
+            });
         }
 
         async function openSortModal() {
             const listId = viewState.activeTab; const state = viewState[listId]; const isWatched = listId.includes('Watched');
-            const sortOptions = [{ value: 'dateAdded_desc', label: 'Data dodania (najnowsze)' }, { value: 'dateAdded_asc', label: 'Data dodania (najstarsze)' }, { value: 'title_asc', label: 'Tytuł (A-Z)' }, { value: 'title_desc', label: 'Tytuł (Z-A)' }, { value: 'year_desc', label: 'Rok (najnowsze)' }, { value: 'year_asc', label: 'Rok (najstarsze)' }];
+            const isCustomSortable = listId === 'moviesToWatch' || listId === 'seriesToWatch';
+
+            const sortOptions = [
+                { value: 'dateAdded_desc', label: 'Data dodania (najnowsze)' }, { value: 'dateAdded_asc', label: 'Data dodania (najstarsze)' },
+                { value: 'title_asc', label: 'Tytuł (A-Z)' }, { value: 'title_desc', label: 'Tytuł (Z-A)' },
+                { value: 'year_desc', label: 'Rok (najnowsze)' }, { value: 'year_asc', label: 'Rok (najstarsze)' }
+            ];
+
             if (isWatched) { sortOptions.push({ value: 'rating_desc', label: 'Ocena (najwyższa)' }, { value: 'rating_asc', label: 'Ocena (najniższa)' }); }
+            if (isCustomSortable) { sortOptions.unshift({ value: 'custom_asc', label: 'Własna kolejność' }); }
+
             const sortOptionsHTML = sortOptions.map(opt => `<label><input type="radio" name="sort" value="${opt.value}" ${state.sortBy === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('');
             const modalContainer = document.getElementById('detailsModalContainer');
             modalContainer.innerHTML = `<div class="modal-overlay"><div class="control-modal-content"><h3>Sortuj według</h3><div class="control-modal-options">${sortOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Resetuj</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
@@ -839,7 +984,7 @@
                 await saveData(); renderList(data[listId], listId); modalContainer.innerHTML = '';
             };
             modalContainer.querySelector('.reset-btn').onclick = async () => {
-                state.sortBy = 'dateAdded_desc';
+                state.sortBy = isCustomSortable ? 'custom_asc' : 'dateAdded_desc';
                 await saveData(); renderList(data[listId], listId); modalContainer.innerHTML = '';
             };
         }
@@ -926,7 +1071,7 @@
         const getListAndItem = (id, type) => { for (const listName in data) { if(Array.isArray(data[listName])) { const item = data[listName].find(i => String(i.id) === String(id) && i.type === type); if (item) return { listName, item }; } } return { listName: null, item: null }; };
         const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'block'; };
         const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const configSection = document.getElementById('configSection'); configSection.style.display = 'block'; configSection.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer; font-weight:bold;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Sukces!', 'Klucz API został zapisany.', 'success'); init(); } else { showCustomAlert('Błąd', 'Proszę wprowadzić prawidłowy klucz API.', 'error'); } }); };
-        const showCustomAlert = (title, message, type = 'info') => { const icons = { success: `<svg viewBox="0 0 52 52" style="width:60px;margin-bottom:16px;"><circle cx="26" cy="26" r="25" fill="none" stroke="var(--success-color)" stroke-width="4"/><path fill="none" stroke="var(--success-color)" stroke-width="4" d="M14.1 27.2l7.1 7.2 16.7-16.8"/></svg>`, error: `<svg viewBox="0 0 52 52" style="width:60px;margin-bottom:16px;"><circle cx="26" cy="26" r="25" fill="none" stroke="var(--primary-color)" stroke-width="4"/><path fill="none" stroke="var(--primary-color)" stroke-width="4" d="M16 16 36 36 M36 16 16 36"/></svg>`, }; const alertHTML = `<div class="modal-overlay" id="customAlert"><div class="modal-content">${icons[type] || ''}<h2>${title}</h2><p>${message}</p><div class="alert-button-group"><button class="alert-button-confirm" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background:var(--primary-color);color:white;">OK</button></div></div>`; const customAlertContainer = document.getElementById('customAlertContainer'); customAlertContainer.innerHTML = alertHTML; customAlertContainer.querySelector('.alert-button-confirm').onclick = () => customAlertContainer.innerHTML = ''; };
+        const showCustomAlert = (title, message, type = 'info') => { const icons = { success: `<svg viewBox="0 0 52 52" style="width:60px;margin-bottom:16px;"><circle cx="26" cy="26" r="25" fill="none" stroke="var(--success-color)" stroke-width="4"/><path fill="none" stroke="var(--success-color)" stroke-width="4" d="M14.1 27.2l7.1 7.2 16.7-16.8"/></svg>`, error: `<svg viewBox="0 0 52 52" style="width:60px;margin-bottom:16px;"><circle cx="26" cy="26" r="25" fill="none" stroke="var(--primary-color)" stroke-width="4"/><path fill="none" stroke="var(--primary-color)" stroke-width="4" d="M16 16 36 36 M36 16 16 36"/></svg>`, }; const alertHTML = `<div class="modal-overlay" id="customAlert"><div class="modal-content">${icons[type] || ''}<h2>${title}</h2><p>${message}</p><div class="alert-button-group"><button class="alert-button-confirm" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background:var(--primary-color);color:white;">OK</button></div>`; const customAlertContainer = document.getElementById('customAlertContainer'); customAlertContainer.innerHTML = alertHTML; customAlertContainer.querySelector('.alert-button-confirm').onclick = () => customAlertContainer.innerHTML = ''; };
         const showCustomConfirm = (title, message) => { return new Promise((resolve) => { const confirmHTML = `<div class="modal-overlay" id="customAlert"><div class="modal-content"><h2>${title}</h2><p>${message}</p><div class="alert-button-group" style="display:flex;justify-content:center;gap:12px;margin-top:24px;"><button class="alert-button-cancel" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background-color: var(--border-color);color:var(--text-color);">Anuluj</button><button class="alert-button-confirm" style="padding:12px 24px;border:none;border-radius:var(--radius-md);font-weight:bold;cursor:pointer;background:var(--primary-color);color:white;">Potwierdź</button></div></div>`; const customAlertContainer = document.getElementById('customAlertContainer'); customAlertContainer.innerHTML = confirmHTML; customAlertContainer.querySelector('.alert-button-confirm').onclick = () => { customAlertContainer.innerHTML = ''; resolve(true); }; customAlertContainer.querySelector('.alert-button-cancel').onclick = () => { customAlertContainer.innerHTML = ''; resolve(false); }; }); };
         const debounce = (func, delay) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => func(...a), delay) } };
 
@@ -1066,7 +1211,7 @@
             });
         }
 
-        async function handleAddItemClick(e) { const button = e.target.closest('.add-item'); if (!button) return; button.disabled = true; const { id, type, list } = button.dataset; const alreadyExists = Object.values(data).flat().some(item => String(item.id) === String(id) && item.type === type); if (alreadyExists) { showCustomAlert('Informacja', 'Ten tytuł już jest na jednej z list.', 'error'); button.disabled = false; return; } const itemDetails = await getItemDetails(id, type); if (!itemDetails) { showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów tytułu.', 'error'); button.disabled = false; return; } itemDetails.dateAdded = Date.now(); const targetListName = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`; if (list === 'watched') { itemDetails.rating = null; itemDetails.review = ""; } data[targetListName].unshift(itemDetails); await saveData(); switchActiveList(viewState.activeTab); document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none'; showCustomAlert('Sukces!', 'Dodano do listy!', 'success'); }
+        async function handleAddItemClick(e) { const button = e.target.closest('.add-item'); if (!button) return; button.disabled = true; const { id, type, list } = button.dataset; const alreadyExists = Object.values(data).flat().some(item => String(item.id) === String(id) && item.type === type); if (alreadyExists) { showCustomAlert('Informacja', 'Ten tytuł już jest na jednej z list.', 'error'); button.disabled = false; return; } const itemDetails = await getItemDetails(id, type); if (!itemDetails) { showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów tytułu.', 'error'); button.disabled = false; return; } itemDetails.dateAdded = Date.now(); const targetListName = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`; if (list === 'toWatch' && (targetListName === 'moviesToWatch' || targetListName === 'seriesToWatch')) { const maxOrder = data[targetListName].length > 0 ? Math.max(...data[targetListName].map(i => i.customOrder || 0)) : -1; itemDetails.customOrder = maxOrder + 1; } if (list === 'watched') { itemDetails.rating = null; itemDetails.review = ""; } data[targetListName].unshift(itemDetails); await saveData(); switchActiveList(viewState.activeTab); document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none'; showCustomAlert('Sukces!', 'Dodano do listy!', 'success'); }
 
         async function getItemDetails(id, type) { try { const response = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images&include_image_language=pl,en,null`); if (!response.ok) return null; const d = await response.json(); const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), releaseDate: d.release_date || d.first_air_date || null, overview: d.overview, genres: d.genres.map(g => g.name), isFavorite: false }; if (type === 'tv') { item.seasons = d.seasons; item.numberOfSeasons = d.number_of_seasons; item.numberOfEpisodes = d.number_of_episodes; item.progress = {}; } else if (type === 'movie') { item.runtime = d.runtime || null; } return item; } catch { return null; } }
 
@@ -1095,7 +1240,7 @@
             }
         }
 
-        async function handleMoveItem(id, type) { const fromListName = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; const toListName = `${type === 'movie' ? 'movies' : 'series'}Watched`; const itemIndex = data[fromListName].findIndex(i => String(i.id) === String(id) && i.type == type); if (itemIndex > -1) { const [item] = data[fromListName].splice(itemIndex, 1); item.rating = null; item.review = ""; delete item.progress; delete item.seasons; data[toListName].unshift(item); await saveData(); switchActiveList(viewState.activeTab); showCustomAlert('Przeniesiono', 'Tytuł oznaczono jako obejrzany.', 'success'); } }
+        async function handleMoveItem(id, type) { const fromListName = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; const toListName = `${type === 'movie' ? 'movies' : 'series'}Watched`; const itemIndex = data[fromListName].findIndex(i => String(i.id) === String(id) && i.type == type); if (itemIndex > -1) { const [item] = data[fromListName].splice(itemIndex, 1); item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder; data[toListName].unshift(item); await saveData(); switchActiveList(viewState.activeTab); showCustomAlert('Przeniesiono', 'Tytuł oznaczono jako obejrzany.', 'success'); } }
         async function saveData() { try { await db.set('mainState', { data, viewState }); } catch (error) { console.error("Nie udało się zapisać danych w IndexedDB:", error); showCustomAlert('Błąd Krytyczny', 'Nie można zapisać danych. Spróbuj odświeżyć stronę.', 'error'); } }
         async function loadData() {
             let savedState = await db.get('mainState');
@@ -1129,6 +1274,14 @@
                         if (item.poster && item.poster.startsWith('/')) {
                             item.poster = IMAGE_BASE_URL + item.poster;
                         }
+                    });
+                }
+            });
+
+            ['moviesToWatch', 'seriesToWatch'].forEach(listKey => {
+                if (dataToMigrate[listKey] && dataToMigrate[listKey].length > 0 && dataToMigrate[listKey][0].customOrder === undefined) {
+                    dataToMigrate[listKey].forEach((item, index) => {
+                        item.customOrder = index;
                     });
                 }
             });
@@ -1534,10 +1687,14 @@
                     releaseDate: null
                 };
 
-                if (list === 'Watched') {
+                if (list === 'ToWatch') {
+                    const maxOrder = data[targetListName].length > 0 ? Math.max(...data[targetListName].map(i => i.customOrder || 0)) : -1;
+                    newItem.customOrder = maxOrder + 1;
+                } else {
                     newItem.rating = null;
                     newItem.review = "";
                 }
+
                 if (type === 'movie') {
                     newItem.runtime = null;
                 }
@@ -1694,6 +1851,10 @@
 
             itemDetails.dateAdded = Date.now();
             const targetListName = (type === 'movie' ? 'movies' : 'series') + 'ToWatch';
+
+            const maxOrder = data[targetListName].length > 0 ? Math.max(...data[targetListName].map(i => i.customOrder || 0)) : -1;
+            itemDetails.customOrder = maxOrder + 1;
+
             data[targetListName].unshift(itemDetails);
             await saveData();
 
