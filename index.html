@@ -59,7 +59,6 @@
             margin: 0;
             padding-top: calc(var(--header-height) + var(--safe-top));
             transition: background-color var(--transition-speed), color var(--transition-speed);
-            /* --- NOWOŚĆ --- Zapobiega przewijaniu strony w poziomie podczas gestu */
             overflow-x: hidden;
         }
 
@@ -182,8 +181,6 @@
         .star-rating-display { display: flex; gap: 2px; margin-top: auto; padding-top: 6px; }
         .star-rating-display svg { width: 18px; height: 18px; }
         .list-item .item-actions { margin-left: auto; align-self: center; display: flex; }
-
-        /* Zaktualizowane style dla SortableJS */
         .list-item.sortable-ghost {
             opacity: 0.4;
             background: var(--border-color);
@@ -197,7 +194,6 @@
         .list-item[style*="cursor: move;"] {
             background-color: color-mix(in srgb, var(--card-color) 80%, var(--border-color));
         }
-
 
         .list-item.unreleased {
             opacity: 0.75;
@@ -216,7 +212,6 @@
             font-weight: 500;
             display: inline-block;
         }
-
 
         .progress-container { margin-top: auto; padding-top: 8px; }
         .progress-text { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; }
@@ -692,7 +687,6 @@
             seriesToWatch: 'Seriale do Obejrzenia',
             seriesWatched: 'Seriale Obejrzane',
         };
-        // --- NOWOŚĆ --- Definicja kolejności list do nawigacji gestami
         const TAB_ORDER = ['moviesToWatch', 'moviesWatched', 'seriesToWatch', 'seriesWatched'];
 
         const ICONS = {
@@ -887,7 +881,20 @@
                     document.getElementById('searchResults').style.display = 'none';
                 }
             });
-            document.getElementById('searchResults').addEventListener('click', handleAddItemClick);
+
+            document.getElementById('searchResults').addEventListener('click', (e) => {
+                const quickAddButton = e.target.closest('.add-item');
+                const searchItem = e.target.closest('.search-item');
+
+                if (quickAddButton) {
+                    handleQuickAddItem(quickAddButton);
+                } else if (searchItem && !searchItem.classList.contains('show-all-results-btn')) {
+                    const { id, type } = searchItem.dataset;
+                    if (id && type) {
+                        openPreviewModal(id, type);
+                    }
+                }
+            });
 
             document.querySelector('.list-tabs').addEventListener('click', (e) => {
                 const tabButton = e.target.closest('.tab-button');
@@ -913,20 +920,17 @@
             document.getElementById('restoreInput').addEventListener('change', restoreData);
             document.getElementById('info-fab').addEventListener('click', showInfoModal);
 
-            // --- NOWOŚĆ --- Inicjalizacja gestów nawigacji
             setupSwipeNavigation();
         }
 
-        // --- NOWA FUNKCJA DO OBSŁUGI GESTÓW NAWIGACJI ---
         function setupSwipeNavigation() {
             const swipeArea = document.getElementById('lists-section');
             let startX = 0;
             let currentX = 0;
             let isSwiping = false;
-            const swipeThreshold = 75; // Minimalna odległość przesunięcia w pikselach, aby uznać to za gest
+            const swipeThreshold = 75;
 
             swipeArea.addEventListener('touchstart', (e) => {
-                // Nie rozpoczynaj przesuwania, jeśli użytkownik przeciąga element listy
                 if (e.target.closest('.sortable-chosen')) {
                     return;
                 }
@@ -950,9 +954,9 @@
                     const currentIndex = TAB_ORDER.indexOf(viewState.activeTab);
                     let newIndex;
 
-                    if (deltaX < 0) { // Przesunięcie w lewo
+                    if (deltaX < 0) {
                         newIndex = (currentIndex + 1) % TAB_ORDER.length;
-                    } else { // Przesunięcie w prawo
+                    } else {
                         newIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length;
                     }
 
@@ -1092,7 +1096,6 @@
                 year = yearMatch[1];
                 searchTerm = query.replace(/\b\d{4}\b$/, '').trim();
             }
-
             try {
                 let finalResults = [];
                 if (year && searchTerm) {
@@ -1141,6 +1144,8 @@
             topResults.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'search-item';
+                div.dataset.id = item.id;
+                div.dataset.type = item.media_type;
                 const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
                 div.innerHTML = `<img src="${posterSrc}" alt="Okładka" loading="lazy" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${item.title || item.name}</strong><span>${(item.release_date || item.first_air_date || '').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Dodaj do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Dodaj do obejrzanych"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button></div>`;
                 searchResultsContainer.appendChild(div);
@@ -1168,7 +1173,7 @@
             const resultsHTML = filteredResults.map(item => {
                 const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
                 return `
-                    <div class="search-item">
+                    <div class="search-item" data-id="${item.id}" data-type="${item.media_type}">
                         <img src="${posterSrc}" alt="Okładka" loading="lazy" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
                         <div class="info">
                             <strong>${item.title || item.name}</strong>
@@ -1198,20 +1203,69 @@
             const modal = modalContainer.querySelector('.modal-overlay');
             const closeModal = () => modalContainer.innerHTML = '';
 
-            modal.addEventListener('click', e => {
-                if (e.target === modal) closeModal();
-            });
+            modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
-            modal.querySelector('.all-results-list').addEventListener('click', async (e) => {
-                const button = e.target.closest('.add-item');
-                if (button) {
-                    await handleAddItemClick(e);
+
+            modal.querySelector('.all-results-list').addEventListener('click', (e) => {
+                const quickAddButton = e.target.closest('.add-item');
+                const searchItem = e.target.closest('.search-item');
+
+                if (quickAddButton) {
+                    handleQuickAddItem(quickAddButton);
                     closeModal();
+                } else if (searchItem) {
+                    const { id, type } = searchItem.dataset;
+                    if (id && type) {
+                        openPreviewModal(id, type);
+                        closeModal();
+                    }
                 }
             });
         }
 
-        async function handleAddItemClick(e) { const button = e.target.closest('.add-item'); if (!button) return; button.disabled = true; const { id, type, list } = button.dataset; const alreadyExists = Object.values(data).flat().some(item => String(item.id) === String(id) && item.type === type); if (alreadyExists) { showCustomAlert('Informacja', 'Ten tytuł już jest na jednej z list.', 'error'); button.disabled = false; return; } const itemDetails = await getItemDetails(id, type); if (!itemDetails) { showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów tytułu.', 'error'); button.disabled = false; return; } itemDetails.dateAdded = Date.now(); const targetListName = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`; if (list === 'toWatch' && (targetListName === 'moviesToWatch' || targetListName === 'seriesToWatch')) { const maxOrder = data[targetListName].length > 0 ? Math.max(...data[targetListName].map(i => i.customOrder || 0)) : -1; itemDetails.customOrder = maxOrder + 1; } if (list === 'watched') { itemDetails.rating = null; itemDetails.review = ""; } data[targetListName].unshift(itemDetails); await saveData(); switchActiveList(viewState.activeTab); document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none'; showCustomAlert('Sukces!', 'Dodano do listy!', 'success'); }
+        async function addItemToList(id, type, list) {
+            const alreadyExists = Object.values(data).flat().some(item => String(item.id) === String(id) && item.type === type);
+            if (alreadyExists) {
+                showCustomAlert('Informacja', 'Ten tytuł już jest na jednej z list.', 'error');
+                return false;
+            }
+
+            const itemDetails = await getItemDetails(id, type);
+            if (!itemDetails) {
+                showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów tytułu.', 'error');
+                return false;
+            }
+
+            itemDetails.dateAdded = Date.now();
+            const targetListName = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`;
+
+            if (list === 'toWatch' && (targetListName === 'moviesToWatch' || targetListName === 'seriesToWatch')) {
+                const maxOrder = data[targetListName].length > 0 ? Math.max(...data[targetListName].map(i => i.customOrder || 0)) : -1;
+                itemDetails.customOrder = maxOrder + 1;
+            }
+            if (list === 'watched') {
+                itemDetails.rating = null;
+                itemDetails.review = "";
+            }
+
+            data[targetListName].unshift(itemDetails);
+            await saveData();
+
+            switchActiveList(viewState.activeTab);
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').style.display = 'none';
+            showCustomAlert('Sukces!', 'Dodano do listy!', 'success');
+            return true;
+        }
+
+        async function handleQuickAddItem(button) {
+            button.disabled = true;
+            const { id, type, list } = button.dataset;
+            const success = await addItemToList(id, type, list);
+            if (!success) {
+                button.disabled = false;
+            }
+        }
 
         async function getItemDetails(id, type) { try { const response = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images&include_image_language=pl,en,null`); if (!response.ok) return null; const d = await response.json(); const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), releaseDate: d.release_date || d.first_air_date || null, overview: d.overview, genres: d.genres.map(g => g.name), isFavorite: false }; if (type === 'tv') { item.seasons = d.seasons; item.numberOfSeasons = d.number_of_seasons; item.numberOfEpisodes = d.number_of_episodes; item.progress = {}; } else if (type === 'movie') { item.runtime = d.runtime || null; } return item; } catch { return null; } }
 
@@ -1310,6 +1364,111 @@
             switchActiveList(viewState.activeTab || 'moviesToWatch');
             showCustomAlert('Sukces', 'Dane zostały przywrócone.', 'success');
             } else { throw new Error('Nieprawidłowy format pliku.'); } } catch(err) { showCustomAlert('Błąd', err.message || 'Błąd odczytu pliku.', 'error'); } }; reader.readAsText(file); e.target.value = ''; }
+
+        async function openPreviewModal(id, type) {
+            const detailsModalContainer = document.getElementById('detailsModalContainer');
+            detailsModalContainer.innerHTML = `<div class="modal-overlay"><div class="modal-content" style="text-align:center;">Ładowanie...</div></div>`;
+
+            const item = await getItemDetails(id, type);
+            if (!item) {
+                detailsModalContainer.innerHTML = '';
+                showCustomAlert('Błąd', 'Nie udało się załadować szczegółów.', 'error');
+                return;
+            }
+
+            const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
+
+            let runtimeInfo = '';
+            if (item.type === 'movie' && item.runtime) {
+                runtimeInfo = `<div class="runtime-info" style="margin-bottom: 20px; font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">Czas trwania: ${formatRuntime(item.runtime)}</div>`;
+            }
+
+            let footerHTML = '';
+            if (isAlreadyAdded) {
+                footerHTML = `
+                <div class="modal-footer" style="margin-top:24px; text-align:center;">
+                    <span style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; color: var(--success-color);">
+                        <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg>
+                        Ten tytuł jest już na jednej z Twoich list.
+                    </span>
+                </div>`;
+            } else {
+                footerHTML = `
+                <div class="modal-footer" style="margin-top:24px;display:flex;justify-content:space-between; gap:12px;">
+                    <button id="previewAddToWatchedBtn" style="padding:14px 20px;border:1px solid var(--border-color);background:transparent;color:var(--text-color);border-radius:var(--radius-md);cursor:pointer;font-size:1rem;font-weight:bold; flex:1;">Dodaj do Obejrzanych</button>
+                    <button id="previewAddToWatchBtn" style="padding:14px 20px;border:none;background:var(--primary-color);color:white;border-radius:var(--radius-md);cursor:pointer;font-size:1rem;font-weight:bold; flex:1;">Dodaj do Obejrzenia</button>
+                </div>`;
+            }
+
+            const modalHTML = `
+            <div class="modal-overlay">
+                <div class="modal-content">
+                    <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+                    <div class="modal-header">
+                        <img src="${item.poster || POSTER_PLACEHOLDER}" alt="Okładka" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
+                        <div class="modal-title-wrapper">
+                            <div class="modal-title">
+                                <h2>${item.title} (${item.year})</h2>
+                                <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
+                            </div>
+                        </div>
+                    </div>
+                     <div id="trailer-section-container" style="text-align: center; margin: 16px 0;"></div>
+                    <div class="modal-body">
+                        ${runtimeInfo}
+                        <h3>Opis</h3>
+                        <p style="line-height:1.6;color:var(--text-secondary);">${item.overview || 'Brak opisu.'}</p>
+                        <div id="cast-container"></div>
+                    </div>
+                    ${footerHTML}
+                </div>
+            </div>`;
+            detailsModalContainer.innerHTML = modalHTML;
+            const modal = detailsModalContainer.querySelector('.modal-overlay');
+
+            const closeModal = () => { detailsModalContainer.innerHTML = ''; };
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) { closeModal(); }
+                const castMember = e.target.closest('.cast-member[data-actor-id]');
+                if (castMember) { openActorDetailsModal(castMember.dataset.actorId); }
+            });
+            modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
+
+            getTrailerKey(id, type).then(trailerKey => {
+                if (trailerKey) {
+                    const trailerBtnContainer = document.getElementById('trailer-section-container');
+                    if (trailerBtnContainer) {
+                        const trailerBtn = document.createElement('button');
+                        trailerBtn.className = 'trailer-btn';
+                        trailerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M10,16.5V7.5L16,12M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" /></svg> Zwiastun`;
+                        trailerBtn.onclick = () => openTrailerModal(trailerKey);
+                        trailerBtnContainer.appendChild(trailerBtn);
+                    }
+                }
+            });
+
+            const castContainer = document.getElementById('cast-container');
+            getCredits(id, type).then(cast => {
+                if (cast && cast.length > 0) {
+                    castContainer.innerHTML = `<p style="color: var(--text-secondary); margin-top: 24px;">Ładowanie obsady...</p>`;
+                    const castHTML = cast.map(member => `<div class="cast-member" data-actor-id="${member.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${member.profile_path}" alt="${member.name}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${member.name}</strong><span>${member.character}</span></div>`).join('');
+                    castContainer.innerHTML = `<div class="cast-section"><h3>Obsada</h3><div class="cast-scroller">${castHTML}</div></div>`;
+                } else { castContainer.innerHTML = ''; }
+            });
+
+            if (!isAlreadyAdded) {
+                document.getElementById('previewAddToWatchBtn').onclick = async () => {
+                    if (await addItemToList(id, type, 'toWatch')) {
+                        closeModal();
+                    }
+                };
+                document.getElementById('previewAddToWatchedBtn').onclick = async () => {
+                    if (await addItemToList(id, type, 'watched')) {
+                        closeModal();
+                    }
+                };
+            }
+        }
 
         async function populateAndRenderSeriesSections(item, container) {
             if (String(item.id).startsWith('custom_')) {
