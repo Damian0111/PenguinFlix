@@ -94,7 +94,7 @@
         .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; fill: var(--text-secondary); pointer-events: none; }
 
         /* WYNIKI WYSZUKIWANIA */
-        #searchResults { display: none; position: fixed; top: calc(var(--header-height) + var(--safe-top) + 8px); left: 50%; transform: translateX(-50%); width: 92%; max-width: 800px; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; z-index: 1200; max-height: 60vh; overflow-y: auto; box-shadow: var(--shadow); }
+        #searchResults { display: none; position: fixed; top: calc(var(--header-height) + var(--safe-top) + 8px); left: 50%; transform: translateX(-50%); width: 92%; max-width: 800px; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; z-index: 1200; max-height: 60vh; overflow-y: auto; box-shadow: var(--shadow); overscroll-behavior-y: contain; }
         .search-item { display: flex; align-items: center; padding: 12px 16px; gap: 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background-color var(--transition-speed); }
         .search-item:last-child { border-bottom: none; }
         .search-item:hover { background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); }
@@ -268,7 +268,11 @@
         .settings-item:hover svg.chevron { fill: var(--primary-color); }
 
         /* --- NOWE MODALE SZCZEGÓŁÓW (BOTTOM SHEET & HERO) --- */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+            z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px;
+            overscroll-behavior: none; /* Blokuje odświeżanie strony na urządzeniach mobilnych */
+        }
 
         .modern-modal-wrapper {
             position: relative; background: var(--bg-color); border-radius: var(--radius-lg);
@@ -278,7 +282,10 @@
             box-shadow: 0 24px 48px rgba(0,0,0,0.6); border: 1px solid var(--border-color);
         }
 
-        .modern-modal-scroll { overflow-y: auto; flex-grow: 1; scrollbar-width: none; }
+        .modern-modal-scroll {
+            overflow-y: auto; flex-grow: 1; scrollbar-width: none;
+            overscroll-behavior-y: contain; /* Powstrzymuje scrollowanie pod spodem */
+        }
         .modern-modal-scroll::-webkit-scrollbar { display: none; }
 
         @media(max-width: 600px) {
@@ -643,7 +650,7 @@
                         <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg> Podsumowanie
                     </button>
                     <button class="ptab-btn" data-ptab="settings">
-                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Ustawienia
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Ustawienia
                     </button>
                 </div>
 
@@ -1323,6 +1330,60 @@
             };
         }
 
+        // --- ZMODERNIZOWANY GEST SWIPE DOWN ---
+        function setupSwipeToClose(modalElement, closeCallback) {
+            const wrapper = modalElement.querySelector('.modern-modal-wrapper');
+            if (!wrapper) return;
+            let startY = 0;
+            let currentY = 0;
+            let isDragging = false;
+
+            const onTouchStart = (e) => {
+                const scrollArea = wrapper.querySelector('.modern-modal-scroll');
+                // Zablokuj swipe jeśli element w środku jest przewinięty w dół
+                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) {
+                    isDragging = false;
+                    return;
+                }
+
+                startY = e.touches[0].clientY;
+                isDragging = true;
+                wrapper.style.transition = 'none';
+            };
+
+            const onTouchMove = (e) => {
+                if (!isDragging) return;
+                const y = e.touches[0].clientY;
+                const deltaY = y - startY;
+
+                // Jeśli ciągniemy w dół
+                if (deltaY > 0) {
+                    // BLOKUJEMY domyślne odświeżanie przeglądarki (pull-to-refresh)
+                    e.preventDefault();
+                    currentY = deltaY;
+                    wrapper.style.transform = `translateY(${currentY}px)`;
+                }
+            };
+
+            const onTouchEnd = () => {
+                if (!isDragging) return;
+                isDragging = false;
+                wrapper.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                if (currentY > 100) {
+                    wrapper.style.transform = `translateY(100%)`;
+                    setTimeout(closeCallback, 250);
+                } else {
+                    wrapper.style.transform = `translateY(0)`;
+                }
+                currentY = 0;
+            };
+
+            // passive: false pozwala na użycie e.preventDefault()
+            wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
+            wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
+            wrapper.addEventListener('touchend', onTouchEnd);
+        }
+
         function showInfoModal() {
             const checkIcon = `<svg class="info-feature-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
             const infoHTML = `
@@ -1666,7 +1727,7 @@
             `;
         }
 
-        // FUKCJA GESTU DO ZAMYKANIA MODALA
+        // --- ZMODERNIZOWANY GEST SWIPE DOWN ---
         function setupSwipeToClose(modalElement, closeCallback) {
             const wrapper = modalElement.querySelector('.modern-modal-wrapper');
             if (!wrapper) return;
@@ -1676,7 +1737,11 @@
 
             const onTouchStart = (e) => {
                 const scrollArea = wrapper.querySelector('.modern-modal-scroll');
-                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) return;
+                // Zablokuj swipe jeśli element w środku jest przewinięty w dół
+                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) {
+                    isDragging = false;
+                    return;
+                }
 
                 startY = e.touches[0].clientY;
                 isDragging = true;
@@ -1686,8 +1751,13 @@
             const onTouchMove = (e) => {
                 if (!isDragging) return;
                 const y = e.touches[0].clientY;
-                currentY = Math.max(0, y - startY);
-                if (currentY > 0) {
+                const deltaY = y - startY;
+
+                // Jeśli ciągniemy w dół
+                if (deltaY > 0) {
+                    // BLOKUJEMY domyślne odświeżanie przeglądarki (pull-to-refresh)
+                    e.preventDefault();
+                    currentY = deltaY;
                     wrapper.style.transform = `translateY(${currentY}px)`;
                 }
             };
@@ -1705,8 +1775,9 @@
                 currentY = 0;
             };
 
+            // passive: false pozwala na użycie e.preventDefault()
             wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
-            wrapper.addEventListener('touchmove', onTouchMove, { passive: true });
+            wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
             wrapper.addEventListener('touchend', onTouchEnd);
         }
 
