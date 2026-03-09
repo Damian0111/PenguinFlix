@@ -211,10 +211,6 @@
             border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 12px;
             width: calc(100% + 32px);
         }
-        .randomizer-container { padding: 0 16px; width: 100%; }
-        .random-btn { width: 100%; padding: 16px; border: none; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--primary-color), #ff4b2b); color: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 6px 16px rgba(229, 9, 20, 0.3); transition: transform 0.2s, box-shadow 0.2s; }
-        .random-btn:active { transform: scale(0.97); }
-        .random-btn svg { width: 26px; height: 26px; fill: white; }
         .discover-categories-wrapper { width: 100%; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
         .discover-categories-wrapper::-webkit-scrollbar { display: none; }
         .discover-categories { display: flex; align-items: center; gap: 10px; width: max-content; padding-right: 16px; }
@@ -228,6 +224,29 @@
         .discover-poster-wrapper { position: relative; width: 100%; aspect-ratio: 2 / 3; border-radius: var(--radius-md); overflow: hidden; background-color: var(--card-color); box-shadow: var(--shadow); border: 1px solid var(--border-color); }
         .discover-poster-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .discover-item-title { font-size: 0.9rem; font-weight: 600; text-align: center; line-height: 1.3; color: var(--text-color); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
+
+        /* NOWY PRZYCISK LOSOWANIA (FAB) */
+        .fab-randomizer {
+            position: fixed;
+            bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 20px);
+            right: 20px;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), #ff4b2b);
+            border: none;
+            box-shadow: 0 6px 16px rgba(229, 9, 20, 0.4);
+            cursor: pointer;
+            display: none; /* Pokazywane przez JS tylko na karcie Odkrywaj */
+            align-items: center; justify-content: center;
+            z-index: 1000;
+            transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+        }
+        .fab-randomizer.visible { display: flex; animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .fab-randomizer:active { transform: scale(0.9); }
+        .fab-randomizer:hover { filter: brightness(1.1); box-shadow: 0 8px 20px rgba(229, 9, 20, 0.6); }
+        .fab-randomizer svg { width: 30px; height: 30px; fill: white; transition: transform 0.3s ease; }
+        .fab-randomizer.rolling svg { animation: rollDice 0.6s ease-in-out; }
+        @keyframes rollDice { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(180deg) scale(1.3); } 100% { transform: rotate(360deg) scale(1); } }
 
         /* --- ZAKŁADKA PROFIL --- */
         .profile-header { text-align: center; margin-bottom: 24px; margin-top: 16px; width: 100%; }
@@ -271,7 +290,7 @@
         .modal-overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
             z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px;
-            overscroll-behavior: none; /* Blokuje odświeżanie strony na urządzeniach mobilnych */
+            overscroll-behavior: none;
         }
 
         .modern-modal-wrapper {
@@ -284,7 +303,7 @@
 
         .modern-modal-scroll {
             overflow-y: auto; flex-grow: 1; scrollbar-width: none;
-            overscroll-behavior-y: contain; /* Powstrzymuje scrollowanie pod spodem */
+            overscroll-behavior-y: contain;
         }
         .modern-modal-scroll::-webkit-scrollbar { display: none; }
 
@@ -302,7 +321,6 @@
         .hero-bg-img { position: absolute; inset: 0; background-size: cover; background-position: center top; transition: filter 0.3s; }
         .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, var(--bg-color) 0%, rgba(16, 17, 20, 0.8) 30%, transparent 100%); }
 
-        /* Przycisk zamknięcia modalu z X */
         .modal-top-close-btn {
             position: absolute; top: 16px; right: 16px; z-index: 60;
             background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; border-radius: 50%;
@@ -343,7 +361,6 @@
         .modal-btn.primary { background: var(--primary-color); color: white; box-shadow: 0 4px 16px rgba(229, 9, 20, 0.3); }
         .modal-btn.secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
 
-        /* Nowa karta recenzji */
         .review-card { background: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
         .review-card h3 { text-align: center; margin-bottom: 16px; }
         .star-rating-interactive { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px;}
@@ -362,7 +379,6 @@
         .modern-textarea { width: 100%; min-height: 100px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); border-radius: var(--radius-md); padding: 16px; font-size: 0.95rem; font-family: inherit; resize: vertical; outline: none; transition: border-color 0.2s; }
         .modern-textarea:focus { border-color: var(--primary-color); }
 
-        /* Zwiastun Przycisk w Hero */
         .hero-trailer-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem; font-weight: bold; background: rgba(255,255,255,0.15); backdrop-filter: blur(4px); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s; }
         .hero-trailer-btn svg { width: 16px; height: 16px; fill: white; }
         .hero-trailer-btn:hover { background: var(--primary-color); border-color: var(--primary-color); }
@@ -404,6 +420,62 @@
         .control-modal-footer .reset-btn { background-color: var(--border-color); color: var(--text-color); }
         .control-modal-footer .apply-btn { background-color: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3); }
 
+        /* --- NOWY SYSTEM POWIADOMIEŃ (TOASTS) --- */
+        #toast-container {
+            position: fixed; top: max(env(safe-area-inset-top, 16px), 16px);
+            left: 50%; transform: translateX(-50%); z-index: 9999;
+            display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px;
+            pointer-events: none; /* Żeby nie blokować klikania pod spodem */
+        }
+        .modern-toast {
+            position: relative; overflow: hidden;
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 16px; border-radius: var(--radius-lg);
+            background: color-mix(in srgb, var(--card-color) 98%, transparent);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            animation: slideDownToast 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            pointer-events: auto; cursor: pointer;
+        }
+        /* Style dedykowane konkretnym typom toasta */
+        .modern-toast.success { border-left: 4px solid var(--success-color); box-shadow: 0 8px 24px rgba(40, 167, 69, 0.15); }
+        .modern-toast.error { border-left: 4px solid var(--primary-color); box-shadow: 0 8px 24px rgba(229, 9, 20, 0.15); }
+        .modern-toast.info { border-left: 4px solid #3b82f6; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15); }
+
+        .modern-toast.hiding { animation: slideUpToast 0.3s forwards; }
+        .toast-icon-wrap { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .toast-icon-wrap.success { background: color-mix(in srgb, var(--success-color) 15%, transparent); color: var(--success-color); }
+        .toast-icon-wrap.error { background: color-mix(in srgb, var(--primary-color) 15%, transparent); color: var(--primary-color); }
+        .toast-icon-wrap.info { background: color-mix(in srgb, #3b82f6 15%, transparent); color: #3b82f6; }
+        .toast-icon-wrap svg { width: 20px; height: 20px; stroke: currentColor; fill: none; }
+        .toast-content { display: flex; flex-direction: column; justify-content: center; z-index: 2; padding-bottom: 4px; }
+        .toast-title { font-weight: 700; font-size: 0.95rem; color: var(--text-color); margin-bottom: 2px;}
+        .toast-msg { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.3;}
+
+        /* Pasek postępu na dole toasta */
+        .toast-progress {
+            position: absolute; bottom: 0; left: 0; height: 3px; background: currentColor;
+            animation: toastProgress 3.5s linear forwards; z-index: 1;
+        }
+
+        @keyframes slideDownToast { from { transform: translateY(-120%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideUpToast { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-120%); opacity: 0; } }
+        @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+
+        /* Modal POTWIERDZENIA - Pozostaje stary wygląd (wymaga zablokowania ekranu) */
+        .modern-alert-overlay { position: fixed; inset: 0; z-index: 4000; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.25s ease-out; }
+        .modern-alert-card { background: var(--card-color); width: 100%; max-width: 380px; border-radius: 20px; padding: 32px 24px; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); animation: alertPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; align-items: center; }
+        .modern-alert-icon-wrap { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+        .modern-alert-icon-wrap.info { background: color-mix(in srgb, #3b82f6 15%, transparent); }
+        .modern-alert-icon-wrap.info svg { width: 32px; height: 32px; stroke: #3b82f6; }
+        .modern-alert-card h2 { margin: 0 0 12px; font-size: 1.4rem; color: var(--text-color); }
+        .modern-alert-card p { margin: 0 0 28px; color: var(--text-secondary); font-size: 1rem; line-height: 1.5; }
+        .modern-alert-actions { display: flex; gap: 12px; width: 100%; justify-content: center; }
+        .modern-alert-btn { flex: 1; padding: 14px 20px; border: none; border-radius: var(--radius-pill); font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
+        .modern-alert-btn:active { transform: scale(0.95); }
+        .modern-alert-btn.primary { background: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3); }
+        .modern-alert-btn.secondary { background: var(--border-color); color: var(--text-color); }
+
         /* --- STYLE DLA "O APLIKACJI" --- */
         .info-feature-list { list-style: none; padding: 0; margin: 0 0 24px 0; }
         .info-feature-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; font-size: 0.95rem; color: var(--text-color); line-height: 1.4; }
@@ -423,24 +495,6 @@
         .modern-radio-label input { display: none; }
         .modern-radio-label span { display: block; padding: 12px 12px; font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; }
         .modern-radio-label input:checked + span { background: var(--text-color); color: var(--bg-color); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-        /* ALERTY I POTWIERDZENIA */
-        .modern-alert-overlay { position: fixed; inset: 0; z-index: 4000; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.25s ease-out; }
-        .modern-alert-card { background: var(--card-color); width: 100%; max-width: 380px; border-radius: 20px; padding: 32px 24px; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); animation: alertPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; align-items: center; }
-        .modern-alert-icon-wrap { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
-        .modern-alert-icon-wrap.success { background: color-mix(in srgb, var(--success-color) 15%, transparent); }
-        .modern-alert-icon-wrap.success svg { width: 32px; height: 32px; stroke: var(--success-color); }
-        .modern-alert-icon-wrap.error { background: color-mix(in srgb, var(--primary-color) 15%, transparent); }
-        .modern-alert-icon-wrap.error svg { width: 32px; height: 32px; stroke: var(--primary-color); }
-        .modern-alert-icon-wrap.info { background: color-mix(in srgb, #3b82f6 15%, transparent); }
-        .modern-alert-icon-wrap.info svg { width: 32px; height: 32px; stroke: #3b82f6; }
-        .modern-alert-card h2 { margin: 0 0 12px; font-size: 1.4rem; color: var(--text-color); }
-        .modern-alert-card p { margin: 0 0 28px; color: var(--text-secondary); font-size: 1rem; line-height: 1.5; }
-        .modern-alert-actions { display: flex; gap: 12px; width: 100%; justify-content: center; }
-        .modern-alert-btn { flex: 1; padding: 14px 20px; border: none; border-radius: var(--radius-pill); font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
-        .modern-alert-btn:active { transform: scale(0.95); }
-        .modern-alert-btn.primary { background: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3); }
-        .modern-alert-btn.secondary { background: var(--border-color); color: var(--text-color); }
 
         .cast-section, .known-for-section, .seasons-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color); }
         .cast-section h3, .known-for-section h3, .seasons-section h3 { margin-bottom: 16px; margin-top: 0;}
@@ -521,7 +575,6 @@
         .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--radius-lg); background-color: #000; }
         .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 
-        /* PRZYCISK ZAMKNIĘCIA TRAILERA (Zawsze X) */
         .trailer-close-btn {
             position: absolute; top: -45px; right: 0; z-index: 5100;
             width: 36px; height: 36px; background: rgba(255,255,255,0.2) !important;
@@ -541,6 +594,9 @@
 </head>
 <body>
     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display: none;" id="force-light-mode-hack">
+
+    <!-- POJEMNIK NA NOWOCZESNE POWIADOMIENIA (TOASTY) -->
+    <div id="toast-container"></div>
 
     <!-- GŁÓWNY GÓRNY PASEK -->
     <header id="fixed-header">
@@ -606,12 +662,6 @@
             <!-- ZAKŁADKA 3: ODKRYWAJ -->
             <div id="tab-discover" class="main-tab-content">
                 <div class="discover-sticky-header">
-                    <div class="randomizer-container">
-                        <button id="btn-randomize" class="random-btn">
-                            <svg viewBox="0 0 24 24"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg>
-                            <span>Nie wiesz co obejrzeć? Wylosuj!</span>
-                        </button>
-                    </div>
                     <div class="discover-categories-wrapper">
                         <div class="discover-categories" id="discover-categories">
                             <button class="discover-pill active" data-endpoint="trending">🔥 Trendy</button>
@@ -635,6 +685,11 @@
                     </div>
                 </div>
                 <div class="discover-grid" id="main-discover-grid"></div>
+
+                <!-- NOWY PRZYCISK LOSOWANIA W FORMIE PŁYWAJĄCEJ KOSTKI -->
+                <button id="fab-randomize" class="fab-randomizer" title="Wylosuj co obejrzeć">
+                    <svg viewBox="0 0 24 24"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg>
+                </button>
             </div>
 
             <!-- ZAKŁADKA 4: PROFIL I USTAWIENIA -->
@@ -798,6 +853,14 @@
             document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => { btn.classList.toggle('active', btn.dataset.maintab === tabId); });
             document.querySelectorAll('.main-tab-content').forEach(container => { container.classList.toggle('active', container.id === `tab-${tabId}`); });
             const subHeader = document.getElementById('sub-header');
+
+            // Obsługa widoczności FAB kostki
+            const fab = document.getElementById('fab-randomize');
+            if (fab) {
+                if (tabId === 'discover') fab.classList.add('visible');
+                else fab.classList.remove('visible');
+            }
+
             if (tabId === 'movies' || tabId === 'series') {
                 subHeader.style.display = 'flex';
                 const subTab = tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
@@ -1040,19 +1103,28 @@
             document.getElementById('discover-categories').addEventListener('click', handlePillClick);
             document.getElementById('discover-genres').addEventListener('click', handlePillClick);
 
-            document.getElementById('btn-randomize').addEventListener('click', async () => {
-                const btn = document.getElementById('btn-randomize'); const originalContent = btn.innerHTML;
-                btn.innerHTML = '<span>Szukam czegoś super... 🎲</span>'; btn.disabled = true;
+            // Obsługa kliknięcia w nowy FAB kostki
+            document.getElementById('fab-randomize').addEventListener('click', async (e) => {
+                const btn = e.currentTarget;
+                if(btn.disabled) return;
+                btn.disabled = true;
+                btn.classList.add('rolling');
+
                 try {
                     const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
                     const res = await fetch(`${API_BASE_URL}/${type}/popular?api_key=${API_KEY}&language=pl-PL&page=${randomPage}`);
                     if (res.ok) {
                         const data = await res.json(); const validItems = data.results.filter(i => i.poster_path);
                         if (validItems.length > 0) { const randomItem = validItems[Math.floor(Math.random() * validItems.length)]; openPreviewModal(randomItem.id, type); }
-                        else { showCustomAlert('Ups', 'Spróbuj ponownie.', 'error'); }
+                        else { showCustomAlert('Brak wyników', 'Nie udało się wylosować. Spróbuj ponownie.', 'error'); }
                     }
-                } catch (e) { showCustomAlert('Błąd', 'Brak połączenia sieciowego.', 'error'); }
-                finally { btn.innerHTML = originalContent; btn.disabled = false; }
+                } catch (err) { showCustomAlert('Błąd sieci', 'Brak połączenia z internetem.', 'error'); }
+                finally {
+                    setTimeout(() => {
+                        btn.classList.remove('rolling');
+                        btn.disabled = false;
+                    }, 600); // Czas trwania animacji
+                }
             });
         }
 
@@ -1065,11 +1137,11 @@
 
             if (deleteBtn) {
                 e.stopPropagation();
-                const { listName } = getListAndItem(id, type);
-                showCustomConfirm('Potwierdzenie usunięcia', 'Czy na pewno chcesz usunąć ten tytuł ze swojej listy?').then(confirmed => {
+                const { listName, item } = getListAndItem(id, type);
+                showCustomConfirm('Potwierdzenie usunięcia', `Czy na pewno chcesz usunąć "${item.title}" ze swojej listy?`).then(confirmed => {
                     if (confirmed && listName) {
                         data[listName] = data[listName].filter(i => !(String(i.id) === String(id) && i.type === type));
-                        saveData().then(() => { renderList(data[listName], listName); showCustomAlert('Usunięto', 'Tytuł został usunięty z listy.', 'success'); });
+                        saveData().then(() => { renderList(data[listName], listName); showCustomAlert('Usunięto', `"${item.title}" zniknął z Twojej listy.`, 'success'); });
                     }
                 });
             } else { openDetailsModal(id, type); }
@@ -1330,55 +1402,31 @@
             };
         }
 
-        // --- ZMODERNIZOWANY GEST SWIPE DOWN ---
         function setupSwipeToClose(modalElement, closeCallback) {
             const wrapper = modalElement.querySelector('.modern-modal-wrapper');
             if (!wrapper) return;
-            let startY = 0;
-            let currentY = 0;
-            let isDragging = false;
+            let startY = 0; let currentY = 0; let isDragging = false;
 
             const onTouchStart = (e) => {
                 const scrollArea = wrapper.querySelector('.modern-modal-scroll');
-                // Zablokuj swipe jeśli element w środku jest przewinięty w dół
-                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) {
-                    isDragging = false;
-                    return;
-                }
-
-                startY = e.touches[0].clientY;
-                isDragging = true;
-                wrapper.style.transition = 'none';
+                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) { isDragging = false; return; }
+                startY = e.touches[0].clientY; isDragging = true; wrapper.style.transition = 'none';
             };
 
             const onTouchMove = (e) => {
                 if (!isDragging) return;
-                const y = e.touches[0].clientY;
-                const deltaY = y - startY;
-
-                // Jeśli ciągniemy w dół
-                if (deltaY > 0) {
-                    // BLOKUJEMY domyślne odświeżanie przeglądarki (pull-to-refresh)
-                    e.preventDefault();
-                    currentY = deltaY;
-                    wrapper.style.transform = `translateY(${currentY}px)`;
-                }
+                const y = e.touches[0].clientY; const deltaY = y - startY;
+                if (deltaY > 0) { e.preventDefault(); currentY = deltaY; wrapper.style.transform = `translateY(${currentY}px)`; }
             };
 
             const onTouchEnd = () => {
                 if (!isDragging) return;
-                isDragging = false;
-                wrapper.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                if (currentY > 100) {
-                    wrapper.style.transform = `translateY(100%)`;
-                    setTimeout(closeCallback, 250);
-                } else {
-                    wrapper.style.transform = `translateY(0)`;
-                }
+                isDragging = false; wrapper.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                if (currentY > 100) { wrapper.style.transform = `translateY(100%)`; setTimeout(closeCallback, 250); }
+                else { wrapper.style.transform = `translateY(0)`; }
                 currentY = 0;
             };
 
-            // passive: false pozwala na użycie e.preventDefault()
             wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
             wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
             wrapper.addEventListener('touchend', onTouchEnd);
@@ -1440,33 +1488,52 @@
         const generateStarRatingDisplay = (rating) => { let starsHTML = ''; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for (let i = 1; i <= 5; i++) { if (rating >= i) { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--warning-color)"><path d="${starPath}"/></svg>`; } else if (rating >= i - 0.5) { starsHTML += `<svg viewBox="0 0 24 24"><defs><linearGradient id="half_grad_${i}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="50%" stop-color="var(--warning-color)"/><stop offset="50%" stop-color="var(--border-color)"/></linearGradient></defs><path d="${starPath}" fill="url(#half_grad_${i})"/></svg>`; } else { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--border-color)"><path d="${starPath}"/></svg>`; } } return `<div class="star-rating-display">${starsHTML}</div>`; };
         const getListAndItem = (id, type) => { for (const listName in data) { if(Array.isArray(data[listName])) { const item = data[listName].find(i => String(i.id) === String(id) && i.type === type); if (item) return { listName, item }; } } return { listName: null, item: null }; };
         const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'flex'; };
-        const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const configSection = document.getElementById('configSection'); configSection.style.display = 'block'; configSection.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer; font-weight:bold;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Sukces!', 'Klucz API został zapisany.', 'success'); init(); } else { showCustomAlert('Błąd', 'Proszę wprowadzić prawidłowy klucz API.', 'error'); } }); };
+        const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const configSection = document.getElementById('configSection'); configSection.style.display = 'block'; configSection.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer; font-weight:bold;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Gotowe!', 'Klucz API został pomyślnie zapisany.', 'success'); init(); } else { showCustomAlert('Błąd', 'Proszę wprowadzić prawidłowy klucz API.', 'error'); } }); };
 
+        // --- ZMODERNIZOWANA FUNKCJA ALARMÓW (TOASTS) ---
         const showCustomAlert = (title, message, type = 'info') => {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `modern-toast ${type}`;
+
             const icons = {
-                success: `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
-                error: `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
-                info: `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
+                success: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+                error: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+                info: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
             };
-            const alertHTML = `
-                <div class="modern-alert-overlay" id="modernAlertWrap">
-                    <div class="modern-alert-card">
-                        <div class="modern-alert-icon-wrap ${type}">${icons[type] || icons.info}</div>
-                        <h2>${title}</h2>
-                        <p>${message}</p>
-                        <div class="modern-alert-actions">
-                            <button class="modern-alert-btn primary alert-button-confirm">Zrozumiałem</button>
-                        </div>
-                    </div>
-                </div>`;
-            const customAlertContainer = document.getElementById('customAlertContainer');
-            customAlertContainer.innerHTML = alertHTML;
-            const overlay = customAlertContainer.querySelector('.modern-alert-overlay');
-            const close = () => { overlay.style.opacity = '0'; setTimeout(() => customAlertContainer.innerHTML = '', 200); };
-            customAlertContainer.querySelector('.alert-button-confirm').onclick = close;
-            overlay.onclick = (e) => { if(e.target === overlay) close(); };
+
+            const progressColors = {
+                success: 'var(--success-color)',
+                error: 'var(--primary-color)',
+                info: '#3b82f6'
+            };
+
+            toast.innerHTML = `
+                <div class="toast-icon-wrap ${type}">${icons[type] || icons.info}</div>
+                <div class="toast-content">
+                    <span class="toast-title">${title}</span>
+                    <span class="toast-msg">${message}</span>
+                </div>
+                <div class="toast-progress" style="color: ${progressColors[type] || progressColors.info}"></div>
+            `;
+
+            toastContainer.appendChild(toast);
+
+            const hideTimeout = setTimeout(() => {
+                if(!toast.classList.contains('hiding')) {
+                    toast.classList.add('hiding');
+                    toast.addEventListener('animationend', () => toast.remove());
+                }
+            }, 3500);
+
+            toast.addEventListener('click', () => {
+                 clearTimeout(hideTimeout);
+                 toast.classList.add('hiding');
+                 toast.addEventListener('animationend', () => toast.remove());
+            });
         };
 
+        // --- POTWIERDZENIA ZOSTAJĄ JAKO MODAL ---
         const showCustomConfirm = (title, message) => {
             return new Promise((resolve) => {
                 const confirmHTML = `
@@ -1596,8 +1663,12 @@
         }
 
         async function addItemToList(id, type, list) {
-            const alreadyExists = Object.values(data).flat().some(item => String(item.id) === String(id) && item.type === type);
-            if (alreadyExists) { showCustomAlert('Informacja', 'Ten tytuł już jest na jednej z list.', 'info'); return false; }
+            // Szukanie czy istnieje (do komunikatu potrzebujemy starego obiektu)
+            const existingItem = Object.values(data).flat().find(item => String(item.id) === String(id) && item.type === type);
+            if (existingItem) {
+                showCustomAlert('Już na liście', `"${existingItem.title}" znajduje się już w Twojej bibliotece.`, 'info');
+                return false;
+            }
 
             const itemDetails = await getItemDetails(id, type);
             if (!itemDetails) { showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów tytułu.', 'error'); return false; }
@@ -1619,7 +1690,8 @@
 
             document.getElementById('searchInput').value = '';
             document.getElementById('searchResults').style.display = 'none';
-            showCustomAlert('Sukces!', 'Tytuł został pomyślnie dodany do listy.', 'success');
+
+            showCustomAlert('Sukces!', `"${itemDetails.title}" został dodany do listy.`, 'success');
             return true;
         }
 
@@ -1651,8 +1723,23 @@
 
         async function getCredits(id, type) { if (String(id).startsWith('custom_')) return []; try { const response = await fetch(`${API_BASE_URL}/${type}/${id}/credits?api_key=${API_KEY}&language=pl-PL`); if (!response.ok) return []; const data = await response.json(); return data.cast.slice(0, 15); } catch { return []; } }
 
-        async function handleMoveItem(id, type) { const fromListName = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; const toListName = `${type === 'movie' ? 'movies' : 'series'}Watched`; const itemIndex = data[fromListName].findIndex(i => String(i.id) === String(id) && i.type == type); if (itemIndex > -1) { const [item] = data[fromListName].splice(itemIndex, 1); item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder; data[toListName].unshift(item); await saveData(); switchSubTab('watched'); showCustomAlert('Przeniesiono', 'Tytuł pomyślnie oznaczony jako obejrzany.', 'success'); } }
-        async function saveData() { try { await db.set('mainState', { data, viewState }); } catch (error) { console.error("Nie udało się zapisać danych w IndexedDB:", error); showCustomAlert('Błąd Krytyczny', 'Nie można zapisać danych. Spróbuj odświeżyć stronę.', 'error'); } }
+        async function handleMoveItem(id, type) {
+            const fromListName = `${type === 'movie' ? 'movies' : 'series'}ToWatch`;
+            const toListName = `${type === 'movie' ? 'movies' : 'series'}Watched`;
+            const itemIndex = data[fromListName].findIndex(i => String(i.id) === String(id) && i.type == type);
+
+            if (itemIndex > -1) {
+                const [item] = data[fromListName].splice(itemIndex, 1);
+                item.rating = null; item.review = "";
+                delete item.progress; delete item.seasons; delete item.customOrder;
+                data[toListName].unshift(item);
+                await saveData();
+                switchSubTab('watched');
+                showCustomAlert('Obejrzane!', `"${item.title}" oznaczono jako obejrzane.`, 'success');
+            }
+        }
+
+        async function saveData() { try { await db.set('mainState', { data, viewState }); } catch (error) { console.error("Nie udało się zapisać w DB:", error); showCustomAlert('Błąd Krytyczny', 'Nie można zapisać danych. Spróbuj odświeżyć.', 'error'); } }
 
         async function loadData() {
             let savedState = await db.get('mainState');
@@ -1695,10 +1782,9 @@
         }
 
         function isDataEmpty() { return Object.values(data).every(list => !list || list.length === 0); }
-        function backupData() { if (isDataEmpty()) { showCustomAlert('Uwaga', 'Twoje listy są puste. Brak danych do eksportu.', 'info'); return; } const dataStr = JSON.stringify({ data, viewState }, null, 2); const blob = new Blob([dataStr], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `penguinflix_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href); showCustomAlert('Sukces', 'Kopia zapasowa została pobrana na Twoje urządzenie.', 'success');}
-        async function restoreData(e) { const file = e.target.files[0]; if (!file) return; const confirmed = await showCustomConfirm('Przywracanie kopii', 'Ta operacja całkowicie nadpisze obecne dane w aplikacji. Czy na pewno chcesz kontynuować?'); if (!confirmed) { e.target.value = ''; return; } const reader = new FileReader(); reader.onload = async (event) => { try { const restored = JSON.parse(event.target.result); if (restored.data && restored.data.moviesToWatch !== undefined) { viewState = restored.viewState || viewState; migrateData(restored.data); data = restored.data; await saveData(); switchMainTab(viewState.activeMainTab || 'movies'); showCustomAlert('Sukces!', 'Dane zostały pomyślnie przywrócone z pliku.', 'success'); } else { throw new Error('Nieprawidłowy format pliku.'); } } catch(err) { showCustomAlert('Błąd odczytu', 'Zły format pliku lub plik jest uszkodzony.', 'error'); } }; reader.readAsText(file); e.target.value = ''; }
+        function backupData() { if (isDataEmpty()) { showCustomAlert('Uwaga', 'Twoje listy są puste. Brak danych do eksportu.', 'info'); return; } const dataStr = JSON.stringify({ data, viewState }, null, 2); const blob = new Blob([dataStr], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `penguinflix_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href); showCustomAlert('Sukces', 'Kopia zapasowa pobrana na urządzenie.', 'success');}
+        async function restoreData(e) { const file = e.target.files[0]; if (!file) return; const confirmed = await showCustomConfirm('Przywracanie kopii', 'Ta operacja nadpisze obecne dane w aplikacji. Kontynuować?'); if (!confirmed) { e.target.value = ''; return; } const reader = new FileReader(); reader.onload = async (event) => { try { const restored = JSON.parse(event.target.result); if (restored.data && restored.data.moviesToWatch !== undefined) { viewState = restored.viewState || viewState; migrateData(restored.data); data = restored.data; await saveData(); switchMainTab(viewState.activeMainTab || 'movies'); showCustomAlert('Sukces!', 'Dane zostały pomyślnie przywrócone.', 'success'); } else { throw new Error('Nieprawidłowy format pliku.'); } } catch(err) { showCustomAlert('Błąd', 'Zły format pliku lub plik jest uszkodzony.', 'error'); } }; reader.readAsText(file); e.target.value = ''; }
 
-        // --- ZMODERNIZOWANE OKNO SZCZEGÓŁÓW (WSPÓLNE DLA PREVIEW I DETAIL) ---
         function getModalHeaderHTML(item) {
             const bgImage = item.backdrop || item.poster || POSTER_PLACEHOLDER;
             const bgFilter = item.backdrop ? '' : 'filter: blur(20px) brightness(0.5); transform: scale(1.1);';
@@ -1716,7 +1802,6 @@
                         <div class="hero-text">
                             <div class="hero-title-row">
                                 <h2 class="hero-title">${item.title}</h2>
-                                <!-- Gwiazdka ulubionych zarezerwowana do wstrzyknięcia -->
                                 <div id="hero-fav-container"></div>
                             </div>
                             <div class="hero-meta">${item.year}${runtimeInfo}</div>
@@ -1727,66 +1812,12 @@
             `;
         }
 
-        // --- ZMODERNIZOWANY GEST SWIPE DOWN ---
-        function setupSwipeToClose(modalElement, closeCallback) {
-            const wrapper = modalElement.querySelector('.modern-modal-wrapper');
-            if (!wrapper) return;
-            let startY = 0;
-            let currentY = 0;
-            let isDragging = false;
-
-            const onTouchStart = (e) => {
-                const scrollArea = wrapper.querySelector('.modern-modal-scroll');
-                // Zablokuj swipe jeśli element w środku jest przewinięty w dół
-                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) {
-                    isDragging = false;
-                    return;
-                }
-
-                startY = e.touches[0].clientY;
-                isDragging = true;
-                wrapper.style.transition = 'none';
-            };
-
-            const onTouchMove = (e) => {
-                if (!isDragging) return;
-                const y = e.touches[0].clientY;
-                const deltaY = y - startY;
-
-                // Jeśli ciągniemy w dół
-                if (deltaY > 0) {
-                    // BLOKUJEMY domyślne odświeżanie przeglądarki (pull-to-refresh)
-                    e.preventDefault();
-                    currentY = deltaY;
-                    wrapper.style.transform = `translateY(${currentY}px)`;
-                }
-            };
-
-            const onTouchEnd = () => {
-                if (!isDragging) return;
-                isDragging = false;
-                wrapper.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                if (currentY > 100) {
-                    wrapper.style.transform = `translateY(100%)`;
-                    setTimeout(closeCallback, 250);
-                } else {
-                    wrapper.style.transform = `translateY(0)`;
-                }
-                currentY = 0;
-            };
-
-            // passive: false pozwala na użycie e.preventDefault()
-            wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
-            wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
-            wrapper.addEventListener('touchend', onTouchEnd);
-        }
-
         async function openPreviewModal(id, type) {
             const detailsModalContainer = document.getElementById('detailsModalContainer');
             detailsModalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="align-items:center; justify-content:center; height:200px; color:var(--text-secondary);">Ładowanie...</div></div>`;
 
             const item = await getItemDetails(id, type);
-            if (!item) { detailsModalContainer.innerHTML = ''; showCustomAlert('Błąd połączenia', 'Nie udało się załadować szczegółów tytułu.', 'error'); return; }
+            if (!item) { detailsModalContainer.innerHTML = ''; showCustomAlert('Błąd', 'Nie udało się załadować szczegółów.', 'error'); return; }
 
             const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
 
@@ -1805,7 +1836,7 @@
                         <div class="modal-body-content">
                             <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
                             <div>
-                                <h3>O czym to jest?</h3>
+                                <h3>Opis</h3>
                                 <p class="overview-text">${item.overview || 'Brak opisu dla tego tytułu.'}</p>
                             </div>
                             <div id="cast-container"></div>
@@ -1852,13 +1883,9 @@
             const { listName, item } = getListAndItem(id, type);
             if (!item) return;
 
-            // Wymuś pobranie z API, jeśli brakuje okładki w tle lub brakuje czasu trwania filmu
             if (!String(id).startsWith('custom_') && (!item.backdrop || (type === 'movie' && item.runtime === undefined))) {
                 const freshDetails = await getItemDetails(id, type);
-                if (freshDetails) {
-                    Object.assign(item, freshDetails);
-                    await saveData();
-                }
+                if (freshDetails) { Object.assign(item, freshDetails); await saveData(); }
             }
 
             const isToWatchSeries = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
@@ -1877,7 +1904,7 @@
                         <div class="modal-body-content">
                             <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
                             <div>
-                                <h3>O czym to jest?</h3>
+                                <h3>Opis</h3>
                                 <p class="overview-text">${item.overview || 'Brak opisu dla tego tytułu.'}</p>
                             </div>
 
@@ -1904,7 +1931,6 @@
 
             detailsModalContainer.innerHTML = modalHTML; const modal = detailsModalContainer.querySelector('.modal-overlay');
 
-            // Wstrzyknięcie guzika Ulubione do Hero
             const favContainer = modal.querySelector('#hero-fav-container');
             if (favContainer) {
                 favContainer.innerHTML = `<button id="modal-favorite-btn" class="hero-fav-btn ${item.isFavorite ? 'active' : ''}" title="Oznacz jako ulubione"><svg viewBox="0 0 24 24"><path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z"/></svg></button>`;
@@ -1949,7 +1975,9 @@
                     const ratingEl = document.querySelector('.star-rating-interactive');
                     item.rating = ratingEl ? parseFloat(ratingEl.dataset.rating) : null;
                     item.review = document.getElementById('reviewText').value;
-                    await saveData(); closeModal(); showCustomAlert('Zapisano!', 'Twoja ocena i recenzja zostały zaktualizowane.', 'success');
+                    await saveData();
+                    closeModal();
+                    showCustomAlert('Zapisano!', `Twoja ocena dla "${item.title}" została zaktualizowana.`, 'success');
                 };
             } else {
                 document.getElementById('moveToWatchedBtn').onclick = async () => { await handleMoveItem(id, type); closeModal(); };
@@ -2172,7 +2200,7 @@
                 data[targetListName].unshift(newItem); await saveData();
                 const mainTab = type === 'movie' ? 'movies' : 'series';
                 switchMainTab(mainTab); switchSubTab(listSuffix);
-                closeModal(); showCustomAlert('Sukces!', 'Wpis został dodany do Twojej listy.', 'success');
+                closeModal(); showCustomAlert('Dodano ręcznie', `"${title}" został zapisany.`, 'success');
             });
         }
 
@@ -2280,7 +2308,13 @@
         async function addItemFromFilmography(button) {
             button.disabled = true; button.textContent = 'Dodawanie...'; const { id, type } = button.dataset;
             const itemDetails = await getItemDetails(id, type);
-            if (!itemDetails) { button.textContent = 'Błąd!'; setTimeout(() => { button.textContent = 'Dodaj do obejrzenia'; button.disabled = false; }, 2000); return; }
+
+            if (!itemDetails) {
+                button.textContent = 'Błąd!';
+                showCustomAlert('Błąd', 'Nie udało się pobrać szczegółów.', 'error');
+                setTimeout(() => { button.textContent = 'Dodaj do obejrzenia'; button.disabled = false; }, 2000);
+                return;
+            }
 
             itemDetails.dateAdded = Date.now();
             const targetListName = (type === 'movie' ? 'movies' : 'series') + 'ToWatch';
@@ -2290,6 +2324,8 @@
             data[targetListName].unshift(itemDetails); await saveData();
             const actionContainer = button.parentElement;
             actionContainer.innerHTML = `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Dodano!</span>`;
+
+            showCustomAlert('Dodano z filmografii', `"${itemDetails.title}" dołączył do planowanych.`, 'success');
         }
 
         function setupInteractiveStars(item) { const container = document.querySelector('.star-rating-interactive'); if(!container) return; const ratingDisplay = document.getElementById('rating-display'); const decBtn = document.getElementById('rating-decrement'); const incBtn = document.getElementById('rating-increment'); let currentRating = item.rating || 0; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for(let i=1; i<=5; i++){ const star = document.createElement('div'); star.className = 'star'; star.innerHTML = `<svg class="star-background" viewBox="0 0 24 24"><path d="${starPath}"/></svg><svg class="star-foreground" viewBox="0 0 24 24"><path d="${starPath}"/></svg>`; container.appendChild(star); } const updateRatingUI = (rating) => { currentRating = rating; container.dataset.rating = currentRating; container.querySelectorAll('.star-foreground').forEach((star, index) => { const score = currentRating - index; if (score >= 1) { star.style.clipPath = 'inset(0 0 0 0)'; } else if (score > 0) { star.style.clipPath = `inset(0 ${100 - score * 100}% 0 0)`; } else { star.style.clipPath = 'inset(0 100% 0 0)'; } }); ratingDisplay.textContent = `${currentRating.toFixed(1)} / 5.0`; decBtn.disabled = currentRating <= 0; incBtn.disabled = currentRating >= 5; }; const calculateRatingFromEvent = (e) => { const rect = container.getBoundingClientRect(); const mouseX = e.clientX - rect.left; const rawRating = (mouseX / rect.width) * 5; return Math.max(0, Math.min(5, Math.round(rawRating * 2) / 2)); }; container.addEventListener('mousemove', e => updateRatingUI(calculateRatingFromEvent(e))); container.addEventListener('mouseleave', () => updateRatingUI(parseFloat(container.dataset.rating))); container.addEventListener('click', e => { const newRating = calculateRatingFromEvent(e); updateRatingUI(newRating); }); decBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating > 0) { updateRatingUI(rating - 0.5); } }); incBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating < 5) { updateRatingUI(rating + 0.5); } }); updateRatingUI(currentRating); }
