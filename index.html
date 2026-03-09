@@ -22,7 +22,6 @@
             --warning-color: #ffc107;
             --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 
-            /* Wymiary nawigacji */
             --header-height: 60px;
             --sub-header-height: 50px;
             --bottom-nav-height: 65px;
@@ -47,7 +46,7 @@
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUpSheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes alertPop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes growUp { from { height: 0; } to { height: var(--target-h); } }
 
@@ -63,6 +62,18 @@
             transition: background-color var(--transition-speed), color var(--transition-speed);
             overflow-x: hidden;
         }
+
+        /* --- GLOBALNE PRZYCISKI IKONOWE --- */
+        .icon-button {
+            background: transparent; border: none; padding: 10px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s; flex-shrink: 0;
+        }
+        .icon-button svg { width: 24px; height: 24px; fill: var(--text-secondary); transition: fill 0.2s; }
+        .icon-button:hover { background-color: color-mix(in srgb, var(--text-secondary) 20%, transparent); transform: scale(1.05); }
+        .icon-button:active { transform: scale(0.95); }
+        .delete-btn:hover svg { fill: var(--primary-color); }
+        .add-item:hover svg { fill: var(--success-color); }
 
         /* --- NAGŁÓWEK GŁÓWNY --- */
         #fixed-header {
@@ -92,19 +103,15 @@
         .search-item .info { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
         .search-item .info strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .search-item .info span { color: var(--text-secondary); font-size: 0.9em; }
-        .search-item .actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+        .search-item .actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
 
-        /* --- SUB-HEADER (Segmented Control) - TERAZ FIXED --- */
+        /* --- SUB-HEADER (Segmented Control) - FIXED --- */
         #sub-header {
-            position: fixed;
-            top: calc(var(--header-height) + var(--safe-top));
-            left: 0; right: 0;
-            height: var(--sub-header-height);
-            z-index: 990;
+            position: fixed; top: calc(var(--header-height) + var(--safe-top)); left: 0; right: 0;
+            height: var(--sub-header-height); z-index: 990;
             background: color-mix(in srgb, var(--bg-color) 85%, transparent);
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 0 16px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 0 16px; border-bottom: 1px solid var(--border-color);
             display: none; justify-content: center; align-items: center;
         }
         .segmented-control { display: flex; background: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 4px; max-width: 400px; width: 100%; }
@@ -114,11 +121,9 @@
         /* --- DOLNA NAWIGACJA --- */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
-            height: calc(var(--bottom-nav-height) + var(--safe-bottom));
-            padding-bottom: var(--safe-bottom);
+            height: calc(var(--bottom-nav-height) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
             background: color-mix(in srgb, var(--card-color) 95%, transparent);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border-top: 1px solid var(--border-color);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--border-color);
             display: flex; justify-content: space-around; align-items: center;
         }
         .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 100%; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; transition: color 0.2s; padding: 0;}
@@ -135,15 +140,10 @@
         /* --- TOOLBAR LISTY (Przyklejony - Sticky) --- */
         .list-toolbar {
             display: flex; flex-direction: column; align-items: stretch; gap: 10px;
-            position: sticky;
-            top: calc(var(--header-height) + var(--safe-top) + var(--sub-header-height) - 1px);
-            z-index: 980;
-            background: color-mix(in srgb, var(--bg-color) 85%, transparent);
+            position: sticky; top: calc(var(--header-height) + var(--safe-top) + var(--sub-header-height) - 1px);
+            z-index: 980; background: color-mix(in srgb, var(--bg-color) 85%, transparent);
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 12px 16px;
-            margin: -8px -16px 12px -16px;
-            width: calc(100% + 32px);
-            border-bottom: 1px solid var(--border-color);
+            padding: 12px 16px; margin: -8px -16px 12px -16px; width: calc(100% + 32px); border-bottom: 1px solid var(--border-color);
         }
         .local-search-container { position: relative; flex-grow: 1; display: flex; align-items: center; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); transition: border-color var(--transition-speed); width: 100%;}
         .local-search-container:focus-within { border-color: var(--primary-color); }
@@ -185,11 +185,9 @@
         .grid-item .grid-badge-delete { position: absolute; top: 6px; right: 6px; background: rgba(229, 9, 20, 0.85); backdrop-filter: blur(4px); padding: 5px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10; border: none; cursor: pointer; transition: background 0.2s;}
         .grid-item .grid-badge-delete:hover { background: rgba(229, 9, 20, 1); }
         .grid-item .grid-badge-delete svg { width: 14px; height: 14px; fill: white; }
-
         .grid-item .grid-badge-info { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #fff; font-size: 0.75rem; font-weight: bold; backdrop-filter: blur(4px); padding: 3px 6px; border-radius: 6px; z-index: 5;}
         .grid-item .grid-unreleased { position: absolute; bottom: 6px; left: 6px; background: var(--primary-color); color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 10;}
         .discover-badge-unreleased { position: absolute; top: 6px; left: 6px; background: var(--primary-color); color: white; font-size: 0.65rem; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 10;}
-
         .grid-item .grid-title-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 10px; text-align: center; font-size: 0.85rem; font-weight: 600; background: var(--card-color); z-index: -1; line-height: 1.4;}
 
         .sortable-ghost { opacity: 0.4; filter: grayscale(1); background: var(--border-color); }
@@ -214,28 +212,16 @@
             width: calc(100% + 32px);
         }
         .randomizer-container { padding: 0 16px; width: 100%; }
-        .random-btn {
-            width: 100%; padding: 16px; border: none; border-radius: var(--radius-lg);
-            background: linear-gradient(135deg, var(--primary-color), #ff4b2b);
-            color: white; font-size: 1.1rem; font-weight: bold; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 12px;
-            box-shadow: 0 6px 16px rgba(229, 9, 20, 0.3); transition: transform 0.2s, box-shadow 0.2s;
-        }
+        .random-btn { width: 100%; padding: 16px; border: none; border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--primary-color), #ff4b2b); color: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 6px 16px rgba(229, 9, 20, 0.3); transition: transform 0.2s, box-shadow 0.2s; }
         .random-btn:active { transform: scale(0.97); }
         .random-btn svg { width: 26px; height: 26px; fill: white; }
-
         .discover-categories-wrapper { width: 100%; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
         .discover-categories-wrapper::-webkit-scrollbar { display: none; }
         .discover-categories { display: flex; align-items: center; gap: 10px; width: max-content; padding-right: 16px; }
-        .discover-pill {
-            padding: 8px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-pill);
-            background: var(--card-color); color: var(--text-color); font-weight: 600; font-size: 0.9rem;
-            cursor: pointer; transition: all 0.2s; white-space: nowrap;
-        }
+        .discover-pill { padding: 8px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-pill); background: var(--card-color); color: var(--text-color); font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
         .discover-pill.active { background: var(--text-color); color: var(--bg-color); border-color: var(--text-color); }
         .genre-pill { background: color-mix(in srgb, var(--primary-color) 10%, var(--card-color)); border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color)); }
         .genre-pill.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
-
         .discover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 24px 16px; width: 100%; }
         .discover-item { display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: transform 0.2s ease-out; }
         .discover-item:hover { transform: translateY(-4px); }
@@ -243,19 +229,17 @@
         .discover-poster-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .discover-item-title { font-size: 0.9rem; font-weight: 600; text-align: center; line-height: 1.3; color: var(--text-color); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
 
-        /* --- ZAKŁADKA PROFIL I USTAWIENIA (NOWA WERSJA) --- */
+        /* --- ZAKŁADKA PROFIL --- */
         .profile-header { text-align: center; margin-bottom: 24px; margin-top: 16px; width: 100%; }
         .profile-header .avatar-icon { width: 80px; height: 80px; fill: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 15%, transparent); border-radius: 50%; padding: 16px; margin: 0 auto 12px;}
         .profile-header h2 { margin: 0; font-size: 1.6rem; }
         .profile-header p { margin: 4px 0 0; color: var(--text-secondary); font-size: 0.9rem; }
-
         .profile-tabs-nav { display: flex; background: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 4px; max-width: 400px; margin: 0 auto 24px; width: 100%; }
         .ptab-btn { flex: 1; padding: 10px 12px; font-size: 0.9rem; font-weight: 600; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px; }
         .ptab-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .ptab-btn.active { background: var(--text-color); color: var(--bg-color); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .profile-sub-section { display: none; animation: fadeIn 0.3s ease-out; flex-direction: column; gap: 16px; }
         .profile-sub-section.active { display: flex; }
-
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; }
         .stat-card { background: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         .stat-card .icon-bg { position: absolute; right: -10px; bottom: -10px; width: 80px; height: 80px; opacity: 0.05; fill: var(--text-color); pointer-events: none;}
@@ -263,7 +247,6 @@
         .stat-card .value { font-size: 1.6rem; font-weight: 800; color: var(--text-color); line-height: 1; }
         .stat-card .highlight { color: var(--primary-color); }
         .stat-card.full-width { grid-column: 1 / -1; }
-
         .rating-chart-wrap { display: flex; flex-direction: column; gap: 12px; height: 140px; margin-top: 10px; }
         .rating-bars { display: flex; align-items: flex-end; justify-content: space-around; flex-grow: 1; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; gap: 4px; }
         .chart-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; height: 100%; width: 100%; position: relative; }
@@ -272,11 +255,9 @@
         .chart-labels { display: flex; justify-content: space-around; }
         .chart-label { flex: 1; text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
         .chart-tooltip { position: absolute; top: -25px; background: var(--text-color); color: var(--bg-color); font-size: 0.75rem; font-weight: bold; padding: 2px 8px; border-radius: 4px; opacity: 0; transform: translateY(5px); transition: all 0.2s; pointer-events: none; white-space: nowrap; }
-
         .top-genres-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;}
         .profile-genre-tag { background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); border: 1px solid var(--border-color); color: var(--text-color); padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 500; display: flex; align-items: center; gap: 6px; }
         .profile-genre-tag strong { color: var(--primary-color); }
-
         .settings-list { display: flex; flex-direction: column; gap: 12px; width: 100%; }
         .settings-item { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); cursor: pointer; transition: all 0.2s ease-out; color: var(--text-color); background: var(--card-color); width: 100%; text-align: left; font-size: 1.05rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .settings-item:hover { transform: translateY(-3px); border-color: var(--primary-color); box-shadow: var(--shadow); }
@@ -286,41 +267,100 @@
         .settings-item:hover svg.icon { stroke: var(--primary-color); }
         .settings-item:hover svg.chevron { fill: var(--primary-color); }
 
-        /* MODALE I WIDOK PODZIELONY (SPLIT LAYOUT) */
+        /* --- NOWE MODALE SZCZEGÓŁÓW (BOTTOM SHEET & HERO) --- */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .modal-content { position: relative; background: var(--card-color); border-radius: var(--radius-lg); padding: 24px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; animation: scaleIn 0.3s ease-out; }
 
-        .modal-content.split-layout { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
-        .modal-top-section { padding: 24px 24px 16px; background: var(--card-color); border-bottom: 1px solid var(--border-color); flex-shrink: 0; position: relative; z-index: 10; }
-        .modal-bottom-section { padding: 16px 24px 24px; overflow-y: auto; flex-grow: 1; }
+        .modern-modal-wrapper {
+            position: relative; background: var(--bg-color); border-radius: var(--radius-lg);
+            width: 100%; max-width: 650px; max-height: 90vh;
+            display: flex; flex-direction: column; overflow: hidden;
+            animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 24px 48px rgba(0,0,0,0.6); border: 1px solid var(--border-color);
+        }
 
-        .icon-button { background: transparent; border: none; border-radius: 50%; width: 44px; height: 44px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background-color var(--transition-speed); flex-shrink: 0;}
-        .icon-button:hover { background-color: var(--border-color); }
-        .icon-button svg { width: 22px; height: 22px; fill: var(--text-secondary); transition: fill 0.2s; }
-        .icon-button.favorite-btn.active svg { fill: var(--warning-color); }
+        .modern-modal-scroll { overflow-y: auto; flex-grow: 1; scrollbar-width: none; }
+        .modern-modal-scroll::-webkit-scrollbar { display: none; }
 
-        .modal-top-section .modal-top-close-btn { position: absolute; top: 12px; right: 12px; z-index: 20; background: color-mix(in srgb, var(--card-color) 80%, transparent); border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.2); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-        .modal-content:not(.split-layout) .modal-top-close-btn { position: absolute; top: 12px; right: 12px; z-index: 10; }
+        @media(max-width: 600px) {
+            .modal-overlay { align-items: flex-end; padding: 0; }
+            .modern-modal-wrapper { border-radius: 24px 24px 0 0; margin-top: auto; max-height: 94vh; animation: slideUpSheet 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); border-bottom: none; }
+        }
 
-        .modal-header.compact { display: flex; flex-direction: row; align-items: stretch; gap: 16px; padding-right: 32px; }
-        .modal-header.compact img { width: 90px; height: 135px; object-fit: cover; margin: 0; border-radius: var(--radius-sm); flex-shrink: 0; box-shadow: var(--shadow); }
-        .modal-header.compact .modal-title-wrapper { display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; gap: 12px; width: 100%; min-width: 0; }
-        .modal-header.compact .modal-title { text-align: left; min-width: 0; width: 100%; }
-        .modal-header.compact h2 { font-size: 1.3rem; margin: 0 0 8px; line-height: 1.2; }
-        .genres { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
-        .genre-tag { background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color: var(--text-secondary); padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; }
+        .modal-drag-handle { display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 40px; height: 5px; border-radius: 5px; background: rgba(255,255,255,0.4); z-index: 50; }
+        @media(max-width: 600px) { .modal-drag-handle { display: block; } }
 
-        .star-rating-interactive { display: flex; gap: 5px; justify-content: center; }
-        .star-rating-interactive .star { position: relative; width: 32px; height: 32px; cursor: pointer; }
+        .modal-hero-header { position: relative; width: 100%; height: 300px; flex-shrink: 0; background-color: #000; overflow: hidden; }
+        @media(max-width: 600px) { .modal-hero-header { height: 250px; } }
+
+        .hero-bg-img { position: absolute; inset: 0; background-size: cover; background-position: center top; transition: filter 0.3s; }
+        .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, var(--bg-color) 0%, rgba(16, 17, 20, 0.8) 30%, transparent 100%); }
+
+        /* Przycisk zamknięcia modalu z X */
+        .modal-top-close-btn {
+            position: absolute; top: 16px; right: 16px; z-index: 60;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; border-radius: 50%;
+            width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: white; transition: background 0.2s;
+        }
+        .modal-top-close-btn:hover { background: rgba(229, 9, 20, 0.8); }
+        .modal-top-close-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none !important; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+        .hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 24px; display: flex; align-items: flex-end; gap: 16px; z-index: 10; }
+        .hero-poster-mini { width: 90px; height: 135px; border-radius: var(--radius-sm); object-fit: cover; box-shadow: 0 8px 16px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; margin-bottom: -10px; background: var(--border-color); }
+        .hero-text { flex-grow: 1; padding-bottom: 4px; }
+        .hero-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 6px; }
+        .hero-title { margin: 0; font-size: 1.6rem; font-weight: 800; color: #fff; line-height: 1.1; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+        .hero-meta { font-size: 0.9rem; color: #ddd; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;}
+
+        .hero-fav-btn { background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+        .hero-fav-btn:hover { background: rgba(255,255,255,0.1); transform: scale(1.05); }
+        .hero-fav-btn svg { width: 22px; height: 22px; fill: var(--text-color); transition: fill 0.2s; }
+        .hero-fav-btn.active svg { fill: var(--warning-color); }
+
+        .modal-body-content { padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+        .genres { display: flex; flex-wrap: wrap; gap: 6px; }
+        .genre-tag { background: rgba(255,255,255,0.1); backdrop-filter: blur(4px); color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; border: 1px solid rgba(255,255,255,0.1); text-shadow: 0 1px 2px rgba(0,0,0,0.5);}
+        .modal-body-content h3 { margin: 0 0 12px; font-size: 1.1rem; color: var(--text-color); }
+        .overview-text { line-height: 1.6; color: var(--text-secondary); font-size: 0.95rem; margin: 0;}
+
+        /* Sticky Footer z akcjami */
+        .modal-sticky-footer {
+            position: sticky; bottom: 0; z-index: 20; padding: 16px 24px;
+            background: color-mix(in srgb, var(--card-color) 85%, transparent);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid var(--border-color);
+            display: flex; gap: 12px;
+        }
+        .modal-btn { flex: 1; padding: 14px 12px; border-radius: var(--radius-pill); font-size: 1rem; font-weight: bold; border: none; cursor: pointer; transition: transform 0.2s; text-align: center;}
+        .modal-btn:active { transform: scale(0.97); }
+        .modal-btn.primary { background: var(--primary-color); color: white; box-shadow: 0 4px 16px rgba(229, 9, 20, 0.3); }
+        .modal-btn.secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+
+        /* Nowa karta recenzji */
+        .review-card { background: var(--card-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
+        .review-card h3 { text-align: center; margin-bottom: 16px; }
+        .star-rating-interactive { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px;}
+        .star-rating-interactive .star { position: relative; width: 36px; height: 36px; cursor: pointer; transition: transform 0.1s;}
+        .star-rating-interactive .star:active { transform: scale(0.9); }
         .star-rating-interactive .star svg { width: 100%; height: 100%; position: absolute; top:0; left:0; }
-        .star-rating-interactive .star-background { fill: var(--border-color); }
-        .star-rating-interactive .star-foreground { fill: var(--warning-color); transition: clip-path 0.1s ease; }
-        .rating-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0 16px; }
-        .rating-controls button { background-color: var(--border-color); border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 1.5rem; font-weight: bold; color: var(--text-color); cursor: pointer; line-height: 1; }
-        .rating-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .rating-display { font-size: 1rem; font-weight: 600; color: var(--text-secondary); min-width: 150px; text-align: center; }
+        .star-rating-interactive .star-background { fill: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
+        .star-rating-interactive .star-foreground { fill: var(--warning-color); transition: clip-path 0.15s ease; filter: drop-shadow(0 2px 4px rgba(255, 193, 7, 0.3));}
 
-        /* --- NOWE STYLE DLA MODALI SORTOWANIA I FILTROWANIA --- */
+        .rating-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+        .rating-controls button { background: var(--bg-color); border: 1px solid var(--border-color); width: 36px; height: 36px; border-radius: 50%; font-size: 1.2rem; font-weight: bold; color: var(--text-color); cursor: pointer; transition: background 0.2s;}
+        .rating-controls button:hover { background: var(--border-color); }
+        .rating-controls button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .rating-display { font-size: 1rem; font-weight: bold; color: var(--warning-color); min-width: 120px; text-align: center; }
+
+        .modern-textarea { width: 100%; min-height: 100px; background: var(--bg-color); border: 1px solid var(--border-color); color: var(--text-color); border-radius: var(--radius-md); padding: 16px; font-size: 0.95rem; font-family: inherit; resize: vertical; outline: none; transition: border-color 0.2s; }
+        .modern-textarea:focus { border-color: var(--primary-color); }
+
+        /* Zwiastun Przycisk w Hero */
+        .hero-trailer-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8rem; font-weight: bold; background: rgba(255,255,255,0.15); backdrop-filter: blur(4px); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: var(--radius-pill); cursor: pointer; transition: all 0.2s; }
+        .hero-trailer-btn svg { width: 16px; height: 16px; fill: white; }
+        .hero-trailer-btn:hover { background: var(--primary-color); border-color: var(--primary-color); }
+
+        /* --- Modale Zwykłe (Sortowanie itp) --- */
         .control-modal-content { max-width: 420px; background: var(--card-color); border-radius: 20px; padding: 24px; animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .control-modal-content h3 { margin: 0 0 20px; font-size: 1.2rem; text-align: center; color: var(--text-color); }
         .control-modal-options { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto; padding-bottom: 10px; scrollbar-width: none; }
@@ -357,28 +397,27 @@
         .control-modal-footer .reset-btn { background-color: var(--border-color); color: var(--text-color); }
         .control-modal-footer .apply-btn { background-color: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3); }
 
-        #custom-add-form { display: flex; flex-direction: column; gap: 16px; text-align: left; }
-        #custom-add-form input[type="text"], #custom-add-form input[type="number"] { width: 100%; padding: 12px; background: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 1rem; }
-        #custom-add-form .radio-group { display: flex; gap: 16px; justify-content: center; }
-        #custom-add-form .radio-group label { display: flex; align-items: center; gap: 8px; }
-        #custom-add-form .form-actions { display: flex; gap: 12px; justify-content: flex-end; }
-        #custom-add-form button { padding: 12px 20px; border-radius: var(--radius-md); font-weight: bold; cursor: pointer; border: none; }
-        #custom-add-form .cancel-btn { background-color: var(--border-color); color: var(--text-color); }
-        #custom-add-form .save-btn { background-color: var(--primary-color); color: white; }
+        /* --- STYLE DLA "O APLIKACJI" --- */
+        .info-feature-list { list-style: none; padding: 0; margin: 0 0 24px 0; }
+        .info-feature-item { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; font-size: 0.95rem; color: var(--text-color); line-height: 1.4; }
+        .info-feature-icon { width: 20px; height: 20px; stroke: var(--primary-color); fill: none; flex-shrink: 0; margin-top: 2px;}
+        .important-note { background: color-mix(in srgb, var(--warning-color) 15%, transparent); border-left: 4px solid var(--warning-color); padding: 16px; border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: 24px; font-size: 0.9rem; line-height: 1.5; color: var(--text-color); }
+        .tmdb-logo { height: 16px; margin-top: 8px; }
 
-        #infoModal .modal-content { text-align: center; line-height: 1.6; }
-        #infoModal h2 { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 1.5rem; color: var(--primary-color); }
-        #infoModal h3 { margin-bottom: 24px; color: var(--text-color); }
-        #infoModal .important-note { background-color: color-mix(in srgb, var(--primary-color) 10%, transparent); border-left: 4px solid var(--primary-color); padding: 12px; border-radius: var(--radius-sm); text-align: left; margin: 16px 0; }
-        #infoModal .tmdb-logo { width: 100px; margin-top: 16px; }
+        /* --- STYLE DLA FORMULARZA RĘCZNEGO DODAWANIA --- */
+        .custom-add-group { margin-bottom: 20px; text-align: left; }
+        .custom-add-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .custom-input { width: 100%; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color: var(--text-color); font-size: 1rem; outline: none; transition: border-color 0.2s; margin-bottom: 12px;}
+        .custom-input:focus { border-color: var(--primary-color); }
 
-        /* NOWE STYLE DLA KLUCZOWYCH FUNKCJI W MODALU INFO */
-        .info-feature-list { list-style: none; padding: 0; margin: 0 0 32px 0; display: flex; flex-direction: column; gap: 10px; text-align: left; }
-        .info-feature-item { display: flex; align-items: flex-start; gap: 12px; font-size: 0.95rem; line-height: 1.4; color: var(--text-color); background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: transform 0.2s; }
-        .info-feature-item:hover { transform: translateX(4px); border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color)); }
-        .info-feature-icon { flex-shrink: 0; width: 22px; height: 22px; stroke: var(--primary-color); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; margin-top: 1px; }
+        /* Segmentowe radio dla formularza */
+        .modern-radio-group { display: flex; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 4px; }
+        .modern-radio-label { flex: 1; text-align: center; }
+        .modern-radio-label input { display: none; }
+        .modern-radio-label span { display: block; padding: 12px 12px; font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; }
+        .modern-radio-label input:checked + span { background: var(--text-color); color: var(--bg-color); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
-        /* --- NOWOCZESNE ALERTY I POTWIERDZENIA --- */
+        /* ALERTY I POTWIERDZENIA */
         .modern-alert-overlay { position: fixed; inset: 0; z-index: 4000; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.25s ease-out; }
         .modern-alert-card { background: var(--card-color); width: 100%; max-width: 380px; border-radius: 20px; padding: 32px 24px; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); animation: alertPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; align-items: center; }
         .modern-alert-icon-wrap { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
@@ -396,7 +435,7 @@
         .modern-alert-btn.primary { background: var(--primary-color); color: white; box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3); }
         .modern-alert-btn.secondary { background: var(--border-color); color: var(--text-color); }
 
-        .cast-section, .known-for-section, .seasons-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color); }
+        .cast-section, .known-for-section, .seasons-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color); }
         .cast-section h3, .known-for-section h3, .seasons-section h3 { margin-bottom: 16px; margin-top: 0;}
         .cast-scroller, .known-for-scroller { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
         .cast-scroller::-webkit-scrollbar, .known-for-scroller::-webkit-scrollbar { height: 6px; }
@@ -442,7 +481,7 @@
 
         .season-details { border-bottom: 1px solid var(--border-color); }
         .season-details:last-child { border-bottom: none; }
-        .season-summary { display: flex; justify-content: space-between; align-items: center; padding: 14px 8px; cursor: pointer; transition: background-color var(--transition-speed); }
+        .season-summary { display: flex; justify-content: space-between; align-items: center; padding: 14px 8px; cursor: pointer; transition: background-color var(--transition-speed); border-radius: var(--radius-sm); }
         .season-summary:hover { background-color: color-mix(in srgb, var(--card-color) 50%, var(--border-color)); }
         .season-summary h4 { margin: 0; font-size: 1.1rem; }
         .season-progress { font-size: 0.9rem; color: var(--text-secondary); }
@@ -470,42 +509,25 @@
         .season-toggle-all-btn:hover { color: var(--text-color); border-color: var(--text-color); }
         .loading-episodes { text-align: center; padding: 20px; color: var(--text-secondary); }
 
-        .trailer-btn { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); border-radius: var(--radius-pill); cursor: pointer; transition: all var(--transition-speed); }
-        .trailer-btn svg { width: 18px; height: 18px; fill: var(--text-color); transition: fill var(--transition-speed); }
-        .trailer-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
-        .trailer-btn:hover svg { fill: var(--primary-color); }
-
-        /* Odtwarzacz zwiastunów */
-        #trailerModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 2500; display: flex; align-items: center; justify-content: center; padding: 16px; padding-top: 66px; animation: fadeIn 0.3s; }
+        #trailerModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 16px; padding-top: 66px; animation: fadeIn 0.3s; }
         #trailerModalContent { position: relative; width: 100%; max-width: 960px; animation: scaleIn 0.3s ease-out; }
         .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--radius-lg); background-color: #000; }
         .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
-        .trailer-close-btn { position: absolute; top: -50px; right: 0; z-index: 3000; background: color-mix(in srgb, var(--card-color) 80%, transparent); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 
-        /* Pełny ekran przy obróceniu urządzenia (telefon w poziomie) */
+        /* PRZYCISK ZAMKNIĘCIA TRAILERA (Zawsze X) */
+        .trailer-close-btn {
+            position: absolute; top: -45px; right: 0; z-index: 5100;
+            width: 36px; height: 36px; background: rgba(255,255,255,0.2) !important;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            border: none; cursor: pointer; color: white !important; backdrop-filter: blur(4px);
+        }
+        .trailer-close-btn svg { width: 22px; height: 22px; stroke: white; stroke-width: 2.5; fill: none !important; }
+
         @media (max-width: 960px) and (orientation: landscape) {
             #trailerModalOverlay { padding: 0 !important; }
             #trailerModalContent { width: 100vw !important; height: 100vh !important; display: flex; align-items: center; justify-content: center; border-radius: 0 !important; background: #000; }
             .video-wrapper { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; padding-bottom: 0 !important; border-radius: 0 !important; }
-            .trailer-close-btn { position: fixed !important; top: max(env(safe-area-inset-top, 16px), 16px) !important; right: max(env(safe-area-inset-right, 16px), 16px) !important; background: rgba(0,0,0,0.7) !important; border: 1px solid rgba(255,255,255,0.2); z-index: 3100 !important; }
-        }
-
-        @media (min-width: 600px) {
-            .modal-header.compact img { width: 120px; height: 180px; }
-            .modal-header.compact h2 { font-size: 1.6rem; }
-            .actor-header { flex-direction: row; text-align: left; } .actor-header h2 { text-align: left; }
-        }
-        @media (max-width: 600px) {
-            .modal-top-section { padding: 16px 16px 12px; }
-            .modal-bottom-section { padding: 16px; }
-            ul.grid-view-container { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
-            .discover-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 16px 12px; }
-            .discover-item-title { font-size: 0.85rem; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 420px) {
-            ul.grid-view-container { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
-            .discover-grid { grid-template-columns: repeat(2, 1fr); }
+            .trailer-close-btn { position: fixed !important; top: max(env(safe-area-inset-top, 16px), 16px) !important; right: max(env(safe-area-inset-right, 16px), 16px) !important; background: rgba(0,0,0,0.7) !important; border: 1px solid rgba(255,255,255,0.2); z-index: 5100 !important; }
         }
 
     </style>
@@ -525,7 +547,7 @@
         <div id="searchResults"></div>
     </header>
 
-    <!-- ZAKŁADKI PODRZĘDNE (widoczne tylko w Filmy/Seriale) -->
+    <!-- ZAKŁADKI PODRZĘDNE -->
     <div id="sub-header">
         <div class="segmented-control">
             <button class="seg-btn active" data-subtab="toWatch">Do obejrzenia</button>
@@ -616,28 +638,22 @@
                     <p>Twój filmowy pamiętnik</p>
                 </div>
 
-                <!-- Przełącznik Podsumowanie / Ustawienia -->
                 <div class="profile-tabs-nav">
                     <button class="ptab-btn active" data-ptab="stats">
                         <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg> Podsumowanie
                     </button>
                     <button class="ptab-btn" data-ptab="settings">
-                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Ustawienia
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Ustawienia
                     </button>
                 </div>
 
-                <!-- SEKCJA STATYSTYK -->
                 <div id="ptab-stats" class="profile-sub-section active">
-                    <div class="stats-grid" id="profile-stats-container">
-                        <!-- Wypełniane przez JS -->
-                    </div>
+                    <div class="stats-grid" id="profile-stats-container"></div>
                 </div>
 
-                <!-- SEKCJA USTAWIEŃ -->
                 <div id="ptab-settings" class="profile-sub-section">
                     <div class="settings-list">
                         <button class="settings-item" id="btn-theme-toggle">
-                            <!-- Zaktualizowana ikona motywu (Półksiężyc) -->
                             <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                             <span class="text">Zmień motyw</span>
                         </button>
@@ -765,32 +781,21 @@
         }
 
         function getActiveListId() {
-            if (viewState.activeMainTab === 'movies') {
-                return viewState.moviesSubTab === 'toWatch' ? 'moviesToWatch' : 'moviesWatched';
-            } else if (viewState.activeMainTab === 'series') {
-                return viewState.seriesSubTab === 'toWatch' ? 'seriesToWatch' : 'seriesWatched';
-            }
+            if (viewState.activeMainTab === 'movies') { return viewState.moviesSubTab === 'toWatch' ? 'moviesToWatch' : 'moviesWatched'; }
+            else if (viewState.activeMainTab === 'series') { return viewState.seriesSubTab === 'toWatch' ? 'seriesToWatch' : 'seriesWatched'; }
             return null;
         }
 
         function switchMainTab(tabId) {
             viewState.activeMainTab = tabId;
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.maintab === tabId);
-            });
-            document.querySelectorAll('.main-tab-content').forEach(container => {
-                container.classList.toggle('active', container.id === `tab-${tabId}`);
-            });
+            document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => { btn.classList.toggle('active', btn.dataset.maintab === tabId); });
+            document.querySelectorAll('.main-tab-content').forEach(container => { container.classList.toggle('active', container.id === `tab-${tabId}`); });
             const subHeader = document.getElementById('sub-header');
             if (tabId === 'movies' || tabId === 'series') {
                 subHeader.style.display = 'flex';
                 const subTab = tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
-                document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.subtab === subTab);
-                });
-                const listId = getActiveListId();
-                updateToolbarUI(tabId);
-                renderList(data[listId] || [], listId);
+                document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.subtab === subTab); });
+                const listId = getActiveListId(); updateToolbarUI(tabId); renderList(data[listId] || [], listId);
                 document.body.style.paddingTop = `calc(var(--header-height) + var(--sub-header-height) + var(--safe-top))`;
             } else {
                 subHeader.style.display = 'none';
@@ -807,32 +812,26 @@
         function switchSubTab(subTabId) {
             if (viewState.activeMainTab === 'movies') viewState.moviesSubTab = subTabId;
             else if (viewState.activeMainTab === 'series') viewState.seriesSubTab = subTabId;
-            document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.subtab === subTabId);
-            });
+            document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.subtab === subTabId); });
             const listId = getActiveListId();
             const parentTab = document.getElementById(`tab-${viewState.activeMainTab}`);
             parentTab.querySelectorAll('.list-container').forEach(c => c.classList.remove('active'));
             document.getElementById(`${listId}ListContainer`).classList.add('active');
-            updateToolbarUI(viewState.activeMainTab);
-            renderList(data[listId] || [], listId);
-            saveData();
+            updateToolbarUI(viewState.activeMainTab); renderList(data[listId] || [], listId); saveData();
+        }
+
+        function switchProfileTab(tabId) {
+            document.querySelectorAll('.ptab-btn').forEach(b => b.classList.toggle('active', b.dataset.ptab === tabId));
+            document.querySelectorAll('.profile-sub-section').forEach(s => s.classList.toggle('active', s.id === `ptab-${tabId}`));
         }
 
         function updateToolbarUI(mainTabId) {
-            const listId = getActiveListId();
-            if (!listId) return;
-            const state = viewState[listId];
-            const parentTab = document.getElementById(`tab-${mainTabId}`);
-            const localSearchInput = parentTab.querySelector('.localSearchInput');
-            const clearLocalSearch = parentTab.querySelector('.clearLocalSearch');
-            localSearchInput.value = state.localSearch || '';
-            clearLocalSearch.style.display = state.localSearch ? 'flex' : 'none';
-            const isCustomSortActive = state.sortBy === 'custom_asc';
-            let sortOptionsActive = state.sortBy !== 'dateAdded_desc';
-            if (isCustomSortActive && (listId === 'moviesToWatch' || listId === 'seriesToWatch')) {
-                sortOptionsActive = false;
-            }
+            const listId = getActiveListId(); if (!listId) return;
+            const state = viewState[listId]; const parentTab = document.getElementById(`tab-${mainTabId}`);
+            const localSearchInput = parentTab.querySelector('.localSearchInput'); const clearLocalSearch = parentTab.querySelector('.clearLocalSearch');
+            localSearchInput.value = state.localSearch || ''; clearLocalSearch.style.display = state.localSearch ? 'flex' : 'none';
+            const isCustomSortActive = state.sortBy === 'custom_asc'; let sortOptionsActive = state.sortBy !== 'dateAdded_desc';
+            if (isCustomSortActive && (listId === 'moviesToWatch' || listId === 'seriesToWatch')) { sortOptionsActive = false; }
             const filterOptionsActive = (state.filterByGenre !== 'all' || state.filterFavoritesOnly);
             parentTab.querySelector('.btn-sort').classList.toggle('active', sortOptionsActive);
             parentTab.querySelector('.btn-filter').classList.toggle('active', filterOptionsActive);
@@ -841,31 +840,19 @@
         }
 
         function renderList(originalItems, listId) {
-            const container = document.getElementById(`${listId}ListContainer`);
-            if (!container) return;
-            const state = viewState[listId];
-            let itemsToRender = [...(originalItems || [])];
+            const container = document.getElementById(`${listId}ListContainer`); if (!container) return;
+            const state = viewState[listId]; let itemsToRender = [...(originalItems || [])];
 
             if (state.localSearch) {
                 const query = state.localSearch.toLowerCase();
-                itemsToRender = itemsToRender.filter(item =>
-                    (item.title && item.title.toLowerCase().includes(query)) ||
-                    (item.overview && item.overview.toLowerCase().includes(query))
-                );
+                itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query)));
             }
-
-            if (state.filterFavoritesOnly) {
-                itemsToRender = itemsToRender.filter(item => item.isFavorite);
-            }
-            if (state.filterByGenre !== 'all') {
-                itemsToRender = itemsToRender.filter(item => item.genres.includes(state.filterByGenre));
-            }
+            if (state.filterFavoritesOnly) { itemsToRender = itemsToRender.filter(item => item.isFavorite); }
+            if (state.filterByGenre !== 'all') { itemsToRender = itemsToRender.filter(item => item.genres.includes(state.filterByGenre)); }
 
             const [sortBy, direction] = state.sortBy.split('_');
-
-            if (sortBy === 'custom') {
-                itemsToRender.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0));
-            } else {
+            if (sortBy === 'custom') { itemsToRender.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0)); }
+            else {
                 itemsToRender.sort((a, b) => {
                     let valA, valB;
                     switch (sortBy) {
@@ -879,107 +866,48 @@
             const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z";
 
             const listHTML = itemsToRender.map(item => {
-                const isWatched = listId.includes('Watched');
-                const isToWatchList = listId.includes('ToWatch');
-                let isUnreleased = false;
-                let unreleasedBadgeList = '';
-                let unreleasedBadgeGrid = '';
+                const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
+                let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
 
                 if (isToWatchList && item.releaseDate) {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const releaseDate = new Date(item.releaseDate);
+                    const today = new Date(); today.setHours(0, 0, 0, 0); const releaseDate = new Date(item.releaseDate);
                     if (releaseDate > today) {
-                        isUnreleased = true;
-                        const formattedDate = releaseDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
-                        unreleasedBadgeList = `<div class="unreleased-badge">Premiera: ${formattedDate}</div>`;
-                        unreleasedBadgeGrid = `<div class="grid-unreleased">Wkrótce</div>`;
+                        isUnreleased = true; const formattedDate = releaseDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+                        unreleasedBadgeList = `<div class="unreleased-badge">Premiera: ${formattedDate}</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased">Wkrótce</div>`;
                     }
                 }
 
                 if (viewState.globalViewMode === 'grid') {
-                    let favoriteBadge = '';
-                    if (item.isFavorite) {
-                        favoriteBadge = `<div class="grid-badge-favorite"><svg viewBox="0 0 24 24"><path d="${starPath}"/></svg></div>`;
-                    }
-
+                    let favoriteBadge = item.isFavorite ? `<div class="grid-badge-favorite"><svg viewBox="0 0 24 24"><path d="${starPath}"/></svg></div>` : '';
                     let infoBadge = '';
-                    if (isWatched && item.rating > 0) {
-                        infoBadge = `<div class="grid-badge-info">★ ${item.rating}</div>`;
-                    } else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
+                    if (isWatched && item.rating > 0) { infoBadge = `<div class="grid-badge-info">★ ${item.rating}</div>`; }
+                    else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
                         const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
-                        if (watchedCount > 0) {
-                            const pct = Math.round((watchedCount/item.numberOfEpisodes)*100);
-                            infoBadge = `<div class="grid-badge-info">${pct}%</div>`;
-                        }
+                        if (watchedCount > 0) { const pct = Math.round((watchedCount/item.numberOfEpisodes)*100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
                     }
+                    let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń" aria-label="Usuń"><svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>`;
 
-                    let deleteBadge = `
-                        <button class="grid-badge-delete delete-btn" title="Usuń" aria-label="Usuń">
-                            <svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>
-                        </button>`;
-
-                    return `
-                        <li class="grid-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}">
-                            <div class="grid-title-fallback">${item.title}</div>
-                            <img src="${item.poster || POSTER_PLACEHOLDER}" alt="${item.title}" loading="lazy" onerror="this.style.opacity=0;">
-                            ${favoriteBadge}
-                            ${infoBadge}
-                            ${unreleasedBadgeGrid}
-                            ${deleteBadge}
-                        </li>`;
+                    return `<li class="grid-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><div class="grid-title-fallback">${item.title}</div><img src="${item.poster || POSTER_PLACEHOLDER}" alt="${item.title}" loading="lazy" onerror="this.style.opacity=0;">${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${deleteBadge}</li>`;
                 } else {
                     let extraInfo = '';
-                    if (isWatched && item.rating) {
-                        extraInfo = generateStarRatingDisplay(item.rating);
-                    } else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
-                        const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
-                        const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
-                        extraInfo = `
-                            <div class="progress-container">
-                                <div class="progress-text">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div>
-                                <div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div>
-                            </div>
-                        `;
+                    if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
+                    else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
+                        const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0); const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
+                        extraInfo = `<div class="progress-container"><div class="progress-text">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
                     }
-                    return `
-                        <li class="list-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}">
-                            <img src="${item.poster || POSTER_PLACEHOLDER}" alt="Okładka" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
-                            <div class="info">
-                                <strong>${item.title}</strong>
-                                <span class="meta">${item.year}</span>
-                                ${unreleasedBadgeList}
-                                <p class="overview">${item.overview || ''}</p>
-                                ${extraInfo}
-                            </div>
-                            <div class="item-actions">
-                                <button class="icon-button delete-btn" title="Usuń">
-                                    <svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>
-                                </button>
-                            </div>
-                        </li>`;
+                    return `<li class="list-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><img src="${item.poster || POSTER_PLACEHOLDER}" alt="Okładka" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${item.title}</strong><span class="meta">${item.year}</span>${unreleasedBadgeList}<p class="overview">${item.overview || ''}</p>${extraInfo}</div><div class="item-actions"><button class="icon-button delete-btn" title="Usuń"><svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button></div></li>`;
                 }
             }).join('');
 
             let ul = container.querySelector('ul');
-            if (!ul) {
-                ul = document.createElement('ul');
-                container.appendChild(ul);
-            }
-
+            if (!ul) { ul = document.createElement('ul'); container.appendChild(ul); }
             ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
             ul.innerHTML = itemsToRender.length > 0 ? listHTML : `<div class="placeholder" style="padding:40px 0; color:var(--text-secondary); text-align:center;">Brak pozycji do wyświetlenia.</div>`;
 
-            if (sortableInstance) {
-                sortableInstance.destroy();
-                sortableInstance = null;
-            }
-
+            if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
             const isCustomSortActive = state.sortBy === 'custom_asc';
             const isCustomSortableList = listId === 'moviesToWatch' || listId === 'seriesToWatch';
-            if (isCustomSortableList && isCustomSortActive && !state.localSearch) {
-                initializeSortable(listId, ul, viewState.globalViewMode);
-            }
+            if (isCustomSortableList && isCustomSortActive && !state.localSearch) { initializeSortable(listId, ul, viewState.globalViewMode); }
         }
 
         function initializeSortable(listId, listEl, viewMode) {
@@ -1013,12 +941,7 @@
             document.querySelectorAll('.ptab-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const targetBtn = e.target.closest('.ptab-btn');
-                    if (targetBtn && !targetBtn.classList.contains('active')) {
-                        document.querySelectorAll('.ptab-btn').forEach(b => b.classList.remove('active'));
-                        document.querySelectorAll('.profile-sub-section').forEach(s => s.classList.remove('active'));
-                        targetBtn.classList.add('active');
-                        document.getElementById('ptab-' + targetBtn.dataset.ptab).classList.add('active');
-                    }
+                    if (targetBtn && !targetBtn.classList.contains('active')) { switchProfileTab(targetBtn.dataset.ptab); }
                 });
             });
 
@@ -1083,6 +1006,11 @@
                         const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
                         if (deltaX < 0 && currentSubTab === 'toWatch') { switchSubTab('watched'); }
                         else if (deltaX > 0 && currentSubTab === 'watched') { switchSubTab('toWatch'); }
+                    } else if (viewState.activeMainTab === 'profile') {
+                        const activeBtn = document.querySelector('.ptab-btn.active');
+                        const currentPtab = activeBtn ? activeBtn.dataset.ptab : 'stats';
+                        if (deltaX < 0 && currentPtab === 'stats') { switchProfileTab('settings'); }
+                        else if (deltaX > 0 && currentPtab === 'settings') { switchProfileTab('stats'); }
                     }
                 }
             };
@@ -1189,7 +1117,6 @@
             let totalMoviesWatched = data.moviesWatched.length;
             let totalSeriesWatched = data.seriesWatched.length;
             let totalMovieRuntimeMinutes = 0;
-            let episodesWatched = 0;
             let genreCounts = {};
             let sumRating = 0;
             let ratedItemsCount = 0;
@@ -1215,7 +1142,6 @@
 
             const allSeries = [...data.seriesWatched, ...data.seriesToWatch];
             allSeries.forEach(s => {
-                if (s.progress) { Object.values(s.progress).forEach(arr => episodesWatched += arr.length); }
                 if (s.rating > 0) {
                     sumRating += s.rating; ratedItemsCount++;
                     let bucket = Math.ceil(s.rating);
@@ -1273,7 +1199,7 @@
                 </div>
                 <div class="stat-card">
                     <svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg>
-                    <div class="label">Odcinki Seriali</div><div class="value">${episodesWatched}</div>
+                    <div class="label">Obejrzane Seriale</div><div class="value">${totalSeriesWatched}</div>
                 </div>
                 <div class="stat-card">
                     <svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
@@ -1334,8 +1260,10 @@
             `).join('');
 
             const modalContainer = document.getElementById('detailsModalContainer');
-            modalContainer.innerHTML = `<div class="modal-overlay"><div class="control-modal-content"><h3>Sortuj według</h3><div class="control-modal-options">${sortOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Domyślne</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
+            modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Sortuj według</h3><div class="control-modal-options">${sortOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Domyślne</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
             modalContainer.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) modalContainer.innerHTML = ''; };
+
+            setupSwipeToClose(modalContainer.querySelector('.modal-overlay'), () => modalContainer.innerHTML = '');
 
             modalContainer.querySelector('.apply-btn').onclick = async () => {
                 const selectedSort = document.querySelector('input[name="sort"]:checked'); if (selectedSort) state.sortBy = selectedSort.value;
@@ -1378,8 +1306,10 @@
             filterOptionsHTML += `</div>`;
 
             const modalContainer = document.getElementById('detailsModalContainer');
-            modalContainer.innerHTML = `<div class="modal-overlay"><div class="control-modal-content"><h3>Filtruj listę</h3><div class="control-modal-options">${filterOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Wyczyść</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
+            modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Filtruj listę</h3><div class="control-modal-options">${filterOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Wyczyść</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
             modalContainer.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) modalContainer.innerHTML = ''; };
+
+            setupSwipeToClose(modalContainer.querySelector('.modal-overlay'), () => modalContainer.innerHTML = '');
 
             modalContainer.querySelector('.apply-btn').onclick = async () => {
                 state.filterFavoritesOnly = document.getElementById('filter-favorites-checkbox').checked;
@@ -1397,45 +1327,52 @@
             const checkIcon = `<svg class="info-feature-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
             const infoHTML = `
                 <div class="modal-overlay" id="infoModal">
-                    <div class="modal-content">
-                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                        <h2>
-                            <svg class="app-logo-icon" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg>
-                            <span>PenguinFlix</span>
-                        </h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 24px;">Twój osobisty dziennik do śledzenia filmów i seriali.</p>
+                    <div class="modern-modal-wrapper">
+                        <div class="modal-drag-handle"></div>
+                        <button class="modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
 
-                        <h3 style="text-align: left; margin-bottom: 12px; font-size: 1.1rem;">Kluczowe Funkcje</h3>
-                        <ul class="info-feature-list">
-                            <li class="info-feature-item">${checkIcon} <span>Śledzenie tytułów do obejrzenia i już obejrzanych</span></li>
-                            <li class="info-feature-item">${checkIcon} <span>Szczegółowe śledzenie postępów w serialach (sezony i odcinki)</span></li>
-                            <li class="info-feature-item">${checkIcon} <span>Ocenianie, dodawanie recenzji oraz oznaczanie ulubionych</span></li>
-                            <li class="info-feature-item">${checkIcon} <span>Błyskawiczne wyszukiwanie i odkrywanie aktualnych trendów</span></li>
-                            <li class="info-feature-item">${checkIcon} <span>Przeglądanie obsady, filmografii aktorów i zwiastunów</span></li>
-                            <li class="info-feature-item">${checkIcon} <span>Zaawansowane sortowanie, filtrowanie i własne układanie list</span></li>
-                            <li class="info-feature-item">${checkIcon} <span>Działanie offline z możliwością instalacji jako aplikacja (PWA)</span></li>
-                        </ul>
+                        <div class="modern-modal-scroll" style="padding: 32px 24px;">
+                            <h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;">
+                                <svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg>
+                                <span>PenguinFlix</span>
+                            </h2>
+                            <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik do śledzenia filmów i seriali.</p>
 
-                        <h3 style="border-top: 1px solid var(--border-color); padding-top: 24px;">Twoje Dane i Kopie Zapasowe</h3>
-                        <div class="important-note">
-                            <strong>Ważne:</strong> Wszystkie Twoje dane są przechowywane <strong>wyłącznie w przeglądarce na tym urządzeniu</strong>. Nie są wysyłane na żaden serwer.
-                            <br><br>
-                            Aby uniknąć utraty danych, <strong>regularnie twórz kopię zapasową</strong> w ustawieniach Profilu.
+                            <h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3>
+                            <ul class="info-feature-list">
+                                <li class="info-feature-item">${checkIcon} <span>Śledzenie tytułów do obejrzenia i już obejrzanych</span></li>
+                                <li class="info-feature-item">${checkIcon} <span>Szczegółowe śledzenie postępów w serialach (sezony i odcinki)</span></li>
+                                <li class="info-feature-item">${checkIcon} <span>Ocenianie, dodawanie recenzji oraz oznaczanie ulubionych</span></li>
+                                <li class="info-feature-item">${checkIcon} <span>Błyskawiczne wyszukiwanie i odkrywanie aktualnych trendów</span></li>
+                                <li class="info-feature-item">${checkIcon} <span>Przeglądanie obsady, filmografii aktorów i zwiastunów</span></li>
+                                <li class="info-feature-item">${checkIcon} <span>Zaawansowane sortowanie, filtrowanie i własne układanie list</span></li>
+                                <li class="info-feature-item">${checkIcon} <span>Działanie offline z możliwością instalacji jako aplikacja (PWA)</span></li>
+                            </ul>
+
+                            <h3 style="border-top: 1px solid var(--border-color); padding-top: 24px; color: var(--text-color);">Twoje Dane i Kopie Zapasowe</h3>
+                            <div class="important-note">
+                                <strong>Ważne:</strong> Wszystkie Twoje dane są przechowywane <strong>wyłącznie w przeglądarce na tym urządzeniu</strong>. Nie są wysyłane na żaden serwer.
+                                <br><br>
+                                Aby uniknąć utraty danych, <strong>regularnie twórz kopię zapasową</strong> w ustawieniach Profilu.
+                            </div>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary);">
+                                Ta aplikacja wykorzystuje dane i obrazy dostarczane przez The Movie Database (TMDb).
+                                <br>
+                                <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo">
+                            </p>
                         </div>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary);">
-                            Ta aplikacja wykorzystuje dane i obrazy dostarczane przez The Movie Database (TMDb).
-                            <br>
-                            <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo">
-                        </p>
                     </div>
                 </div>`;
+
             const customAlertContainer = document.getElementById('customAlertContainer');
             customAlertContainer.innerHTML = infoHTML;
             const modal = customAlertContainer.querySelector('.modal-overlay');
             const closeBtn = modal.querySelector('.modal-top-close-btn');
             const closeModal = () => customAlertContainer.innerHTML = '';
+
             modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
             closeBtn.addEventListener('click', closeModal);
+            setupSwipeToClose(modal, closeModal);
         }
 
         const formatRuntime = (minutes) => { if (!minutes || minutes <= 0) return ''; const hours = Math.floor(minutes / 60); const remainingMinutes = minutes % 60; let formatted = []; if (hours > 0) formatted.push(`${hours}h`); if (remainingMinutes > 0) formatted.push(`${remainingMinutes}min`); return formatted.join(' '); };
@@ -1444,7 +1381,6 @@
         const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'flex'; };
         const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const configSection = document.getElementById('configSection'); configSection.style.display = 'block'; configSection.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; background-color: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color:var(--text-color); border:1px solid var(--border-color); border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer; font-weight:bold;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Sukces!', 'Klucz API został zapisany.', 'success'); init(); } else { showCustomAlert('Błąd', 'Proszę wprowadzić prawidłowy klucz API.', 'error'); } }); };
 
-        // --- NOWE FUNKCJE ALERTY I POTWIERDZENIA ---
         const showCustomAlert = (title, message, type = 'info') => {
             const icons = {
                 success: `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
@@ -1464,7 +1400,6 @@
                 </div>`;
             const customAlertContainer = document.getElementById('customAlertContainer');
             customAlertContainer.innerHTML = alertHTML;
-
             const overlay = customAlertContainer.querySelector('.modern-alert-overlay');
             const close = () => { overlay.style.opacity = '0'; setTimeout(() => customAlertContainer.innerHTML = '', 200); };
             customAlertContainer.querySelector('.alert-button-confirm').onclick = close;
@@ -1490,11 +1425,7 @@
                 const customAlertContainer = document.getElementById('customAlertContainer');
                 customAlertContainer.innerHTML = confirmHTML;
                 const overlay = customAlertContainer.querySelector('.modern-alert-overlay');
-
-                const cleanup = (result) => {
-                    overlay.style.opacity = '0';
-                    setTimeout(() => { customAlertContainer.innerHTML = ''; resolve(result); }, 200);
-                };
+                const cleanup = (result) => { overlay.style.opacity = '0'; setTimeout(() => { customAlertContainer.innerHTML = ''; resolve(result); }, 200); };
                 customAlertContainer.querySelector('.alert-button-confirm').onclick = () => cleanup(true);
                 customAlertContainer.querySelector('.alert-button-cancel').onclick = () => cleanup(false);
                 overlay.onclick = (e) => { if(e.target === overlay) cleanup(false); };
@@ -1577,12 +1508,13 @@
 
             const modalHTML = `
                 <div class="modal-overlay">
-                    <div class="modal-content split-layout" style="max-width: 700px;">
-                        <div class="modal-top-section" style="padding-bottom: 16px;">
-                            <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                            <h2 style="margin: 0; text-align: center; font-size: 1.2rem;">Wyniki dla: "${query}"</h2>
+                    <div class="modern-modal-wrapper" style="max-width: 700px;">
+                        <div class="modal-drag-handle"></div>
+                        <button class="modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                        <div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border-color); text-align: center;">
+                            <h2 style="margin: 0; font-size: 1.2rem; margin-top: 10px;">Wyniki dla: "${query}"</h2>
                         </div>
-                        <div class="modal-bottom-section" style="padding: 0;">
+                        <div class="modern-modal-scroll" style="padding: 0;">
                             <div class="all-results-list">${resultsHTML}</div>
                         </div>
                     </div>
@@ -1592,6 +1524,8 @@
             const modal = modalContainer.querySelector('.modal-overlay'); const closeModal = () => modalContainer.innerHTML = '';
             modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
+
+            setupSwipeToClose(modal, closeModal);
 
             modal.querySelector('.all-results-list').addEventListener('click', (e) => {
                 const quickAddButton = e.target.closest('.add-item'); const searchItem = e.target.closest('.search-item');
@@ -1635,7 +1569,25 @@
             if (!success) { button.disabled = false; }
         }
 
-        async function getItemDetails(id, type) { try { const response = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images&include_image_language=pl,en,null`); if (!response.ok) return null; const d = await response.json(); const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), releaseDate: d.release_date || d.first_air_date || null, overview: d.overview, genres: d.genres.map(g => g.name), isFavorite: false }; if (type === 'tv') { item.seasons = d.seasons; item.numberOfSeasons = d.number_of_seasons; item.numberOfEpisodes = d.number_of_episodes; item.progress = {}; } else if (type === 'movie') { item.runtime = d.runtime || null; } return item; } catch { return null; } }
+        async function getItemDetails(id, type) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images&include_image_language=pl,en,null`);
+                if (!response.ok) return null;
+                const d = await response.json();
+                const item = {
+                    id: d.id, title: d.title || d.name,
+                    poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null,
+                    backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null,
+                    type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4),
+                    releaseDate: d.release_date || d.first_air_date || null, overview: d.overview,
+                    genres: d.genres.map(g => g.name), isFavorite: false
+                };
+                if (type === 'tv') { item.seasons = d.seasons; item.numberOfSeasons = d.number_of_seasons; item.numberOfEpisodes = d.number_of_episodes; item.progress = {}; }
+                else if (type === 'movie') { item.runtime = d.runtime || null; }
+                return item;
+            } catch { return null; }
+        }
+
         async function getCredits(id, type) { if (String(id).startsWith('custom_')) return []; try { const response = await fetch(`${API_BASE_URL}/${type}/${id}/credits?api_key=${API_KEY}&language=pl-PL`); if (!response.ok) return []; const data = await response.json(); return data.cast.slice(0, 15); } catch { return []; } }
 
         async function handleMoveItem(id, type) { const fromListName = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; const toListName = `${type === 'movie' ? 'movies' : 'series'}Watched`; const itemIndex = data[fromListName].findIndex(i => String(i.id) === String(id) && i.type == type); if (itemIndex > -1) { const [item] = data[fromListName].splice(itemIndex, 1); item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder; data[toListName].unshift(item); await saveData(); switchSubTab('watched'); showCustomAlert('Przeniesiono', 'Tytuł pomyślnie oznaczony jako obejrzany.', 'success'); } }
@@ -1685,49 +1637,113 @@
         function backupData() { if (isDataEmpty()) { showCustomAlert('Uwaga', 'Twoje listy są puste. Brak danych do eksportu.', 'info'); return; } const dataStr = JSON.stringify({ data, viewState }, null, 2); const blob = new Blob([dataStr], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `penguinflix_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href); showCustomAlert('Sukces', 'Kopia zapasowa została pobrana na Twoje urządzenie.', 'success');}
         async function restoreData(e) { const file = e.target.files[0]; if (!file) return; const confirmed = await showCustomConfirm('Przywracanie kopii', 'Ta operacja całkowicie nadpisze obecne dane w aplikacji. Czy na pewno chcesz kontynuować?'); if (!confirmed) { e.target.value = ''; return; } const reader = new FileReader(); reader.onload = async (event) => { try { const restored = JSON.parse(event.target.result); if (restored.data && restored.data.moviesToWatch !== undefined) { viewState = restored.viewState || viewState; migrateData(restored.data); data = restored.data; await saveData(); switchMainTab(viewState.activeMainTab || 'movies'); showCustomAlert('Sukces!', 'Dane zostały pomyślnie przywrócone z pliku.', 'success'); } else { throw new Error('Nieprawidłowy format pliku.'); } } catch(err) { showCustomAlert('Błąd odczytu', 'Zły format pliku lub plik jest uszkodzony.', 'error'); } }; reader.readAsText(file); e.target.value = ''; }
 
+        // --- ZMODERNIZOWANE OKNO SZCZEGÓŁÓW (WSPÓLNE DLA PREVIEW I DETAIL) ---
+        function getModalHeaderHTML(item) {
+            const bgImage = item.backdrop || item.poster || POSTER_PLACEHOLDER;
+            const bgFilter = item.backdrop ? '' : 'filter: blur(20px) brightness(0.5); transform: scale(1.1);';
+            let runtimeInfo = '';
+            if (item.type === 'movie' && item.runtime) { runtimeInfo = ` • ${formatRuntime(item.runtime)}`; }
+
+            return `
+                <div class="modal-drag-handle"></div>
+                <button class="modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                <div class="modal-hero-header">
+                    <div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div>
+                    <div class="hero-gradient"></div>
+                    <div class="hero-content">
+                        <img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" onerror="this.src='${POSTER_PLACEHOLDER}';">
+                        <div class="hero-text">
+                            <div class="hero-title-row">
+                                <h2 class="hero-title">${item.title}</h2>
+                                <!-- Gwiazdka ulubionych zarezerwowana do wstrzyknięcia -->
+                                <div id="hero-fav-container"></div>
+                            </div>
+                            <div class="hero-meta">${item.year}${runtimeInfo}</div>
+                            <div id="trailer-section-container"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // FUKCJA GESTU DO ZAMYKANIA MODALA
+        function setupSwipeToClose(modalElement, closeCallback) {
+            const wrapper = modalElement.querySelector('.modern-modal-wrapper');
+            if (!wrapper) return;
+            let startY = 0;
+            let currentY = 0;
+            let isDragging = false;
+
+            const onTouchStart = (e) => {
+                const scrollArea = wrapper.querySelector('.modern-modal-scroll');
+                if (scrollArea && scrollArea.contains(e.target) && scrollArea.scrollTop > 0) return;
+
+                startY = e.touches[0].clientY;
+                isDragging = true;
+                wrapper.style.transition = 'none';
+            };
+
+            const onTouchMove = (e) => {
+                if (!isDragging) return;
+                const y = e.touches[0].clientY;
+                currentY = Math.max(0, y - startY);
+                if (currentY > 0) {
+                    wrapper.style.transform = `translateY(${currentY}px)`;
+                }
+            };
+
+            const onTouchEnd = () => {
+                if (!isDragging) return;
+                isDragging = false;
+                wrapper.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                if (currentY > 100) {
+                    wrapper.style.transform = `translateY(100%)`;
+                    setTimeout(closeCallback, 250);
+                } else {
+                    wrapper.style.transform = `translateY(0)`;
+                }
+                currentY = 0;
+            };
+
+            wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
+            wrapper.addEventListener('touchmove', onTouchMove, { passive: true });
+            wrapper.addEventListener('touchend', onTouchEnd);
+        }
+
         async function openPreviewModal(id, type) {
             const detailsModalContainer = document.getElementById('detailsModalContainer');
-            detailsModalContainer.innerHTML = `<div class="modal-overlay"><div class="modal-content" style="text-align:center;">Ładowanie...</div></div>`;
+            detailsModalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="align-items:center; justify-content:center; height:200px; color:var(--text-secondary);">Ładowanie...</div></div>`;
 
             const item = await getItemDetails(id, type);
             if (!item) { detailsModalContainer.innerHTML = ''; showCustomAlert('Błąd połączenia', 'Nie udało się załadować szczegółów tytułu.', 'error'); return; }
 
             const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
-            let runtimeInfo = '';
-            if (item.type === 'movie' && item.runtime) { runtimeInfo = `<div class="runtime-info" style="margin-bottom: 20px; font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">Czas trwania: ${formatRuntime(item.runtime)}</div>`; }
 
             let footerHTML = '';
             if (isAlreadyAdded) {
-                footerHTML = `<div class="modal-footer" style="margin-top:24px; text-align:center;"><span style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Ten tytuł jest już w Twojej kolekcji.</span></div>`;
+                footerHTML = `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>`;
             } else {
-                footerHTML = `<div class="modal-footer" style="margin-top:24px;display:flex;justify-content:space-between; gap:12px;"><button id="previewAddToWatchedBtn" style="padding:14px 10px;border:1px solid var(--border-color);background:transparent;color:var(--text-color);border-radius:var(--radius-md);cursor:pointer;font-size:0.95rem;font-weight:bold; flex:1;">Do Obejrzanych</button><button id="previewAddToWatchBtn" style="padding:14px 10px;border:none;background:var(--primary-color);color:white;border-radius:var(--radius-md);cursor:pointer;font-size:0.95rem;font-weight:bold; flex:1;">Do Obejrzenia</button></div>`;
+                footerHTML = `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>`;
             }
 
             const modalHTML = `
             <div class="modal-overlay">
-                <div class="modal-content split-layout">
-                    <div class="modal-top-section">
-                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                        <div class="modal-header compact">
-                            <img src="${item.poster || POSTER_PLACEHOLDER}" alt="Okładka" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
-                            <div class="modal-title-wrapper">
-                                <div class="modal-title">
-                                    <h2>${item.title} (${item.year})</h2>
-                                </div>
-                                <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
-                                <div id="trailer-section-container" style="margin-top: 12px;"></div>
+                <div class="modern-modal-wrapper">
+                    ${getModalHeaderHTML(item)}
+                    <div class="modern-modal-scroll">
+                        <div class="modal-body-content">
+                            <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
+                            <div>
+                                <h3>O czym to jest?</h3>
+                                <p class="overview-text">${item.overview || 'Brak opisu dla tego tytułu.'}</p>
                             </div>
+                            <div id="cast-container"></div>
                         </div>
                     </div>
-                    <div class="modal-bottom-section">
-                        ${runtimeInfo}
-                        <h3 style="margin-top:0;">Opis</h3>
-                        <p style="line-height:1.6;color:var(--text-secondary);">${item.overview || 'Brak opisu.'}</p>
-                        <div id="cast-container"></div>
-                        ${footerHTML}
-                    </div>
+                    ${footerHTML}
                 </div>
             </div>`;
+
             detailsModalContainer.innerHTML = modalHTML;
             const modal = detailsModalContainer.querySelector('.modal-overlay');
 
@@ -1735,13 +1751,14 @@
             modal.addEventListener('click', (e) => { if (e.target === modal) { closeModal(); } const castMember = e.target.closest('.cast-member[data-actor-id]'); if (castMember) { openActorDetailsModal(castMember.dataset.actorId); } });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
 
+            setupSwipeToClose(modal, closeModal);
+
             getTrailerKey(id, type).then(trailerKey => {
                 if (trailerKey) {
                     const trailerBtnContainer = document.getElementById('trailer-section-container');
                     if (trailerBtnContainer) {
-                        const trailerBtn = document.createElement('button'); trailerBtn.className = 'trailer-btn';
-                        trailerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M10,16.5V7.5L16,12M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" /></svg> Zwiastun`;
-                        trailerBtn.onclick = () => openTrailerModal(trailerKey); trailerBtnContainer.appendChild(trailerBtn);
+                        trailerBtnContainer.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`;
+                        trailerBtnContainer.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(trailerKey);
                     }
                 }
             });
@@ -1749,10 +1766,9 @@
             const castContainer = document.getElementById('cast-container');
             getCredits(id, type).then(cast => {
                 if (cast && cast.length > 0) {
-                    castContainer.innerHTML = `<p style="color: var(--text-secondary); margin-top: 24px;">Ładowanie obsady...</p>`;
                     const castHTML = cast.map(member => `<div class="cast-member" data-actor-id="${member.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${member.profile_path}" alt="${member.name}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${member.name}</strong><span>${member.character}</span></div>`).join('');
-                    castContainer.innerHTML = `<div class="cast-section"><h3>Obsada</h3><div class="cast-scroller">${castHTML}</div></div>`;
-                } else { castContainer.innerHTML = ''; }
+                    castContainer.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${castHTML}</div></div>`;
+                }
             });
 
             if (!isAlreadyAdded) {
@@ -1761,79 +1777,86 @@
             }
         }
 
-        async function populateAndRenderSeriesSections(item, container) {
-            if (String(item.id).startsWith('custom_')) { container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Śledzenie odcinków nie jest dostępne dla wpisów niestandardowych.</p></div>`; return; }
-            if (!item.seasons) {
-                container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p class="loading-episodes">Aktualizowanie danych serialu...</p></div>`;
-                const freshDetails = await getItemDetails(item.id, item.type);
-                if (freshDetails) { Object.assign(item, freshDetails); await saveData(); }
-                else { container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color:var(--primary-color)">Nie udało się pobrać danych o sezonach.</p></div>`; return; }
-            }
-            renderSeasonsProgress(item, container);
-        }
-
         async function openDetailsModal(id, type) {
             const { listName, item } = getListAndItem(id, type);
             if (!item) return;
 
-            if (type === 'movie' && item.runtime === undefined && !String(id).startsWith('custom_')) {
+            // Wymuś pobranie z API, jeśli brakuje okładki w tle lub brakuje czasu trwania filmu
+            if (!String(id).startsWith('custom_') && (!item.backdrop || (type === 'movie' && item.runtime === undefined))) {
                 const freshDetails = await getItemDetails(id, type);
-                if (freshDetails) { Object.assign(item, freshDetails); await saveData(); }
+                if (freshDetails) {
+                    Object.assign(item, freshDetails);
+                    await saveData();
+                }
             }
 
             const isToWatchSeries = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
-            let runtimeInfo = '';
-            if (item.type === 'movie' && item.runtime) { runtimeInfo = `<div class="runtime-info" style="margin-bottom: 20px; font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">Czas trwania: ${formatRuntime(item.runtime)}</div>`; }
 
             const detailsModalContainer = document.getElementById('detailsModalContainer');
+
+            let footerHTML = isWatched
+                ? `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`
+                : `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
+
             const modalHTML = `
             <div class="modal-overlay">
-                <div class="modal-content split-layout">
-                    <div class="modal-top-section">
-                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                        <div class="modal-header compact">
-                            <img src="${item.poster || POSTER_PLACEHOLDER}" alt="Okładka" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
-                            <div class="modal-title-wrapper">
-                                <div class="modal-title" style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
-                                    <h2 style="margin: 0;">${item.title} (${item.year})</h2>
-                                    <button id="modal-favorite-btn" class="icon-button favorite-btn ${item.isFavorite ? 'active' : ''}" style="margin-top: -2px;" title="Oznacz jako ulubione">
-                                        <svg viewBox="0 0 24 24"><path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z"/></svg>
-                                    </button>
-                                </div>
-                                <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
-                                <div id="trailer-section-container" style="margin-top: 12px;"></div>
+                <div class="modern-modal-wrapper">
+                    ${getModalHeaderHTML(item)}
+                    <div class="modern-modal-scroll">
+                        <div class="modal-body-content">
+                            <div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('')}</div>
+                            <div>
+                                <h3>O czym to jest?</h3>
+                                <p class="overview-text">${item.overview || 'Brak opisu dla tego tytułu.'}</p>
                             </div>
+
+                            <div id="seasons-container"></div>
+                            <div id="cast-container"></div>
+
+                            ${isWatched ? `
+                            <div class="review-card">
+                                <h3>Twoja ocena</h3>
+                                <div class="star-rating-interactive"></div>
+                                <div class="rating-controls">
+                                    <button id="rating-decrement" aria-label="Zmniejsz">-</button>
+                                    <span id="rating-display" class="rating-display"></span>
+                                    <button id="rating-increment" aria-label="Zwiększ">+</button>
+                                </div>
+                                <textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz o tym tytule...">${item.review || ''}</textarea>
+                            </div>` : ''}
+
                         </div>
                     </div>
-                    <div class="modal-bottom-section">
-                        ${runtimeInfo}
-                        <h3 style="margin-top:0;">Opis</h3>
-                        <p style="line-height:1.6;color:var(--text-secondary);">${item.overview || 'Brak opisu.'}</p>
-                        <div id="seasons-container"></div>
-                        <div id="cast-container"></div>
-                        ${isWatched ? `<h3>Twoja ocena i recenzja</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement" aria-label="Zmniejsz ocenę o pół gwiazdki">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment" aria-label="Zwiększ ocenę o pół gwiazdki">+</button></div><textarea id="reviewText" placeholder="Napisz swoją recenzję..." style="width:100%;min-height:120px;background:color-mix(in srgb, var(--bg-color) 50%, var(--card-color));border:1px solid var(--border-color);color:var(--text-color);border-radius:var(--radius-md);padding:14px;font-size:1rem;resize:vertical;">${item.review || ''}</textarea>` : ''}
-                        <div class="modal-footer" style="margin-top:24px;display:flex;justify-content:flex-end;">
-                            ${isWatched ? `<button id="saveReviewBtn" style="padding:14px 24px;border:none;background:var(--primary-color);color:white;border-radius:var(--radius-md);cursor:pointer;font-size:1rem;font-weight:bold;width:100%;">Zapisz zmiany</button>` : `<button id="moveToWatchedBtn" style="padding:14px 24px;border:none;background:var(--primary-color);color:white;border-radius:var(--radius-md);cursor:pointer;font-size:1rem;font-weight:bold;width:100%;">Oznacz jako Obejrzane</button>`}
-                        </div>
-                    </div>
+                    ${footerHTML}
                 </div>
             </div>`;
 
             detailsModalContainer.innerHTML = modalHTML; const modal = detailsModalContainer.querySelector('.modal-overlay');
 
+            // Wstrzyknięcie guzika Ulubione do Hero
+            const favContainer = modal.querySelector('#hero-fav-container');
+            if (favContainer) {
+                favContainer.innerHTML = `<button id="modal-favorite-btn" class="hero-fav-btn ${item.isFavorite ? 'active' : ''}" title="Oznacz jako ulubione"><svg viewBox="0 0 24 24"><path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z"/></svg></button>`;
+                modal.querySelector('#modal-favorite-btn').addEventListener('click', async (e) => {
+                    item.isFavorite = !item.isFavorite;
+                    e.currentTarget.classList.toggle('active', item.isFavorite);
+                    await saveData();
+                });
+            }
+
             const closeModal = () => { detailsModalContainer.innerHTML = ''; renderList(data[listName], listName); };
             modal.addEventListener('click', (e) => { if (e.target === modal) { closeModal(); } const castMember = e.target.closest('.cast-member[data-actor-id]'); if (castMember) { openActorDetailsModal(castMember.dataset.actorId); } });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
-            modal.querySelector('#modal-favorite-btn').addEventListener('click', async (e) => { item.isFavorite = !item.isFavorite; e.currentTarget.classList.toggle('active', item.isFavorite); await saveData(); });
+
+            setupSwipeToClose(modal, closeModal);
 
             if (!String(item.id).startsWith('custom_')) {
                 getTrailerKey(id, type).then(trailerKey => {
                     if (trailerKey) {
                         const trailerBtnContainer = document.getElementById('trailer-section-container');
                         if (trailerBtnContainer) {
-                            const trailerBtn = document.createElement('button'); trailerBtn.className = 'trailer-btn';
-                            trailerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M10,16.5V7.5L16,12M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" /></svg> Zwiastun`;
-                            trailerBtn.onclick = () => openTrailerModal(trailerKey); trailerBtnContainer.appendChild(trailerBtn);
+                            trailerBtnContainer.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`;
+                            trailerBtnContainer.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(trailerKey);
                         }
                     }
                 });
@@ -1842,10 +1865,9 @@
             const castContainer = document.getElementById('cast-container');
             getCredits(id, type).then(cast => {
                 if (cast && cast.length > 0) {
-                    castContainer.innerHTML = `<p style="color: var(--text-secondary); margin-top: 24px;">Ładowanie obsady...</p>`;
                     const castHTML = cast.map(member => `<div class="cast-member" data-actor-id="${member.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${member.profile_path}" alt="${member.name}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${member.name}</strong><span>${member.character}</span></div>`).join('');
-                    castContainer.innerHTML = `<div class="cast-section"><h3>Obsada</h3><div class="cast-scroller">${castHTML}</div></div>`;
-                } else { castContainer.innerHTML = ''; }
+                    castContainer.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${castHTML}</div></div>`;
+                }
             });
 
             if (isToWatchSeries) { populateAndRenderSeriesSections(item, document.getElementById('seasons-container')); }
@@ -1861,6 +1883,19 @@
             } else {
                 document.getElementById('moveToWatchedBtn').onclick = async () => { await handleMoveItem(id, type); closeModal(); };
             }
+        }
+
+        function populateAndRenderSeriesSections(item, container) {
+            if (String(item.id).startsWith('custom_')) { container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Śledzenie odcinków niedostępne dla wpisów ręcznych.</p></div>`; return; }
+            if (!item.seasons) {
+                container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3><p class="loading-episodes">Aktualizowanie danych serialu...</p></div>`;
+                getItemDetails(item.id, item.type).then(async freshDetails => {
+                    if (freshDetails) { Object.assign(item, freshDetails); await saveData(); renderSeasonsProgress(item, container); }
+                    else { container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color:var(--primary-color)">Błąd danych o sezonach.</p></div>`; }
+                });
+                return;
+            }
+            renderSeasonsProgress(item, container);
         }
 
         async function getTrailerKey(id, type) {
@@ -1883,8 +1918,8 @@
             trailerContainer.innerHTML = `
                 <div id="trailerModalOverlay">
                     <div id="trailerModalContent">
-                        <button class="icon-button trailer-close-btn" title="Zamknij">
-                            <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        <button class="trailer-close-btn" title="Zamknij">
+                            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                         <div class="video-wrapper">
                             <iframe src="https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&rel=0&modestbranding=1&playsinline=1${originParam}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
@@ -1897,14 +1932,14 @@
         }
 
         function renderSeasonsProgress(item, container) {
-            if (!item.seasons || item.seasons.length === 0) { container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Brak informacji o sezonach dla tego serialu.</p></div>`; return; }
+            if (!item.seasons || item.seasons.length === 0) { container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Brak informacji o sezonach.</p></div>`; return; }
             if (!item.progress) item.progress = {};
 
             const seasonsHTML = item.seasons.map(season => {
                 const watchedInSeason = item.progress[season.season_number]?.length || 0;
                 return `<div class="season-details" data-season-number="${season.season_number}"><div class="season-summary"><h4>${season.name}</h4><span class="season-progress">${watchedInSeason} / ${season.episode_count}</span></div><div class="episodes-list"><div class="loading-episodes">Ładowanie odcinków...</div></div></div>`;
             }).join('');
-            container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3>${seasonsHTML}</div>`;
+            container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3>${seasonsHTML}</div>`;
 
             container.querySelectorAll('.season-summary').forEach(summary => {
                 summary.addEventListener('click', async (e) => {
@@ -1978,31 +2013,60 @@
         function openCustomAddModal() {
             const modalHTML = `
                 <div class="modal-overlay" id="customAddModal">
-                    <div class="modal-content">
-                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                        <h3 style="margin-top:0">Dodaj wpis ręcznie</h3>
-                        <form id="custom-add-form">
-                            <input type="text" id="custom-title" placeholder="Tytuł (wymagane)" required>
-                            <input type="number" id="custom-year" placeholder="Rok produkcji (np. 2023)">
-                            <input type="text" id="custom-poster" placeholder="URL do plakatu (opcjonalnie)">
-                            <div>
-                                <p style="margin: 0 0 8px; font-weight: 600;">Typ:</p>
-                                <div class="radio-group">
-                                    <label><input type="radio" name="custom-type" value="movie" checked> Film</label>
-                                    <label><input type="radio" name="custom-type" value="tv"> Serial</label>
+                    <div class="modern-modal-wrapper" style="max-width: 450px;">
+                        <div class="modal-drag-handle"></div>
+                        <button class="modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+
+                        <div class="modern-modal-scroll" style="padding: 24px;">
+                            <h3 style="margin: 0 0 20px 0; font-size: 1.3rem; text-align: center; color: var(--text-color);">Dodaj tytuł ręcznie</h3>
+
+                            <form id="custom-add-form">
+                                <div class="custom-add-group">
+                                    <label class="custom-add-label">Tytuł (wymagane)</label>
+                                    <input type="text" id="custom-title" class="custom-input" placeholder="Wpisz nazwę filmu lub serialu..." required>
                                 </div>
-                            </div>
-                            <div>
-                                <p style="margin: 0 0 8px; font-weight: 600;">Dodaj do listy:</p>
-                                <div class="radio-group">
-                                    <label><input type="radio" name="custom-list" value="toWatch" checked> Do obejrzenia</label>
-                                    <label><input type="radio" name="custom-list" value="watched"> Obejrzane</label>
+
+                                <div class="custom-add-group">
+                                    <label class="custom-add-label">Rok produkcji (opcjonalnie)</label>
+                                    <input type="number" id="custom-year" class="custom-input" placeholder="Np. 2024">
                                 </div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="save-btn" style="width:100%;">Zapisz</button>
-                            </div>
-                        </form>
+
+                                <div class="custom-add-group">
+                                    <label class="custom-add-label">URL do plakatu (opcjonalnie)</label>
+                                    <input type="url" id="custom-poster" class="custom-input" placeholder="https://...">
+                                </div>
+
+                                <div class="custom-add-group">
+                                    <label class="custom-add-label">Typ nośnika</label>
+                                    <div class="modern-radio-group">
+                                        <label class="modern-radio-label">
+                                            <input type="radio" name="custom-type" value="movie" checked>
+                                            <span>Film</span>
+                                        </label>
+                                        <label class="modern-radio-label">
+                                            <input type="radio" name="custom-type" value="tv">
+                                            <span>Serial</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="custom-add-group">
+                                    <label class="custom-add-label">Gdzie zapisać?</label>
+                                    <div class="modern-radio-group">
+                                        <label class="modern-radio-label">
+                                            <input type="radio" name="custom-list" value="toWatch" checked>
+                                            <span>Do obejrzenia</span>
+                                        </label>
+                                        <label class="modern-radio-label">
+                                            <input type="radio" name="custom-list" value="watched">
+                                            <span>Obejrzane</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="modal-btn primary" style="width:100%; margin-top: 10px;">Zapisz tytuł w bibliotece</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             `;
@@ -2010,8 +2074,10 @@
             container.innerHTML = modalHTML;
             const modal = container.querySelector('.modal-overlay'); const form = container.querySelector('#custom-add-form');
             const closeModal = () => container.innerHTML = '';
+
             modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', closeModal);
+            setupSwipeToClose(modal, closeModal);
 
             form.addEventListener('submit', async e => {
                 e.preventDefault();
@@ -2078,15 +2144,18 @@
 
             const modalHTML = `
                 <div class="modal-overlay actor-modal-overlay">
-                    <div class="modal-content actor-modal-content">
-                        <button class="icon-button modal-top-close-btn" title="Zamknij"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                        <div class="actor-header">
-                            ${actorData.profile_path ? `<img src="${IMAGE_BASE_URL}${actorData.profile_path}" alt="${actorData.name}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
-                            <h2>${actorData.name}</h2>
+                    <div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);">
+                        <div class="modal-drag-handle"></div>
+                        <button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                        <div class="modern-modal-scroll" style="padding: 24px;">
+                            <div class="actor-header">
+                                ${actorData.profile_path ? `<img src="${IMAGE_BASE_URL}${actorData.profile_path}" alt="${actorData.name}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
+                                <h2>${actorData.name}</h2>
+                            </div>
+                            <div class="actor-bio">${actorData.biography || 'Brak dostępnej biografii.'}</div>
+                            ${knownForHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${knownForHTML}</div></div>` : ''}
+                            ${actorData.full_filmography && actorData.full_filmography.length > 0 ? `<div class="filmography-controls"><button id="toggle-filmography-btn" class="filmography-button">Pokaż pełną filmografię</button></div><div id="full-filmography-container" style="display: none;"></div>` : ''}
                         </div>
-                        <div class="actor-bio">${actorData.biography || 'Brak dostępnej biografii.'}</div>
-                        ${knownForHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${knownForHTML}</div></div>` : ''}
-                        ${actorData.full_filmography && actorData.full_filmography.length > 0 ? `<div class="filmography-controls"><button id="toggle-filmography-btn" class="filmography-button">Pokaż pełną filmografię</button></div><div id="full-filmography-container" style="display: none;"></div>` : ''}
                     </div>
                 </div>`;
             actorModalContainer.innerHTML = modalHTML;
@@ -2124,6 +2193,9 @@
 
             const modal = actorModalContainer.querySelector('.modal-overlay');
             const closeModal = () => actorModalContainer.innerHTML = '';
+
+            setupSwipeToClose(modal, closeModal);
+
             modal.addEventListener('click', e => {
                 if (e.target === modal) closeModal();
                 const header = e.target.closest('.filmography-item-header');
@@ -2149,14 +2221,14 @@
             actionContainer.innerHTML = `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Dodano!</span>`;
         }
 
-        function setupInteractiveStars(item) { const container = document.querySelector('.star-rating-interactive'); if(!container) return; const ratingDisplay = document.getElementById('rating-display'); const decBtn = document.getElementById('rating-decrement'); const incBtn = document.getElementById('rating-increment'); let currentRating = item.rating || 0; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for(let i=1; i<=5; i++){ const star = document.createElement('div'); star.className = 'star'; star.innerHTML = `<svg class="star-background" viewBox="0 0 24 24"><path d="${starPath}"/></svg><svg class="star-foreground" viewBox="0 0 24 24"><path d="${starPath}"/></svg>`; container.appendChild(star); } const updateRatingUI = (rating) => { currentRating = rating; container.dataset.rating = currentRating; container.querySelectorAll('.star-foreground').forEach((star, index) => { const score = currentRating - index; if (score >= 1) { star.style.clipPath = 'inset(0 0 0 0)'; } else if (score > 0) { star.style.clipPath = `inset(0 ${100 - score * 100}% 0 0)`; } else { star.style.clipPath = 'inset(0 100% 0 0)'; } }); ratingDisplay.textContent = `Twoja ocena: ${currentRating.toFixed(1)} / 5.0`; decBtn.disabled = currentRating <= 0; incBtn.disabled = currentRating >= 5; }; const calculateRatingFromEvent = (e) => { const rect = container.getBoundingClientRect(); const mouseX = e.clientX - rect.left; const rawRating = (mouseX / rect.width) * 5; return Math.max(0, Math.min(5, Math.round(rawRating * 2) / 2)); }; container.addEventListener('mousemove', e => updateRatingUI(calculateRatingFromEvent(e))); container.addEventListener('mouseleave', () => updateRatingUI(parseFloat(container.dataset.rating))); container.addEventListener('click', e => { const newRating = calculateRatingFromEvent(e); updateRatingUI(newRating); }); decBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating > 0) { updateRatingUI(rating - 0.5); } }); incBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating < 5) { updateRatingUI(rating + 0.5); } }); updateRatingUI(currentRating); }
+        function setupInteractiveStars(item) { const container = document.querySelector('.star-rating-interactive'); if(!container) return; const ratingDisplay = document.getElementById('rating-display'); const decBtn = document.getElementById('rating-decrement'); const incBtn = document.getElementById('rating-increment'); let currentRating = item.rating || 0; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for(let i=1; i<=5; i++){ const star = document.createElement('div'); star.className = 'star'; star.innerHTML = `<svg class="star-background" viewBox="0 0 24 24"><path d="${starPath}"/></svg><svg class="star-foreground" viewBox="0 0 24 24"><path d="${starPath}"/></svg>`; container.appendChild(star); } const updateRatingUI = (rating) => { currentRating = rating; container.dataset.rating = currentRating; container.querySelectorAll('.star-foreground').forEach((star, index) => { const score = currentRating - index; if (score >= 1) { star.style.clipPath = 'inset(0 0 0 0)'; } else if (score > 0) { star.style.clipPath = `inset(0 ${100 - score * 100}% 0 0)`; } else { star.style.clipPath = 'inset(0 100% 0 0)'; } }); ratingDisplay.textContent = `${currentRating.toFixed(1)} / 5.0`; decBtn.disabled = currentRating <= 0; incBtn.disabled = currentRating >= 5; }; const calculateRatingFromEvent = (e) => { const rect = container.getBoundingClientRect(); const mouseX = e.clientX - rect.left; const rawRating = (mouseX / rect.width) * 5; return Math.max(0, Math.min(5, Math.round(rawRating * 2) / 2)); }; container.addEventListener('mousemove', e => updateRatingUI(calculateRatingFromEvent(e))); container.addEventListener('mouseleave', () => updateRatingUI(parseFloat(container.dataset.rating))); container.addEventListener('click', e => { const newRating = calculateRatingFromEvent(e); updateRatingUI(newRating); }); decBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating > 0) { updateRatingUI(rating - 0.5); } }); incBtn.addEventListener('click', () => { let rating = parseFloat(container.dataset.rating); if (rating < 5) { updateRatingUI(rating + 0.5); } }); updateRatingUI(currentRating); }
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').then(registration => {
-                    console.log('ServiceWorker zarejestrowany: ', registration);
+                    console.log('ServiceWorker zarejestrowany');
                 }).catch(registrationError => {
-                    console.log('Rejestracja ServiceWorker nie powiodła się: ', registrationError);
+                    console.log('Błąd ServiceWorker:', registrationError);
                 });
             });
         }
