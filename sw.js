@@ -1,4 +1,4 @@
-const CACHE_NAME = 'penguinflix-cache-v2'; // Zmieniona nazwa, żeby wymusić aktualizację!
+const CACHE_NAME = 'penguinflix-cache-v3'; // Zmienione na v3, żeby wymusić przejęcie kontroli
 const URLS_TO_CACHE = [
   './',
   './index.html',
@@ -14,6 +14,8 @@ self.addEventListener('install', event => {
         console.log('Otwarto cache. Dodawanie zasobów: ', URLS_TO_CACHE);
         return cache.addAll(URLS_TO_CACHE);
       })
+      // KLUCZOWE 1: Zmusza nowego Service Workera do pominięcia kolejki i natychmiastowej instalacji
+      .then(() => self.skipWaiting()) 
   );
 });
 
@@ -30,18 +32,32 @@ self.addEventListener('activate', event => {
         })
       );
     })
+    // KLUCZOWE 2: Nowy Service Worker natychmiast przejmuje kontrolę nad otwartą kartą
+    .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.url.includes('api.themoviedb.org')) {
+  // Ignorujemy zapytania do zewnętrznego API
+  if (event.request.url.includes('api.themoviedb.org') || event.request.url.includes('youtube.com')) {
     return;
   }
   
+  // KLUCZOWE 3: Strategia "Network First" (Najpierw sieć, potem Cache)
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        return response || fetch(event.request);
+    fetch(event.request)
+      .then(networkResponse => {
+        // Jeśli mamy internet i serwer odpowiada, pobieramy najnowszą wersję
+        // i od razu zapisujemy/aktualizujemy ją w pamięci podręcznej.
+        return caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, networkResponse.clone());
+          return networkResponse;
+        });
+      })
+      .catch(() => {
+        // Złapanie błędu (.catch) nastąpi tylko, gdy NIE MASZ INTERNETU.
+        // Wtedy i tylko wtedy wyciągamy starą wersję aplikacji z pamięci.
+        return caches.match(event.request);
       })
   );
 });
