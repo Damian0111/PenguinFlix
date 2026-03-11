@@ -248,6 +248,27 @@
         .quick-track-btn-grid:hover svg { fill: white; transform: scale(1.1); }
         .quick-track-btn-grid:active { transform: translateX(-50%) translateY(0) scale(0.96); }
 
+        /* --- PRZYCISK PAGINACJI (LOAD MORE) --- */
+        .load-more-btn {
+            background-color: var(--card-color);
+            border: 1px solid var(--border-color);
+            color: var(--primary-color);
+            padding: 12px 28px;
+            border-radius: var(--radius-pill);
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .load-more-btn:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px color-mix(in srgb, var(--primary-color) 20%, transparent);
+        }
+        .load-more-btn:active { transform: translateY(0) scale(0.96); }
+
         /* --- ZAKŁADKA ODKRYWAJ --- */
         .discover-sticky-header {
             position: sticky; top: calc(var(--header-height) + var(--safe-top) - 1px); z-index: 990;
@@ -632,6 +653,27 @@
         .season-toggle-all-btn:hover { color: var(--text-color); border-color: var(--text-color); }
         .loading-episodes { text-align: center; padding: 20px; color: var(--text-secondary); }
 
+        /* --- PRZYCISK PAGINACJI (LOAD MORE) --- */
+        .load-more-btn {
+            background-color: var(--card-color);
+            border: 1px solid var(--border-color);
+            color: var(--primary-color);
+            padding: 12px 28px;
+            border-radius: var(--radius-pill);
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .load-more-btn:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px color-mix(in srgb, var(--primary-color) 20%, transparent);
+        }
+        .load-more-btn:active { transform: translateY(0) scale(0.96); }
+
         #trailerModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 16px; padding-top: 66px; animation: fadeIn 0.3s; }
         #trailerModalContent { position: relative; width: 100%; max-width: 960px; animation: scaleIn 0.3s ease-out; }
         .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--radius-lg); background-color: #000; }
@@ -949,16 +991,17 @@
         let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
         let fullSearchResults = [];
         let sortableInstance = null;
+        const apiCache = {};
 
         let viewState = {
             activeMainTab: 'movies',
             moviesSubTab: 'toWatch',
             seriesSubTab: 'toWatch',
             globalViewMode: 'list',
-            moviesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '' },
-            moviesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '' },
-            seriesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '' },
-            seriesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '' },
+            moviesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            moviesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            seriesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            seriesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
         };
 
         const ICONS = {
@@ -1055,9 +1098,13 @@
             viewBtn.innerHTML = viewState.globalViewMode === 'grid' ? ICONS.list : ICONS.grid;
         }
 
-        function renderList(originalItems, listId) {
+        function renderList(originalItems, listId, preserveLimit = false) {
             const container = document.getElementById(`${listId}ListContainer`); if (!container) return;
-            const state = viewState[listId]; let itemsToRender = [...(originalItems || [])];
+            const state = viewState[listId];
+
+            if (!preserveLimit) state.displayLimit = 30;
+
+            let itemsToRender = [...(originalItems || [])];
 
             if (state.localSearch) {
                 const query = state.localSearch.toLowerCase();
@@ -1079,9 +1126,11 @@
                 });
             }
 
+            const limit = state.displayLimit || 30;
+            const pagedItems = itemsToRender.slice(0, limit);
             const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z";
 
-            const listHTML = itemsToRender.map(item => {
+            const listHTML = pagedItems.map(item => {
                 const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
                 let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
 
@@ -1120,7 +1169,6 @@
                         if (nextEpInfo && !isUnreleased) {
                             quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track" aria-label="Oznacz ${nextEpInfo.string} jako obejrzany">${QUICK_TRACK_ICON} <span>${nextEpInfo.string}</span></button>`;
                         } else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) {
-                            // Zmienione: Mały, dyskretny niebieski znaczek w lewym dolnym rogu zamiast długiego tekstu na środku
                             nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9); box-shadow: 0 4px 12px rgba(0,0,0,0.6);">🕒 Wkrótce</div>`;
                         }
                     }
@@ -1158,6 +1206,17 @@
             if (!ul) { ul = document.createElement('ul'); container.appendChild(ul); }
             ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
             ul.innerHTML = itemsToRender.length > 0 ? listHTML : `<div class="placeholder" style="padding:40px 0; color:var(--text-secondary); text-align:center;">Brak pozycji do wyświetlenia.</div>`;
+
+            let loadMoreContainer = container.querySelector('.load-more-wrap');
+            if (loadMoreContainer) loadMoreContainer.remove();
+
+            if (itemsToRender.length > limit) {
+                loadMoreContainer = document.createElement('div');
+                loadMoreContainer.className = 'load-more-wrap';
+                loadMoreContainer.style.cssText = 'text-align: center; padding: 24px 0 10px; width: 100%;';
+                loadMoreContainer.innerHTML = `<button class="load-more-btn" data-list="${listId}"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg> Pokaż więcej (${itemsToRender.length - limit})</button>`;
+                container.appendChild(loadMoreContainer);
+            }
 
             if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
             const isCustomSortActive = state.sortBy === 'custom_asc';
@@ -1341,6 +1400,15 @@
                     }, 600);
                 }
             });
+
+            mainContent.addEventListener('click', (e) => {
+                const loadMoreBtn = e.target.closest('.load-more-btn');
+                if (loadMoreBtn) {
+                    const listId = loadMoreBtn.dataset.list;
+                    viewState[listId].displayLimit = (viewState[listId].displayLimit || 30) + 30;
+                    renderList(data[listId], listId, true);
+                }
+            });
         }
 
         async function handleQuickTrack(id) {
@@ -1360,7 +1428,7 @@
             const totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
 
             if (totalWatched >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) {
-                renderList(data[listName], listName);
+                renderList(data[listName], listName, true);
                 setTimeout(async () => {
                     const move = await showCustomConfirm('Gratulacje! 🎉', `Wygląda na to, że obejrzałeś wszystkie odcinki "${escapeHTML(item.title)}". Czy chcesz przenieść ten serial do listy "Obejrzane"?`);
                     if(move) {
@@ -1368,7 +1436,7 @@
                     }
                 }, 400);
             } else {
-                renderList(data[listName], listName);
+                renderList(data[listName], listName, true);
             }
         }
 
@@ -1992,10 +2060,25 @@
             } catch { return null; }
         }
 
-        async function getCredits(id, type) { if (String(id).startsWith('custom_')) return []; try { const response = await fetch(`${API_BASE_URL}/${type}/${id}/credits?api_key=${API_KEY}&language=pl-PL`); if (!response.ok) return []; const data = await response.json(); return data.cast.slice(0, 15); } catch { return []; } }
+                async function getCredits(id, type) {
+            if (String(id).startsWith('custom_')) return [];
+            const cacheKey = `credits_${type}_${id}`;
+            if (apiCache[cacheKey]) return apiCache[cacheKey];
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/${type}/${id}/credits?api_key=${API_KEY}&language=pl-PL`);
+                if (!response.ok) return [];
+                const data = await response.json();
+                apiCache[cacheKey] = data.cast.slice(0, 15);
+                return apiCache[cacheKey];
+            } catch { return []; }
+        }
 
         async function getWatchProviders(id, type) {
             if (String(id).startsWith('custom_')) return null;
+            const cacheKey = `providers_${type}_${id}`;
+            if (apiCache[cacheKey]) return apiCache[cacheKey];
+
             try {
                 const res = await fetch(`${API_BASE_URL}/${type}/${id}/watch/providers?api_key=${API_KEY}`);
                 if (!res.ok) return null;
@@ -2007,7 +2090,11 @@
                     if (pl.free) providers.push(...pl.free);
                     if (pl.ads) providers.push(...pl.ads);
                     const uniqueProviders = Array.from(new Set(providers.map(p => p.provider_id))).map(id => providers.find(p => p.provider_id === id));
-                    return uniqueProviders.length > 0 ? uniqueProviders : null;
+
+                    if (uniqueProviders.length > 0) {
+                        apiCache[cacheKey] = uniqueProviders;
+                        return uniqueProviders;
+                    }
                 }
                 return null;
             } catch { return null; }
@@ -2015,6 +2102,9 @@
 
         async function getRecommendations(id, type) {
             if (String(id).startsWith('custom_')) return [];
+            const cacheKey = `recs_${type}_${id}`;
+            if (apiCache[cacheKey]) return apiCache[cacheKey];
+
             try {
                 let res = await fetch(`${API_BASE_URL}/${type}/${id}/recommendations?api_key=${API_KEY}&language=pl-PL&page=1`);
                 let data = await res.json();
@@ -2024,7 +2114,8 @@
                     data = await res.json();
                     results = data.results ? data.results.filter(i => i.poster_path) : [];
                 }
-                return results.slice(0, 15);
+                apiCache[cacheKey] = results.slice(0, 15);
+                return apiCache[cacheKey];
             } catch { return []; }
         }
 
@@ -2100,6 +2191,9 @@
             if (viewState.moviesSubTab === undefined) viewState.moviesSubTab = 'toWatch';
             if (viewState.seriesSubTab === undefined) viewState.seriesSubTab = 'toWatch';
             if (viewState.globalViewMode === undefined) { viewState.globalViewMode = (viewState.moviesToWatch && viewState.moviesToWatch.viewMode) ? viewState.moviesToWatch.viewMode : 'list'; }
+            ['moviesToWatch', 'moviesWatched', 'seriesToWatch', 'seriesWatched'].forEach(key => {
+                if (viewState[key] && viewState[key].displayLimit === undefined) { viewState[key].displayLimit = 30; }
+            });
         }
 
         function isDataEmpty() { return Object.values(data).every(list => !list || list.length === 0); }
@@ -2252,7 +2346,24 @@
 
             if (!String(id).startsWith('custom_') && (!item.backdrop || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
                 const freshDetails = await getItemDetails(id, type);
-                if (freshDetails) { Object.assign(item, freshDetails); await saveData(); }
+                if (freshDetails) {
+                    item.backdrop = freshDetails.backdrop || item.backdrop;
+                    item.poster = freshDetails.poster || item.poster;
+                    item.overview = freshDetails.overview || item.overview;
+                    item.genres = freshDetails.genres || item.genres;
+                    item.releaseDate = freshDetails.releaseDate || item.releaseDate;
+                    if (type === 'tv') {
+                        item.status = freshDetails.status !== undefined ? freshDetails.status : item.status;
+                        item.nextEpisodeToAir = freshDetails.nextEpisodeToAir !== undefined ? freshDetails.nextEpisodeToAir : item.nextEpisodeToAir;
+                        item.seasons = freshDetails.seasons || item.seasons;
+                        item.numberOfSeasons = freshDetails.numberOfSeasons || item.numberOfSeasons;
+                        item.numberOfEpisodes = freshDetails.numberOfEpisodes || item.numberOfEpisodes;
+                        if (!item.progress) item.progress = {};
+                    } else if (type === 'movie') {
+                        item.runtime = freshDetails.runtime || item.runtime;
+                    }
+                    await saveData();
+                }
             }
 
             const isToWatchSeries = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
@@ -2302,7 +2413,7 @@
                     if(airStr) {
                          nextEpBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${airStr}</span></div>`;
                     } else {
-                         nextEpBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M12 2A10 10 0 1 0 22 12A10 10 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8A8 8 0 0 1 12 20Zm1-13h-2v6l5.2 3.1.8-1.2-4-2.4Z"/></svg> Na bieżąco! Czekamy na datę premiery.</div>`;
+                         nextEpBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">⏳ Jesteś na bieżąco! Brak daty kolejnego odcinka.</div>`;
                     }
                 }
             }
@@ -2358,7 +2469,7 @@
                 });
             }
 
-            const closeModal = () => { detailsModalContainer.innerHTML = ''; renderList(data[listName], listName); };
+            const closeModal = () => { detailsModalContainer.innerHTML = ''; renderList(data[listName], listName, true); };
 
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) { closeModal(); return; }
@@ -2427,7 +2538,16 @@
             if (!item.seasons) {
                 container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3><p class="loading-episodes">Aktualizowanie danych serialu...</p></div>`;
                 getItemDetails(item.id, item.type).then(async freshDetails => {
-                    if (freshDetails) { Object.assign(item, freshDetails); await saveData(); renderSeasonsProgress(item, container); }
+                    if (freshDetails) {
+                        item.seasons = freshDetails.seasons || item.seasons;
+                        item.numberOfSeasons = freshDetails.numberOfSeasons || item.numberOfSeasons;
+                        item.numberOfEpisodes = freshDetails.numberOfEpisodes || item.numberOfEpisodes;
+                        item.status = freshDetails.status !== undefined ? freshDetails.status : item.status;
+                        item.nextEpisodeToAir = freshDetails.nextEpisodeToAir !== undefined ? freshDetails.nextEpisodeToAir : item.nextEpisodeToAir;
+                        if (!item.progress) item.progress = {};
+                        await saveData();
+                        renderSeasonsProgress(item, container);
+                    }
                     else { container.innerHTML = `<div class="seasons-section"><h3>Postęp oglądania</h3><p style="color:var(--primary-color)">Błąd danych o sezonach.</p></div>`; }
                 });
                 return;
@@ -2464,7 +2584,11 @@
                     </div>
                 </div>`;
             const modalOverlay = trailerContainer.querySelector('#trailerModalOverlay');
-            const closeModal = () => trailerContainer.innerHTML = '';
+            const closeModal = () => {
+                const iframe = trailerContainer.querySelector('iframe');
+                if (iframe) iframe.src = '';
+                trailerContainer.innerHTML = '';
+            };
             modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay || e.target.closest('.trailer-close-btn')) { closeModal(); } });
         }
 
@@ -2589,7 +2713,7 @@
                     updateSeasonProgressUI(item, seasonNumber);
 
                     const listName = 'seriesToWatch';
-                    renderList(data[listName], listName);
+                    renderList(data[listName], listName, true);
 
                     const totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
                     if(totalWatched >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) {
@@ -2620,7 +2744,7 @@
                 btn.textContent = allWatched ? 'Zaznacz wydane odcinki' : 'Odznacz obejrzane';
 
                 const listName = 'seriesToWatch';
-                renderList(data[listName], listName);
+                renderList(data[listName], listName, true);
 
                 if(!allWatched) {
                      const totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
