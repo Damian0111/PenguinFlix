@@ -1038,7 +1038,7 @@
             return null;
         }
 
-        function switchMainTab(tabId) {
+               function switchMainTab(tabId) {
             viewState.activeMainTab = tabId;
             document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => { btn.classList.toggle('active', btn.dataset.maintab === tabId); });
             document.querySelectorAll('.main-tab-content').forEach(container => { container.classList.toggle('active', container.id === `tab-${tabId}`); });
@@ -1054,7 +1054,20 @@
                 subHeader.style.display = 'flex';
                 const subTab = tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
                 document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.subtab === subTab); });
-                const listId = getActiveListId(); updateToolbarUI(tabId); renderList(data[listId] || [], listId);
+
+                const listId = getActiveListId();
+
+                // --- POPRAWKA: Automatyczne wyświetlanie poprawnej listy po odświeżeniu ---
+                const parentTab = document.getElementById(`tab-${tabId}`);
+                if (parentTab) {
+                    parentTab.querySelectorAll('.list-container').forEach(c => c.classList.remove('active'));
+                    const targetContainer = document.getElementById(`${listId}ListContainer`);
+                    if (targetContainer) targetContainer.classList.add('active');
+                }
+                // ----------------------------------------------------------------------------
+
+                updateToolbarUI(tabId);
+                renderList(data[listId] || [], listId);
                 document.body.style.paddingTop = `calc(var(--header-height) + var(--sub-header-height) + var(--safe-top))`;
             } else {
                 subHeader.style.display = 'none';
@@ -1067,7 +1080,6 @@
             }
             saveData();
         }
-
         function switchSubTab(subTabId) {
             if (viewState.activeMainTab === 'movies') viewState.moviesSubTab = subTabId;
             else if (viewState.activeMainTab === 'series') viewState.seriesSubTab = subTabId;
