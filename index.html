@@ -784,7 +784,7 @@
     font-size: 0.95rem;
     grid-column: 1 / -1; /* Utrzymuje element na środku, gdy włączony jest widok siatki (Grid) */
 }
-        /* --- POPRAWKA RESPONSYWNOŚCI DLA MODALU TAGÓW (Telefony) --- */
+/* --- POPRAWKA RESPONSYWNOŚCI DLA MODALU TAGÓW (Telefony) --- */
 .add-tag-wrapper {
     width: 100% !important;
     box-sizing: border-box !important;
@@ -802,6 +802,50 @@
 .add-tag-btn {
     flex-shrink: 0 !important; /* Gwarantuje, że przycisk się nie zgniecie ani nie ucieknie */
     white-space: nowrap !important;
+}
+/* ===== GRUPOWANIE USTAWIEŃ ===== */
+.settings-section {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 24px;
+}
+
+.settings-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px 12px;
+}
+
+.settings-group {
+    background: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden; /* Przycina rogi elementów w środku */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Nadpisujemy zachowanie pojedynczego elementu, gdy jest w grupie */
+.settings-group .settings-item {
+    border: none !important; /* Usuwamy ramki dookoła */
+    border-radius: 0;
+    border-bottom: 1px solid var(--border-color) !important; /* Dajemy tylko linię oddzielającą na dole */
+    margin: 0;
+    background: transparent;
+}
+
+/* Ostatni element w grupie nie ma linii na dole */
+.settings-group .settings-item:last-child {
+    border-bottom: none !important;
+}
+
+/* Subtelniejsze podświetlenie po najechaniu (żeby nie psuć ramki grupy) */
+.settings-group .settings-item:hover {
+    background: color-mix(in srgb, var(--text-color) 4%, transparent) !important;
 }
     </style>
 </head>
@@ -915,35 +959,68 @@
                     <div class="stats-grid" id="profile-stats-container"></div>
                 </div>
 
-                <div id="ptab-settings" class="profile-sub-section">
-                    <div class="settings-list">
-                        <button class="settings-item" id="btn-theme-toggle">
-                            <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                            <span class="text">Zmień motyw</span>
-                            <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </button>
-                        <button class="settings-item" id="btn-custom-add">
-                            <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                            <span class="text">Dodaj tytuł ręcznie</span>
-                            <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </button>
-                        <button class="settings-item" id="btn-backup">
-                            <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <span class="text">Eksportuj kopię zapasową</span>
-                            <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </button>
-                        <label class="settings-item" for="restoreInput" style="margin:0; cursor:pointer;">
-                            <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                            <span class="text">Importuj kopię zapasową</span>
-                            <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </label>
-                        <input type="file" id="restoreInput" accept=".json" style="display:none">
-                        <button class="settings-item" id="btn-info">
-                            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                            <span class="text">O aplikacji PenguinFlix</span>
-                            <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                        </button>
+                                <div id="ptab-settings" class="profile-sub-section">
+
+                    <!-- SEKCJA 1: Wygląd i zachowanie -->
+                    <div class="settings-section">
+                        <div class="settings-section-title">Wygląd i działanie</div>
+                        <div class="settings-group">
+                            <button class="settings-item" id="btn-theme-toggle">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                                <span class="text">Zmień motyw aplikacji</span>
+                                <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+
+                            <label class="settings-item modern-toggle-row">
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <svg class="icon" viewBox="0 0 24 24" style="stroke:currentColor; fill:none; width: 24px; height: 24px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                                    <span class="text">Wibracje</span>
+                                </div>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="haptics-checkbox">
+                                    <div class="slider"></div>
+                                </div>
+                            </label>
+                        </div>
                     </div>
+
+                    <!-- SEKCJA 2: Dane i Biblioteka -->
+                    <div class="settings-section">
+                        <div class="settings-section-title">Twoja Biblioteka</div>
+                        <div class="settings-group">
+                            <button class="settings-item" id="btn-custom-add">
+                                <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                <span class="text">Dodaj tytuł ręcznie</span>
+                                <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+
+                            <button class="settings-item" id="btn-backup">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                <span class="text">Eksportuj kopię zapasową</span>
+                                <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+
+                            <label class="settings-item" for="restoreInput" style="cursor:pointer;">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                <span class="text">Importuj kopię zapasową</span>
+                                <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </label>
+                            <input type="file" id="restoreInput" accept=".json" style="display:none">
+                        </div>
+                    </div>
+
+                    <!-- SEKCJA 3: Informacje -->
+                    <div class="settings-section">
+                        <div class="settings-section-title">Inne</div>
+                        <div class="settings-group">
+                            <button class="settings-item" id="btn-info">
+                                <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                <span class="text">O aplikacji PenguinFlix</span>
+                                <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -1083,6 +1160,31 @@
         const POSTER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect width=%22200%22 height=%22300%22 fill=%22%23202227%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%238e9297%22 font-size=%2218%22 font-family=%22sans-serif%22%3EBrak okładki%3C/text%3E%3C/svg%3E";
 
         let API_KEY = '';
+        let hapticsEnabled = localStorage.getItem('hapticsEnabled') !== 'false'; // Domyślnie włączone
+
+function triggerHaptic(type = 'light') {
+    if (!hapticsEnabled || !navigator.vibrate) return;
+    try {
+        if (type === 'light') navigator.vibrate(15);
+        else if (type === 'medium') navigator.vibrate(30);
+        else if (type === 'heavy') navigator.vibrate(50);
+        else if (type === 'success') navigator.vibrate([20, 50, 30]);
+        else if (type === 'error') navigator.vibrate([50, 50, 50]);
+    } catch(e) {}
+}
+// === DODAJ TEN GLOBALNY KOD ZARAZ POD FUNKCJĄ ===
+document.addEventListener('click', (e) => {
+    // Sprawdzamy, czy kliknięty element to jakikolwiek przycisk, link, tag, film lub okienko
+    const interactiveElement = e.target.closest('button, .icon-button, .nav-item, .seg-btn, .ptab-btn, .discover-pill, .settings-item, .list-item, .grid-item, .discover-item, .search-item, .cast-member, .recommendation-item, .season-summary, input[type="checkbox"], input[type="radio"], label, .star, .custom-tag, .remove-tag, .existing-tag-wrap, .existing-tag-btn');
+
+    if (interactiveElement && !interactiveElement.disabled) {
+        // Wykluczamy przycisk losowania, bo on ma już ustawioną mocniejszą wibrację "medium"
+        if (interactiveElement.id !== 'fab-randomize') {
+            triggerHaptic('light');
+        }
+    }
+}, { capture: true }); // capture: true sprawia, że wibracja odpala się natychmiast
+// ================================================
         let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
         let fullSearchResults = [];
         let sortableInstance = null;
@@ -1366,156 +1468,185 @@
             });
         }
 
-        function setupEventListeners() {
-            document.querySelector('.bottom-nav').addEventListener('click', (e) => {
-                const navItem = e.target.closest('.nav-item');
-                if (navItem && !navItem.classList.contains('active')) switchMainTab(navItem.dataset.maintab);
-            });
-            document.querySelector('.segmented-control').addEventListener('click', (e) => {
-                const btn = e.target.closest('.seg-btn');
-                if (btn && !btn.classList.contains('active')) switchSubTab(btn.dataset.subtab);
-            });
-            document.querySelectorAll('.ptab-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const targetBtn = e.target.closest('.ptab-btn');
-                    if (targetBtn && !targetBtn.classList.contains('active')) switchProfileTab(targetBtn.dataset.ptab);
-                });
-            });
+      function setupEventListeners() {
+    // Obsługa przełącznika Haptyki
+    const hapticsCb = document.getElementById('haptics-checkbox');
+    if (hapticsCb) {
+        hapticsCb.checked = hapticsEnabled;
+        hapticsCb.addEventListener('change', (e) => {
+            hapticsEnabled = e.target.checked;
+            localStorage.setItem('hapticsEnabled', hapticsEnabled);
+            if (hapticsEnabled) triggerHaptic('success');
+        });
+    }
 
-            document.getElementById('btn-theme-toggle').addEventListener('click', toggleTheme);
-            document.getElementById('btn-custom-add').addEventListener('click', openCustomAddModal);
-            document.getElementById('btn-backup').addEventListener('click', backupData);
-            document.getElementById('restoreInput').addEventListener('change', restoreData);
-            document.getElementById('btn-info').addEventListener('click', showInfoModal);
-
-            const searchInput = document.getElementById('searchInput');
-            const debouncedMainSearch = debounce(async (query) => {
-                const searchResultsContainer = document.getElementById('searchResults');
-                if (!query) { searchResultsContainer.style.display = 'none'; fullSearchResults = []; return; }
-                searchResultsContainer.style.display = 'block';
-                searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`;
-
-                let searchTerm = query; let year = null; const yearMatch = query.match(/\b(\d{4})\b$/);
-                if (yearMatch) { year = yearMatch[1]; searchTerm = query.replace(/\b\d{4}\b$/, '').trim(); }
-
-                try {
-                    let finalResults = [];
-                    if (year && searchTerm) {
-                        const movieUrl = `${API_BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&year=${year}`;
-                        const seriesUrl = `${API_BASE_URL}/search/tv?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&first_air_date_year=${year}`;
-                        const [mRes, sRes] = await Promise.all([ fetch(movieUrl), fetch(seriesUrl) ]);
-                        if (!mRes.ok || !sRes.ok) throw new Error('Błąd sieci.');
-                        const mData = await mRes.json(); const sData = await sRes.json();
-                        mData.results.forEach(i => i.media_type = 'movie'); sData.results.forEach(i => i.media_type = 'tv');
-                        finalResults = [...mData.results, ...sData.results].sort((a, b) => b.popularity - a.popularity);
-                    } else {
-                        const multiUrl = `${API_BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false`;
-                        const response = await fetch(multiUrl);
-                        if (!response.ok) throw new Error(response.status === 401 ? 'Błędny klucz API.' : 'Błąd sieci.');
-                        const resData = await response.json(); finalResults = resData.results;
-                    }
-                    fullSearchResults = finalResults; displaySearchResults(fullSearchResults);
-                } catch (error) { searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">${error.message}</div>`; }
-            }, 400);
-
-            searchInput.addEventListener('input', (e) => debouncedMainSearch(e.target.value.trim()));
-            searchInput.addEventListener('focus', () => { if(searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
-            document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper') && !e.target.closest('#searchResults')) document.getElementById('searchResults').style.display = 'none'; });
-
-            document.querySelectorAll('.localSearchInput').forEach(input => {
-                input.addEventListener('input', debounce((e) => {
-                    const listId = getActiveListId(); if(!listId) return;
-                    viewState[listId].localSearch = e.target.value;
-                    e.target.nextElementSibling.style.display = e.target.value ? 'flex' : 'none';
-                    renderList(data[listId], listId);
-                }, 250));
-            });
-            document.querySelectorAll('.clearLocalSearch').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const listId = getActiveListId(); if(!listId) return;
-                    viewState[listId].localSearch = '';
-                    const input = e.target.previousElementSibling; input.value = ''; e.target.style.display = 'none';
-                    renderList(data[listId], listId); input.focus();
-                });
-            });
-
-            document.getElementById('searchResults').addEventListener('click', (e) => {
-                const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
-                if (quickAdd) handleQuickAddItem(quickAdd);
-                else if (item && !item.classList.contains('show-all-results-btn')) { if (item.dataset.id && item.dataset.type) openPreviewModal(item.dataset.id, item.dataset.type); }
-            });
-
-            document.querySelectorAll('.list-toolbar').forEach(toolbar => {
-                toolbar.addEventListener('click', (e) => {
-                    const btn = e.target.closest('[data-action]');
-                    if (btn) {
-                        const action = btn.dataset.action;
-                        if (action === 'open-sort-options') openSortModal();
-                        else if (action === 'open-filter-options') openFilterModal();
-                        else if (action === 'toggle-view') { viewState.globalViewMode = viewState.globalViewMode === 'grid' ? 'list' : 'grid'; saveData(); switchMainTab(viewState.activeMainTab); }
-                    }
-                });
-            });
-
-            let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
-            const mainContent = document.getElementById('mainContent');
-            const handleSwipeGesture = () => {
-                const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
-                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
-                    if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
-                        const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
-                        if (deltaX < 0 && currentSubTab === 'toWatch') switchSubTab('watched');
-                        else if (deltaX > 0 && currentSubTab === 'watched') switchSubTab('toWatch');
-                    } else if (viewState.activeMainTab === 'profile') {
-                        const activeBtn = document.querySelector('.ptab-btn.active');
-                        const currentPtab = activeBtn ? activeBtn.dataset.ptab : 'stats';
-                        if (deltaX < 0 && currentPtab === 'stats') switchProfileTab('settings');
-                        else if (deltaX > 0 && currentPtab === 'settings') switchProfileTab('stats');
-                    }
-                }
-            };
-
-            mainContent.addEventListener('touchstart', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchstartX = e.changedTouches[0].screenX; touchstartY = e.changedTouches[0].screenY; }, { passive: true });
-            mainContent.addEventListener('touchmove', e => { if (e.target.closest('.modal-overlay')) return; const deltaY = e.changedTouches[0].screenY - touchstartY; if (window.scrollY === 0 && deltaY > 0) { e.preventDefault(); } }, { passive: false });
-            mainContent.addEventListener('touchend', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchendX = e.changedTouches[0].screenX; touchendY = e.changedTouches[0].screenY; handleSwipeGesture(); }, { passive: true });
-
-            document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
-            document.getElementById('tab-series').addEventListener('click', handleListItemClick);
-
-            const handlePillClick = (e) => {
-                const pill = e.target.closest('.discover-pill');
-                if (pill && !pill.classList.contains('active')) {
-                    document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); pill.classList.add('active');
-                    if (pill.dataset.genre) loadDiscoverTab(pill.dataset.genre, true); else loadDiscoverTab(pill.dataset.endpoint, false);
-                }
-            };
-            document.getElementById('discover-categories').addEventListener('click', handlePillClick);
-            document.getElementById('discover-genres').addEventListener('click', handlePillClick);
-
-            document.getElementById('fab-randomize').addEventListener('click', async (e) => {
-                const btn = e.currentTarget; if(btn.disabled) return;
-                btn.disabled = true; btn.classList.add('rolling');
-                try {
-                    const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
-                    const res = await fetch(`${API_BASE_URL}/${type}/popular?api_key=${API_KEY}&language=pl-PL&page=${randomPage}`);
-                    if (res.ok) {
-                        const rd = await res.json(); const validItems = rd.results.filter(i => i.poster_path);
-                        if (validItems.length > 0) openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
-                        else showCustomAlert('Błąd', 'Nic nie znaleziono.', 'error');
-                    }
-                } catch { showCustomAlert('Błąd', 'Brak sieci.', 'error'); }
-                finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
-            });
-
-            mainContent.addEventListener('click', (e) => {
-                const loadMoreBtn = e.target.closest('.load-more-btn');
-                if (loadMoreBtn) {
-                    const listId = loadMoreBtn.dataset.list;
-                    viewState[listId].displayLimit = (viewState[listId].displayLimit || 30) + 30;
-                    renderList(data[listId], listId, true);
-                }
-            });
+    document.querySelector('.bottom-nav').addEventListener('click', (e) => {
+        const navItem = e.target.closest('.nav-item');
+        if (navItem && !navItem.classList.contains('active')) {
+            triggerHaptic('light'); // Wibracja przy zmianie głównej zakładki
+            switchMainTab(navItem.dataset.maintab);
         }
+    });
+
+    document.querySelector('.segmented-control').addEventListener('click', (e) => {
+        const btn = e.target.closest('.seg-btn');
+        if (btn && !btn.classList.contains('active')) {
+            triggerHaptic('light'); // Wibracja przy zmianie pod-zakładki
+            switchSubTab(btn.dataset.subtab);
+        }
+    });
+
+    document.querySelectorAll('.ptab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetBtn = e.target.closest('.ptab-btn');
+            if (targetBtn && !targetBtn.classList.contains('active')) {
+                triggerHaptic('light'); // Wibracja w profilu
+                switchProfileTab(targetBtn.dataset.ptab);
+            }
+        });
+    });
+
+    document.getElementById('btn-theme-toggle').addEventListener('click', () => { triggerHaptic('light'); toggleTheme(); });
+    document.getElementById('btn-custom-add').addEventListener('click', () => { triggerHaptic('light'); openCustomAddModal(); });
+    document.getElementById('btn-backup').addEventListener('click', () => { triggerHaptic('light'); backupData(); });
+    document.getElementById('restoreInput').addEventListener('change', restoreData);
+    document.getElementById('btn-info').addEventListener('click', () => { triggerHaptic('light'); showInfoModal(); });
+
+    const searchInput = document.getElementById('searchInput');
+    const debouncedMainSearch = debounce(async (query) => {
+        const searchResultsContainer = document.getElementById('searchResults');
+        if (!query) { searchResultsContainer.style.display = 'none'; fullSearchResults = []; return; }
+        searchResultsContainer.style.display = 'block';
+        searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`;
+
+        let searchTerm = query; let year = null; const yearMatch = query.match(/\b(\d{4})\b$/);
+        if (yearMatch) { year = yearMatch[1]; searchTerm = query.replace(/\b\d{4}\b$/, '').trim(); }
+
+        try {
+            let finalResults = [];
+            if (year && searchTerm) {
+                const movieUrl = `${API_BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&year=${year}`;
+                const seriesUrl = `${API_BASE_URL}/search/tv?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&first_air_date_year=${year}`;
+                const [mRes, sRes] = await Promise.all([ fetch(movieUrl), fetch(seriesUrl) ]);
+                if (!mRes.ok || !sRes.ok) throw new Error('Błąd sieci.');
+                const mData = await mRes.json(); const sData = await sRes.json();
+                mData.results.forEach(i => i.media_type = 'movie'); sData.results.forEach(i => i.media_type = 'tv');
+                finalResults = [...mData.results, ...sData.results].sort((a, b) => b.popularity - a.popularity);
+            } else {
+                const multiUrl = `${API_BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false`;
+                const response = await fetch(multiUrl);
+                if (!response.ok) throw new Error(response.status === 401 ? 'Błędny klucz API.' : 'Błąd sieci.');
+                const resData = await response.json(); finalResults = resData.results;
+            }
+            fullSearchResults = finalResults; displaySearchResults(fullSearchResults);
+        } catch (error) { searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">${error.message}</div>`; }
+    }, 400);
+
+    searchInput.addEventListener('input', (e) => debouncedMainSearch(e.target.value.trim()));
+    searchInput.addEventListener('focus', () => { if(searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper') && !e.target.closest('#searchResults')) document.getElementById('searchResults').style.display = 'none'; });
+
+    document.querySelectorAll('.localSearchInput').forEach(input => {
+        input.addEventListener('input', debounce((e) => {
+            const listId = getActiveListId(); if(!listId) return;
+            viewState[listId].localSearch = e.target.value;
+            e.target.nextElementSibling.style.display = e.target.value ? 'flex' : 'none';
+            renderList(data[listId], listId);
+        }, 250));
+    });
+    document.querySelectorAll('.clearLocalSearch').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            triggerHaptic('light'); // Wibracja przy czyszczeniu lokalnego szukania
+            const listId = getActiveListId(); if(!listId) return;
+            viewState[listId].localSearch = '';
+            const input = e.target.previousElementSibling; input.value = ''; e.target.style.display = 'none';
+            renderList(data[listId], listId); input.focus();
+        });
+    });
+
+    document.getElementById('searchResults').addEventListener('click', (e) => {
+        const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
+        if (quickAdd) { triggerHaptic('light'); handleQuickAddItem(quickAdd); }
+        else if (item && !item.classList.contains('show-all-results-btn')) {
+            if (item.dataset.id && item.dataset.type) { triggerHaptic('light'); openPreviewModal(item.dataset.id, item.dataset.type); }
+        }
+    });
+
+    document.querySelectorAll('.list-toolbar').forEach(toolbar => {
+        toolbar.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (btn) {
+                triggerHaptic('light'); // Wibracja dla Sortuj/Filtruj/Widok
+                const action = btn.dataset.action;
+                if (action === 'open-sort-options') openSortModal();
+                else if (action === 'open-filter-options') openFilterModal();
+                else if (action === 'toggle-view') { viewState.globalViewMode = viewState.globalViewMode === 'grid' ? 'list' : 'grid'; saveData(); switchMainTab(viewState.activeMainTab); }
+            }
+        });
+    });
+
+    let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
+    const mainContent = document.getElementById('mainContent');
+    const handleSwipeGesture = () => {
+        const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
+            if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
+                const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
+                if (deltaX < 0 && currentSubTab === 'toWatch') { triggerHaptic('light'); switchSubTab('watched'); }
+                else if (deltaX > 0 && currentSubTab === 'watched') { triggerHaptic('light'); switchSubTab('toWatch'); }
+            } else if (viewState.activeMainTab === 'profile') {
+                const activeBtn = document.querySelector('.ptab-btn.active');
+                const currentPtab = activeBtn ? activeBtn.dataset.ptab : 'stats';
+                if (deltaX < 0 && currentPtab === 'stats') { triggerHaptic('light'); switchProfileTab('settings'); }
+                else if (deltaX > 0 && currentPtab === 'settings') { triggerHaptic('light'); switchProfileTab('stats'); }
+            }
+        }
+    };
+
+    mainContent.addEventListener('touchstart', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchstartX = e.changedTouches[0].screenX; touchstartY = e.changedTouches[0].screenY; }, { passive: true });
+    mainContent.addEventListener('touchmove', e => { if (e.target.closest('.modal-overlay')) return; const deltaY = e.changedTouches[0].screenY - touchstartY; if (window.scrollY === 0 && deltaY > 0) { e.preventDefault(); } }, { passive: false });
+    mainContent.addEventListener('touchend', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchendX = e.changedTouches[0].screenX; touchendY = e.changedTouches[0].screenY; handleSwipeGesture(); }, { passive: true });
+
+    document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
+    document.getElementById('tab-series').addEventListener('click', handleListItemClick);
+
+    const handlePillClick = (e) => {
+        const pill = e.target.closest('.discover-pill');
+        if (pill && !pill.classList.contains('active')) {
+            triggerHaptic('light'); // Wibracja dla zakładek Odkrywaj
+            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); pill.classList.add('active');
+            if (pill.dataset.genre) loadDiscoverTab(pill.dataset.genre, true); else loadDiscoverTab(pill.dataset.endpoint, false);
+        }
+    };
+    document.getElementById('discover-categories').addEventListener('click', handlePillClick);
+    document.getElementById('discover-genres').addEventListener('click', handlePillClick);
+
+    document.getElementById('fab-randomize').addEventListener('click', async (e) => {
+        const btn = e.currentTarget; if(btn.disabled) return;
+        triggerHaptic('medium'); // Wibracja (nieco mocniejsza) dla kostki
+        btn.disabled = true; btn.classList.add('rolling');
+        try {
+            const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
+            const res = await fetch(`${API_BASE_URL}/${type}/popular?api_key=${API_KEY}&language=pl-PL&page=${randomPage}`);
+            if (res.ok) {
+                const rd = await res.json(); const validItems = rd.results.filter(i => i.poster_path);
+                if (validItems.length > 0) openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
+                else showCustomAlert('Błąd', 'Nic nie znaleziono.', 'error');
+            }
+        } catch { showCustomAlert('Błąd', 'Brak sieci.', 'error'); }
+        finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
+    });
+
+    mainContent.addEventListener('click', (e) => {
+        const loadMoreBtn = e.target.closest('.load-more-btn');
+        if (loadMoreBtn) {
+            triggerHaptic('light'); // Wibracja przy "Pokaż więcej"
+            const listId = loadMoreBtn.dataset.list;
+            viewState[listId].displayLimit = (viewState[listId].displayLimit || 30) + 30;
+            renderList(data[listId], listId, true);
+        }
+    });
+}
 
         async function handleQuickTrack(id) {
             const listName = 'seriesToWatch'; const item = data[listName].find(i => String(i.id) === String(id));
@@ -1534,32 +1665,34 @@
             } else { renderList(data[listName], listName, true); }
         }
 
-        function handleListItemClick(e) {
-            const itemElement = e.target.closest('.list-item') || e.target.closest('.grid-item');
-            if (!itemElement || e.target.closest('.sortable-chosen')) return;
-            const id = itemElement.dataset.id; const type = itemElement.dataset.type;
-            const deleteBtn = e.target.closest('.delete-btn'); const quickTrackBtn = e.target.closest('[data-action="quick-track"]');
+       function handleListItemClick(e) {
+    const itemElement = e.target.closest('.list-item') || e.target.closest('.grid-item');
+    if (!itemElement || e.target.closest('.sortable-chosen')) return;
+    const id = itemElement.dataset.id; const type = itemElement.dataset.type;
+    const deleteBtn = e.target.closest('.delete-btn'); const quickTrackBtn = e.target.closest('[data-action="quick-track"]');
 
-            if (deleteBtn) {
-    e.stopPropagation(); const { listName, item } = getListAndItem(id, type);
-    showCustomConfirm('Usunąć?', `Czy na pewno chcesz usunąć "${escapeHTML(item.title)}"?`).then(confirmed => {
-        if (confirmed && listName) {
-            // Natychmiast usuwa element z ekranu, zanim zapisze w bazie
-            if (itemElement) itemElement.remove();
-
-            // Usuwa z tablicy
-            data[listName] = data[listName].filter(i => !(String(i.id) === String(id) && i.type == type));
-
-            // Zapisuje i dyskretnie odświeża logikę listy z zachowaniem paginacji (true)
-            saveData().then(() => {
-                renderList(data[listName], listName, true);
-                showCustomAlert('Usunięto', `"${escapeHTML(item.title)}" usunięto z biblioteki.`, 'success');
-            });
-        }
-    });
-} else if (quickTrackBtn) { e.stopPropagation(); handleQuickTrack(id); }
-            else { openDetailsModal(id, type); }
-        }
+    if (deleteBtn) {
+        triggerHaptic('light');
+        e.stopPropagation(); const { listName, item } = getListAndItem(id, type);
+        showCustomConfirm('Usunąć?', `Czy na pewno chcesz usunąć "${escapeHTML(item.title)}"?`).then(confirmed => {
+            if (confirmed && listName) {
+                if (itemElement) itemElement.remove();
+                data[listName] = data[listName].filter(i => !(String(i.id) === String(id) && i.type == type));
+                saveData().then(() => {
+                    renderList(data[listName], listName, true);
+                    showCustomAlert('Usunięto', `"${escapeHTML(item.title)}" usunięto z biblioteki.`, 'success');
+                });
+            }
+        });
+    } else if (quickTrackBtn) {
+        triggerHaptic('light');
+        e.stopPropagation();
+        handleQuickTrack(id);
+    } else {
+        triggerHaptic('light'); // Wibracja przy otwieraniu detali
+        openDetailsModal(id, type);
+    }
+}
 
         async function loadDiscoverTab(endpoint = 'trending', isGenre = false) {
             const gridContainer = document.getElementById('main-discover-grid');
@@ -1842,6 +1975,10 @@
         const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const c = document.getElementById('configSection'); c.style.display = 'block'; c.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Gotowe!', 'Zapisano.', 'success'); init(); } else showCustomAlert('Błąd', 'Błędny klucz.', 'error'); }); };
 
         const showCustomAlert = (title, message, type = 'info') => {
+        // Odpal wibrację na podstawie typu toasta!
+    if (type === 'success') triggerHaptic('success');
+    else if (type === 'error') triggerHaptic('error');
+    else triggerHaptic('medium');
             const toastContainer = document.getElementById('toast-container');
             const toast = document.createElement('div'); toast.className = `modern-toast ${type}`;
             const icons = { success: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`, error: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`, info: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>` };
