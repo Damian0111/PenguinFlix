@@ -971,6 +971,7 @@
                 await loadData();
                 applyTheme();
                 switchMainTab(viewState.activeMainTab || 'movies');
+                refreshStaleSeries(); // Odświeżanie dat seriali w tle
             } else { showConfig(); }
             setupEventListeners();
         }
@@ -1818,7 +1819,7 @@
 
             if (list === 'watched') {
                 if (type === 'tv' && !isSeriesFinished(details)) { showCustomAlert('Uwaga', `Serial wciąż trwa. Dodaj do "Do obejrzenia".`, 'info'); return false; }
-                if (type === 'movie' && details.releaseDate) { const td = new Date(); td.setHours(0,0,0,0); if (new Date(details.releaseDate) > td) { showCustomAlert('Uwaga', `Film nie miał premiery.`, 'info'); return false; } }
+                                if (type === 'movie' && details.releaseDate) { const td = new Date(); td.setHours(0,0,0,0); const rd = new Date(details.releaseDate); rd.setHours(0,0,0,0); if (rd > td) { showCustomAlert('Uwaga', `Film nie miał premiery.`, 'info'); return false; } }
             }
 
             details.dateAdded = Date.now();
@@ -2065,7 +2066,7 @@
 
             let canWatch = true;
             if (item.type === 'tv' && !isSeriesFinished(item)) canWatch = false;
-            else if (item.type === 'movie') { if (!item.releaseDate) canWatch = false; else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); if (rd > t) canWatch = false; } }
+                        else if (item.type === 'movie') { if (!item.releaseDate) canWatch = false; else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); if (rd > t) canWatch = false; } }
 
             let fHTML = isAlreadyAdded ? `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>` : canWatch ? `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>` : `<div class="modal-sticky-footer"><button id="previewAddToWatchBtn" class="modal-btn primary" style="width: 100%;">Dodaj do Obejrzenia</button></div>`;
 
@@ -2141,9 +2142,9 @@
             else {
                 let cw = true; let wMsg = '';
                 if (item.type === 'tv' && !isSeriesFinished(item)) { cw = false; wMsg = 'Zakończ serial, aby przenieść do obejrzanych.'; }
-                else if (item.type === 'movie') {
+                             else if (item.type === 'movie') {
                     if (!item.releaseDate) { cw = false; wMsg = `Brak daty premiery.`; }
-                    else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } }
+                    else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } }
                 }
                 if (!cw) fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;"><span style="color: var(--info-color); font-size: 0.85rem; font-weight: 600; display:flex; align-items:center; gap:6px; flex-direction:column;"><svg viewBox="0 0 24 24" style="width:22px; height:22px; fill:currentColor;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> <span>${wMsg}</span></span></div>`;
                 else fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
@@ -2509,6 +2510,51 @@
             container.addEventListener('mousemove', e => updUI(calcEvt(e))); container.addEventListener('mouseleave', () => updUI(parseFloat(container.dataset.rating))); container.addEventListener('click', e => updUI(calcEvt(e)));
             decBtn.addEventListener('click', () => { let r = parseFloat(container.dataset.rating); if (r > 0) updUI(r - 0.5); }); incBtn.addEventListener('click', () => { let r = parseFloat(container.dataset.rating); if (r < 5) updUI(r + 0.5); });
             updUI(cr);
+        }
+                // ===== CICHE ODŚWIEŻANIE PRZETERMINOWANYCH SERIALI =====
+        async function refreshStaleSeries() {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            let needsSave = false;
+
+            const checkAndRefreshList = async (listName) => {
+                if (!data[listName]) return;
+                for (let i = 0; i < data[listName].length; i++) {
+                    const item = data[listName][i];
+                    if (String(item.id).startsWith('custom_')) continue;
+
+                    let needsRefresh = false;
+                    if (item.nextEpisodeToAir) {
+                        const airDate = new Date(item.nextEpisodeToAir.date);
+                        if (airDate <= today) needsRefresh = true;
+                    } else if (item.status === 'Returning Series') {
+                        needsRefresh = true;
+                    }
+
+                    if (needsRefresh) {
+                        try {
+                            const fd = await getItemDetails(item.id, 'tv');
+                            if (fd) {
+                                item.status = fd.status;
+                                item.nextEpisodeToAir = fd.nextEpisodeToAir;
+                                item.seasons = fd.seasons;
+                                item.numberOfSeasons = fd.numberOfSeasons;
+                                item.numberOfEpisodes = fd.numberOfEpisodes;
+                                needsSave = true;
+                            }
+                        } catch(e) {}
+                        await new Promise(r => setTimeout(r, 400));
+                    }
+                }
+            };
+
+            await checkAndRefreshList('seriesToWatch');
+
+            if (needsSave) {
+                await saveData();
+                const activeList = getActiveListId();
+                if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true);
+            }
         }
 
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(() => console.log('SW ok')).catch(e => console.log('SW błąd', e)); }); }
