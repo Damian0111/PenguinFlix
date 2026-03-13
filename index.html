@@ -847,6 +847,21 @@
 .settings-group .settings-item:hover {
     background: color-mix(in srgb, var(--text-color) 4%, transparent) !important;
 }
+/* ===== ZWIJANY PAMIĘTNIK SEANSÓW ===== */
+.rewatch-section { margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 24px; }
+.rewatch-accordion-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: color-mix(in srgb, var(--bg-color) 40%, var(--card-color)); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s; }
+.rewatch-accordion-header:hover { border-color: var(--text-secondary); background: var(--card-color); }
+.rewatch-accordion-title { font-size: 1.05rem; font-weight: 700; color: var(--text-color); display: flex; align-items: center; gap: 10px; margin: 0; }
+.rewatch-badge { background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+.rewatch-chevron { width: 20px; height: 20px; fill: none; stroke: var(--text-secondary); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.rewatch-accordion-content { display: none; padding-top: 12px; animation: fadeIn 0.3s ease-out; }
+.rewatch-section.expanded .rewatch-accordion-content { display: block; }
+.rewatch-section.expanded .rewatch-chevron { transform: rotate(180deg); stroke: var(--text-color); }
+.rewatch-list { display: flex; flex-direction: column; gap: 8px; }
+.rewatch-item { display: flex; justify-content: space-between; align-items: center; background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); padding: 10px 16px; border-radius: var(--radius-md); font-size: 0.95rem; border: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.rewatch-item-date { font-weight: 600; color: var(--text-color); display: flex; align-items: center; gap: 8px; }
+.rewatch-add-btn { width: 100%; padding: 14px; background: color-mix(in srgb, var(--primary-color) 10%, transparent); border: 2px dashed color-mix(in srgb, var(--primary-color) 50%, transparent); color: var(--primary-color); border-radius: var(--radius-md); font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s ease-out; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 4px; }
+.rewatch-add-btn:hover { background: var(--primary-color); color: white; border-style: solid; box-shadow: 0 6px 16px color-mix(in srgb, var(--primary-color) 30%, transparent); }
     </style>
 </head>
 <body>
@@ -1049,7 +1064,7 @@
     <div id="actorModalContainer"></div>
     <div id="customAlertContainer"></div>
     <div id="trailerModalContainer"></div>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script>
         const QUICK_TRACK_ICON = '<svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>';
 
@@ -1156,45 +1171,38 @@
 
         const API_BASE_URL = 'https://api.themoviedb.org/3';
         const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
-
         const POSTER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect width=%22200%22 height=%22300%22 fill=%22%23202227%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%238e9297%22 font-size=%2218%22 font-family=%22sans-serif%22%3EBrak okładki%3C/text%3E%3C/svg%3E";
 
-        let API_KEY = '';
-        let hapticsEnabled = localStorage.getItem('hapticsEnabled') !== 'false'; // Domyślnie włączone
-
-function triggerHaptic(type = 'light') {
-    if (!hapticsEnabled || !navigator.vibrate) return;
-    try {
-        if (type === 'light') navigator.vibrate(15);
-        else if (type === 'medium') navigator.vibrate(30);
-        else if (type === 'heavy') navigator.vibrate(50);
-        else if (type === 'success') navigator.vibrate([20, 50, 30]);
-        else if (type === 'error') navigator.vibrate([50, 50, 50]);
-    } catch(e) {}
-}
-// === DODAJ TEN GLOBALNY KOD ZARAZ POD FUNKCJĄ ===
-document.addEventListener('click', (e) => {
-    // Sprawdzamy, czy kliknięty element to jakikolwiek przycisk, link, tag, film lub okienko
-    const interactiveElement = e.target.closest('button, .icon-button, .nav-item, .seg-btn, .ptab-btn, .discover-pill, .settings-item, .list-item, .grid-item, .discover-item, .search-item, .cast-member, .recommendation-item, .season-summary, input[type="checkbox"], input[type="radio"], label, .star, .custom-tag, .remove-tag, .existing-tag-wrap, .existing-tag-btn');
-
-    if (interactiveElement && !interactiveElement.disabled) {
-        // Wykluczamy przycisk losowania, bo on ma już ustawioną mocniejszą wibrację "medium"
-        if (interactiveElement.id !== 'fab-randomize') {
-            triggerHaptic('light');
+        let hapticsEnabled = localStorage.getItem('hapticsEnabled') !== 'false';
+        function triggerHaptic(type = 'light') {
+            if (!hapticsEnabled || !navigator.vibrate) return;
+            try {
+                if (type === 'light') navigator.vibrate(15);
+                else if (type === 'medium') navigator.vibrate(30);
+                else if (type === 'heavy') navigator.vibrate(50);
+                else if (type === 'success') navigator.vibrate([20, 50, 30]);
+                else if (type === 'error') navigator.vibrate([50, 50, 50]);
+            } catch(e) {}
         }
-    }
-}, { capture: true }); // capture: true sprawia, że wibracja odpala się natychmiast
-// ================================================
+
+        document.addEventListener('click', (e) => {
+            const interactiveElement = e.target.closest('button, .icon-button, .nav-item, .seg-btn, .ptab-btn, .discover-pill, .settings-item, .list-item, .grid-item, .discover-item, .search-item, .cast-member, .recommendation-item, .season-summary, input[type="checkbox"], input[type="radio"], input[type="text"], input[type="search"], input[type="url"], input[type="number"], label, .star, .custom-tag, .remove-tag, .existing-tag-wrap, .existing-tag-btn');
+            if (interactiveElement && !interactiveElement.disabled) {
+                if (interactiveElement.id !== 'fab-randomize') triggerHaptic('light');
+            }
+        }, { capture: true });
+
+        let API_KEY = '';
         let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
         let fullSearchResults = [];
         let sortableInstance = null;
 
         let viewState = {
             activeMainTab: 'movies', moviesSubTab: 'toWatch', seriesSubTab: 'toWatch', globalViewMode: 'list',
-            moviesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterByCustomTag: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
-            moviesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterByCustomTag: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
-            seriesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterByCustomTag: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
-            seriesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterByCustomTag: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            moviesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterByCustomTag: 'all', filterByVod: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            moviesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterByCustomTag: 'all', filterByVod: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            seriesToWatch: { sortBy: 'custom_asc', filterByGenre: 'all', filterByCustomTag: 'all', filterByVod: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
+            seriesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterByCustomTag: 'all', filterByVod: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
         };
 
         const ICONS = {
@@ -1334,7 +1342,7 @@ document.addEventListener('click', (e) => {
             localSearchInput.value = state.localSearch || ''; clearLocalSearch.style.display = state.localSearch ? 'flex' : 'none';
             const isCustomSortActive = state.sortBy === 'custom_asc'; let sortOptionsActive = state.sortBy !== 'dateAdded_desc';
             if (isCustomSortActive && (listId === 'moviesToWatch' || listId === 'seriesToWatch')) { sortOptionsActive = false; }
-            const filterOptionsActive = (state.filterByGenre !== 'all' || state.filterFavoritesOnly || (state.filterByCustomTag && state.filterByCustomTag !== 'all'));
+            const filterOptionsActive = (state.filterByGenre !== 'all' || state.filterFavoritesOnly || (state.filterByCustomTag && state.filterByCustomTag !== 'all') || (state.filterByVod && state.filterByVod !== 'all'));
             parentTab.querySelector('.btn-sort').classList.toggle('active', sortOptionsActive);
             parentTab.querySelector('.btn-filter').classList.toggle('active', filterOptionsActive);
             const viewBtn = parentTab.querySelector('.btn-view-toggle');
@@ -1352,8 +1360,9 @@ document.addEventListener('click', (e) => {
                 itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query)));
             }
             if (state.filterFavoritesOnly) itemsToRender = itemsToRender.filter(item => item.isFavorite);
-            if (state.filterByGenre !== 'all') itemsToRender = itemsToRender.filter(item => item.genres.includes(state.filterByGenre));
+            if (state.filterByGenre !== 'all') itemsToRender = itemsToRender.filter(item => item.genres && item.genres.includes(state.filterByGenre));
             if (state.filterByCustomTag && state.filterByCustomTag !== 'all') itemsToRender = itemsToRender.filter(item => (item.customTags || []).includes(state.filterByCustomTag));
+            if (state.filterByVod && state.filterByVod !== 'all') itemsToRender = itemsToRender.filter(item => item.vod && item.vod.includes(state.filterByVod));
 
             const [sortBy, direction] = state.sortBy.split('_');
             if (sortBy === 'custom') { itemsToRender.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0)); }
@@ -1428,7 +1437,7 @@ document.addEventListener('click', (e) => {
             let ul = container.querySelector('ul');
             if (!ul) { ul = document.createElement('ul'); container.appendChild(ul); }
             ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
-           ul.innerHTML = itemsToRender.length > 0 ? listHTML : `<div class="empty-state-simple">Brak pozycji do wyświetlenia.</div>`;
+            ul.innerHTML = itemsToRender.length > 0 ? listHTML : `<div class="empty-state-simple">Brak pozycji do wyświetlenia.</div>`;
 
             let loadMoreContainer = container.querySelector('.load-more-wrap');
             if (loadMoreContainer) loadMoreContainer.remove();
@@ -1468,185 +1477,180 @@ document.addEventListener('click', (e) => {
             });
         }
 
-      function setupEventListeners() {
-    // Obsługa przełącznika Haptyki
-    const hapticsCb = document.getElementById('haptics-checkbox');
-    if (hapticsCb) {
-        hapticsCb.checked = hapticsEnabled;
-        hapticsCb.addEventListener('change', (e) => {
-            hapticsEnabled = e.target.checked;
-            localStorage.setItem('hapticsEnabled', hapticsEnabled);
-            if (hapticsEnabled) triggerHaptic('success');
-        });
-    }
-
-    document.querySelector('.bottom-nav').addEventListener('click', (e) => {
-        const navItem = e.target.closest('.nav-item');
-        if (navItem && !navItem.classList.contains('active')) {
-            triggerHaptic('light'); // Wibracja przy zmianie głównej zakładki
-            switchMainTab(navItem.dataset.maintab);
-        }
-    });
-
-    document.querySelector('.segmented-control').addEventListener('click', (e) => {
-        const btn = e.target.closest('.seg-btn');
-        if (btn && !btn.classList.contains('active')) {
-            triggerHaptic('light'); // Wibracja przy zmianie pod-zakładki
-            switchSubTab(btn.dataset.subtab);
-        }
-    });
-
-    document.querySelectorAll('.ptab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const targetBtn = e.target.closest('.ptab-btn');
-            if (targetBtn && !targetBtn.classList.contains('active')) {
-                triggerHaptic('light'); // Wibracja w profilu
-                switchProfileTab(targetBtn.dataset.ptab);
+        function setupEventListeners() {
+            const hapticsCb = document.getElementById('haptics-checkbox');
+            if (hapticsCb) {
+                hapticsCb.checked = hapticsEnabled;
+                hapticsCb.addEventListener('change', (e) => {
+                    hapticsEnabled = e.target.checked;
+                    localStorage.setItem('hapticsEnabled', hapticsEnabled);
+                    if (hapticsEnabled) triggerHaptic('success');
+                });
             }
-        });
-    });
 
-    document.getElementById('btn-theme-toggle').addEventListener('click', () => { triggerHaptic('light'); toggleTheme(); });
-    document.getElementById('btn-custom-add').addEventListener('click', () => { triggerHaptic('light'); openCustomAddModal(); });
-    document.getElementById('btn-backup').addEventListener('click', () => { triggerHaptic('light'); backupData(); });
-    document.getElementById('restoreInput').addEventListener('change', restoreData);
-    document.getElementById('btn-info').addEventListener('click', () => { triggerHaptic('light'); showInfoModal(); });
+            document.querySelector('.bottom-nav').addEventListener('click', (e) => {
+                const navItem = e.target.closest('.nav-item');
+                if (navItem && !navItem.classList.contains('active')) {
+                    triggerHaptic('light');
+                    switchMainTab(navItem.dataset.maintab);
+                }
+            });
 
-    const searchInput = document.getElementById('searchInput');
-    const debouncedMainSearch = debounce(async (query) => {
-        const searchResultsContainer = document.getElementById('searchResults');
-        if (!query) { searchResultsContainer.style.display = 'none'; fullSearchResults = []; return; }
-        searchResultsContainer.style.display = 'block';
-        searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`;
+            document.querySelector('.segmented-control').addEventListener('click', (e) => {
+                const btn = e.target.closest('.seg-btn');
+                if (btn && !btn.classList.contains('active')) {
+                    triggerHaptic('light');
+                    switchSubTab(btn.dataset.subtab);
+                }
+            });
 
-        let searchTerm = query; let year = null; const yearMatch = query.match(/\b(\d{4})\b$/);
-        if (yearMatch) { year = yearMatch[1]; searchTerm = query.replace(/\b\d{4}\b$/, '').trim(); }
+            document.querySelectorAll('.ptab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const targetBtn = e.target.closest('.ptab-btn');
+                    if (targetBtn && !targetBtn.classList.contains('active')) {
+                        triggerHaptic('light');
+                        switchProfileTab(targetBtn.dataset.ptab);
+                    }
+                });
+            });
 
-        try {
-            let finalResults = [];
-            if (year && searchTerm) {
-                const movieUrl = `${API_BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&year=${year}`;
-                const seriesUrl = `${API_BASE_URL}/search/tv?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&first_air_date_year=${year}`;
-                const [mRes, sRes] = await Promise.all([ fetch(movieUrl), fetch(seriesUrl) ]);
-                if (!mRes.ok || !sRes.ok) throw new Error('Błąd sieci.');
-                const mData = await mRes.json(); const sData = await sRes.json();
-                mData.results.forEach(i => i.media_type = 'movie'); sData.results.forEach(i => i.media_type = 'tv');
-                finalResults = [...mData.results, ...sData.results].sort((a, b) => b.popularity - a.popularity);
-            } else {
-                const multiUrl = `${API_BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false`;
-                const response = await fetch(multiUrl);
-                if (!response.ok) throw new Error(response.status === 401 ? 'Błędny klucz API.' : 'Błąd sieci.');
-                const resData = await response.json(); finalResults = resData.results;
-            }
-            fullSearchResults = finalResults; displaySearchResults(fullSearchResults);
-        } catch (error) { searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">${error.message}</div>`; }
-    }, 400);
+            document.getElementById('btn-theme-toggle').addEventListener('click', () => { toggleTheme(); });
+            document.getElementById('btn-custom-add').addEventListener('click', () => { openCustomAddModal(); });
+            document.getElementById('btn-backup').addEventListener('click', () => { backupData(); });
+            document.getElementById('restoreInput').addEventListener('change', restoreData);
+            document.getElementById('btn-info').addEventListener('click', () => { showInfoModal(); });
 
-    searchInput.addEventListener('input', (e) => debouncedMainSearch(e.target.value.trim()));
-    searchInput.addEventListener('focus', () => { if(searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
-    document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper') && !e.target.closest('#searchResults')) document.getElementById('searchResults').style.display = 'none'; });
+            const searchInput = document.getElementById('searchInput');
+            const debouncedMainSearch = debounce(async (query) => {
+                const searchResultsContainer = document.getElementById('searchResults');
+                if (!query) { searchResultsContainer.style.display = 'none'; fullSearchResults = []; return; }
+                searchResultsContainer.style.display = 'block';
+                searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`;
 
-    document.querySelectorAll('.localSearchInput').forEach(input => {
-        input.addEventListener('input', debounce((e) => {
-            const listId = getActiveListId(); if(!listId) return;
-            viewState[listId].localSearch = e.target.value;
-            e.target.nextElementSibling.style.display = e.target.value ? 'flex' : 'none';
-            renderList(data[listId], listId);
-        }, 250));
-    });
-    document.querySelectorAll('.clearLocalSearch').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            triggerHaptic('light'); // Wibracja przy czyszczeniu lokalnego szukania
-            const listId = getActiveListId(); if(!listId) return;
-            viewState[listId].localSearch = '';
-            const input = e.target.previousElementSibling; input.value = ''; e.target.style.display = 'none';
-            renderList(data[listId], listId); input.focus();
-        });
-    });
+                let searchTerm = query; let year = null; const yearMatch = query.match(/\b(\d{4})\b$/);
+                if (yearMatch) { year = yearMatch[1]; searchTerm = query.replace(/\b\d{4}\b$/, '').trim(); }
 
-    document.getElementById('searchResults').addEventListener('click', (e) => {
-        const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
-        if (quickAdd) { triggerHaptic('light'); handleQuickAddItem(quickAdd); }
-        else if (item && !item.classList.contains('show-all-results-btn')) {
-            if (item.dataset.id && item.dataset.type) { triggerHaptic('light'); openPreviewModal(item.dataset.id, item.dataset.type); }
+                try {
+                    let finalResults = [];
+                    if (year && searchTerm) {
+                        const movieUrl = `${API_BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&year=${year}`;
+                        const seriesUrl = `${API_BASE_URL}/search/tv?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false&first_air_date_year=${year}`;
+                        const [mRes, sRes] = await Promise.all([ fetch(movieUrl), fetch(seriesUrl) ]);
+                        if (!mRes.ok || !sRes.ok) throw new Error('Błąd sieci.');
+                        const mData = await mRes.json(); const sData = await sRes.json();
+                        mData.results.forEach(i => i.media_type = 'movie'); sData.results.forEach(i => i.media_type = 'tv');
+                        finalResults = [...mData.results, ...sData.results].sort((a, b) => b.popularity - a.popularity);
+                    } else {
+                        const multiUrl = `${API_BASE_URL}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(searchTerm)}&language=pl-PL&include_adult=false`;
+                        const response = await fetch(multiUrl);
+                        if (!response.ok) throw new Error(response.status === 401 ? 'Błędny klucz API.' : 'Błąd sieci.');
+                        const resData = await response.json(); finalResults = resData.results;
+                    }
+                    fullSearchResults = finalResults; displaySearchResults(fullSearchResults);
+                } catch (error) { searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">${error.message}</div>`; }
+            }, 400);
+
+            searchInput.addEventListener('input', (e) => debouncedMainSearch(e.target.value.trim()));
+            searchInput.addEventListener('focus', () => { if(searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
+            document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper') && !e.target.closest('#searchResults')) document.getElementById('searchResults').style.display = 'none'; });
+
+            document.querySelectorAll('.localSearchInput').forEach(input => {
+                input.addEventListener('input', debounce((e) => {
+                    const listId = getActiveListId(); if(!listId) return;
+                    viewState[listId].localSearch = e.target.value;
+                    e.target.nextElementSibling.style.display = e.target.value ? 'flex' : 'none';
+                    renderList(data[listId], listId);
+                }, 250));
+            });
+            document.querySelectorAll('.clearLocalSearch').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const listId = getActiveListId(); if(!listId) return;
+                    viewState[listId].localSearch = '';
+                    const input = e.target.previousElementSibling; input.value = ''; e.target.style.display = 'none';
+                    renderList(data[listId], listId); input.focus();
+                });
+            });
+
+            document.getElementById('searchResults').addEventListener('click', (e) => {
+                const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
+                if (quickAdd) { handleQuickAddItem(quickAdd); }
+                else if (item && !item.classList.contains('show-all-results-btn')) {
+                    if (item.dataset.id && item.dataset.type) { openPreviewModal(item.dataset.id, item.dataset.type); }
+                }
+            });
+
+            document.querySelectorAll('.list-toolbar').forEach(toolbar => {
+                toolbar.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-action]');
+                    if (btn) {
+                        const action = btn.dataset.action;
+                        if (action === 'open-sort-options') openSortModal();
+                        else if (action === 'open-filter-options') openFilterModal();
+                        else if (action === 'toggle-view') { viewState.globalViewMode = viewState.globalViewMode === 'grid' ? 'list' : 'grid'; saveData(); switchMainTab(viewState.activeMainTab); }
+                    }
+                });
+            });
+
+            let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
+            const mainContent = document.getElementById('mainContent');
+            const handleSwipeGesture = () => {
+                const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
+                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
+                    if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
+                        const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
+                        if (deltaX < 0 && currentSubTab === 'toWatch') { triggerHaptic('light'); switchSubTab('watched'); }
+                        else if (deltaX > 0 && currentSubTab === 'watched') { triggerHaptic('light'); switchSubTab('toWatch'); }
+                    } else if (viewState.activeMainTab === 'profile') {
+                        const activeBtn = document.querySelector('.ptab-btn.active');
+                        const currentPtab = activeBtn ? activeBtn.dataset.ptab : 'stats';
+                        if (deltaX < 0 && currentPtab === 'stats') { triggerHaptic('light'); switchProfileTab('settings'); }
+                        else if (deltaX > 0 && currentPtab === 'settings') { triggerHaptic('light'); switchProfileTab('stats'); }
+                    }
+                }
+            };
+
+            mainContent.addEventListener('touchstart', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchstartX = e.changedTouches[0].screenX; touchstartY = e.changedTouches[0].screenY; }, { passive: true });
+            mainContent.addEventListener('touchmove', e => { if (e.target.closest('.modal-overlay')) return; const deltaY = e.changedTouches[0].screenY - touchstartY; if (window.scrollY === 0 && deltaY > 0) { e.preventDefault(); } }, { passive: false });
+            mainContent.addEventListener('touchend', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchendX = e.changedTouches[0].screenX; touchendY = e.changedTouches[0].screenY; handleSwipeGesture(); }, { passive: true });
+
+            document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
+            document.getElementById('tab-series').addEventListener('click', handleListItemClick);
+
+            const handlePillClick = (e) => {
+                const pill = e.target.closest('.discover-pill');
+                if (pill && !pill.classList.contains('active')) {
+                    document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); pill.classList.add('active');
+                    if (pill.dataset.genre) loadDiscoverTab(pill.dataset.genre, true); else loadDiscoverTab(pill.dataset.endpoint, false);
+                }
+            };
+            document.getElementById('discover-categories').addEventListener('click', handlePillClick);
+            document.getElementById('discover-genres').addEventListener('click', handlePillClick);
+
+            document.getElementById('fab-randomize').addEventListener('click', async (e) => {
+                const btn = e.currentTarget; if(btn.disabled) return;
+                triggerHaptic('medium');
+                btn.disabled = true; btn.classList.add('rolling');
+                try {
+                    const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
+                    const res = await fetch(`${API_BASE_URL}/${type}/popular?api_key=${API_KEY}&language=pl-PL&page=${randomPage}`);
+                    if (res.ok) {
+                        const rd = await res.json(); const validItems = rd.results.filter(i => i.poster_path);
+                        if (validItems.length > 0) openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
+                        else showCustomAlert('Błąd', 'Nic nie znaleziono.', 'error');
+                    }
+                } catch { showCustomAlert('Błąd', 'Brak sieci.', 'error'); }
+                finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
+            });
+
+            mainContent.addEventListener('click', (e) => {
+                const loadMoreBtn = e.target.closest('.load-more-btn');
+                if (loadMoreBtn) {
+                    const listId = loadMoreBtn.dataset.list;
+                    viewState[listId].displayLimit = (viewState[listId].displayLimit || 30) + 30;
+                    renderList(data[listId], listId, true);
+                }
+            });
         }
-    });
-
-    document.querySelectorAll('.list-toolbar').forEach(toolbar => {
-        toolbar.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-action]');
-            if (btn) {
-                triggerHaptic('light'); // Wibracja dla Sortuj/Filtruj/Widok
-                const action = btn.dataset.action;
-                if (action === 'open-sort-options') openSortModal();
-                else if (action === 'open-filter-options') openFilterModal();
-                else if (action === 'toggle-view') { viewState.globalViewMode = viewState.globalViewMode === 'grid' ? 'list' : 'grid'; saveData(); switchMainTab(viewState.activeMainTab); }
-            }
-        });
-    });
-
-    let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
-    const mainContent = document.getElementById('mainContent');
-    const handleSwipeGesture = () => {
-        const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
-            if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
-                const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
-                if (deltaX < 0 && currentSubTab === 'toWatch') { triggerHaptic('light'); switchSubTab('watched'); }
-                else if (deltaX > 0 && currentSubTab === 'watched') { triggerHaptic('light'); switchSubTab('toWatch'); }
-            } else if (viewState.activeMainTab === 'profile') {
-                const activeBtn = document.querySelector('.ptab-btn.active');
-                const currentPtab = activeBtn ? activeBtn.dataset.ptab : 'stats';
-                if (deltaX < 0 && currentPtab === 'stats') { triggerHaptic('light'); switchProfileTab('settings'); }
-                else if (deltaX > 0 && currentPtab === 'settings') { triggerHaptic('light'); switchProfileTab('stats'); }
-            }
-        }
-    };
-
-    mainContent.addEventListener('touchstart', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchstartX = e.changedTouches[0].screenX; touchstartY = e.changedTouches[0].screenY; }, { passive: true });
-    mainContent.addEventListener('touchmove', e => { if (e.target.closest('.modal-overlay')) return; const deltaY = e.changedTouches[0].screenY - touchstartY; if (window.scrollY === 0 && deltaY > 0) { e.preventDefault(); } }, { passive: false });
-    mainContent.addEventListener('touchend', e => { if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; touchendX = e.changedTouches[0].screenX; touchendY = e.changedTouches[0].screenY; handleSwipeGesture(); }, { passive: true });
-
-    document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
-    document.getElementById('tab-series').addEventListener('click', handleListItemClick);
-
-    const handlePillClick = (e) => {
-        const pill = e.target.closest('.discover-pill');
-        if (pill && !pill.classList.contains('active')) {
-            triggerHaptic('light'); // Wibracja dla zakładek Odkrywaj
-            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); pill.classList.add('active');
-            if (pill.dataset.genre) loadDiscoverTab(pill.dataset.genre, true); else loadDiscoverTab(pill.dataset.endpoint, false);
-        }
-    };
-    document.getElementById('discover-categories').addEventListener('click', handlePillClick);
-    document.getElementById('discover-genres').addEventListener('click', handlePillClick);
-
-    document.getElementById('fab-randomize').addEventListener('click', async (e) => {
-        const btn = e.currentTarget; if(btn.disabled) return;
-        triggerHaptic('medium'); // Wibracja (nieco mocniejsza) dla kostki
-        btn.disabled = true; btn.classList.add('rolling');
-        try {
-            const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
-            const res = await fetch(`${API_BASE_URL}/${type}/popular?api_key=${API_KEY}&language=pl-PL&page=${randomPage}`);
-            if (res.ok) {
-                const rd = await res.json(); const validItems = rd.results.filter(i => i.poster_path);
-                if (validItems.length > 0) openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
-                else showCustomAlert('Błąd', 'Nic nie znaleziono.', 'error');
-            }
-        } catch { showCustomAlert('Błąd', 'Brak sieci.', 'error'); }
-        finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
-    });
-
-    mainContent.addEventListener('click', (e) => {
-        const loadMoreBtn = e.target.closest('.load-more-btn');
-        if (loadMoreBtn) {
-            triggerHaptic('light'); // Wibracja przy "Pokaż więcej"
-            const listId = loadMoreBtn.dataset.list;
-            viewState[listId].displayLimit = (viewState[listId].displayLimit || 30) + 30;
-            renderList(data[listId], listId, true);
-        }
-    });
-}
 
         async function handleQuickTrack(id) {
             const listName = 'seriesToWatch'; const item = data[listName].find(i => String(i.id) === String(id));
@@ -1665,34 +1669,31 @@ document.addEventListener('click', (e) => {
             } else { renderList(data[listName], listName, true); }
         }
 
-       function handleListItemClick(e) {
-    const itemElement = e.target.closest('.list-item') || e.target.closest('.grid-item');
-    if (!itemElement || e.target.closest('.sortable-chosen')) return;
-    const id = itemElement.dataset.id; const type = itemElement.dataset.type;
-    const deleteBtn = e.target.closest('.delete-btn'); const quickTrackBtn = e.target.closest('[data-action="quick-track"]');
+        function handleListItemClick(e) {
+            const itemElement = e.target.closest('.list-item') || e.target.closest('.grid-item');
+            if (!itemElement || e.target.closest('.sortable-chosen')) return;
+            const id = itemElement.dataset.id; const type = itemElement.dataset.type;
+            const deleteBtn = e.target.closest('.delete-btn'); const quickTrackBtn = e.target.closest('[data-action="quick-track"]');
 
-    if (deleteBtn) {
-        triggerHaptic('light');
-        e.stopPropagation(); const { listName, item } = getListAndItem(id, type);
-        showCustomConfirm('Usunąć?', `Czy na pewno chcesz usunąć "${escapeHTML(item.title)}"?`).then(confirmed => {
-            if (confirmed && listName) {
-                if (itemElement) itemElement.remove();
-                data[listName] = data[listName].filter(i => !(String(i.id) === String(id) && i.type == type));
-                saveData().then(() => {
-                    renderList(data[listName], listName, true);
-                    showCustomAlert('Usunięto', `"${escapeHTML(item.title)}" usunięto z biblioteki.`, 'success');
+            if (deleteBtn) {
+                e.stopPropagation(); const { listName, item } = getListAndItem(id, type);
+                showCustomConfirm('Usunąć?', `Czy na pewno chcesz usunąć "${escapeHTML(item.title)}"?`).then(confirmed => {
+                    if (confirmed && listName) {
+                        if (itemElement) itemElement.remove();
+                        data[listName] = data[listName].filter(i => !(String(i.id) === String(id) && i.type == type));
+                        saveData().then(() => {
+                            renderList(data[listName], listName, true);
+                            showCustomAlert('Usunięto', `"${escapeHTML(item.title)}" usunięto z biblioteki.`, 'success');
+                        });
+                    }
                 });
+            } else if (quickTrackBtn) {
+                e.stopPropagation();
+                handleQuickTrack(id);
+            } else {
+                openDetailsModal(id, type);
             }
-        });
-    } else if (quickTrackBtn) {
-        triggerHaptic('light');
-        e.stopPropagation();
-        handleQuickTrack(id);
-    } else {
-        triggerHaptic('light'); // Wibracja przy otwieraniu detali
-        openDetailsModal(id, type);
-    }
-}
+        }
 
         async function loadDiscoverTab(endpoint = 'trending', isGenre = false) {
             const gridContainer = document.getElementById('main-discover-grid');
@@ -1769,7 +1770,7 @@ document.addEventListener('click', (e) => {
             let chart = `<div class="rating-bars">`;
             for(let i=1; i<=5; i++) {
                 let hPct = (dist[i] / maxRat) * 100;
-                chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="--target-h: ${hPct}%; height: ${hPct}%;"></div></div>`;
+                chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`;
             }
             chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
 
@@ -1810,11 +1811,22 @@ document.addEventListener('click', (e) => {
 
         async function openFilterModal() {
             const listId = getActiveListId(); const state = viewState[listId];
+            if (state.filterByVod === undefined) state.filterByVod = 'all';
+
             const uniqueGenres = [...new Set((data[listId] || []).flatMap(item => item.genres || []))].sort();
             const uniqueTags = [...new Set((data[listId] || []).flatMap(item => item.customTags || []))].sort();
 
+            const topVodProviders = ['Netflix', 'Max', 'Amazon Prime Video', 'Disney Plus', 'Apple TV Plus', 'SkyShowtime'];
+
             let filterOptionsHTML = `
                 <label class="modern-toggle-row"><span>Tylko ulubione</span><div class="toggle-switch"><input type="checkbox" id="filter-favorites-checkbox" ${state.filterFavoritesOnly ? 'checked' : ''}><div class="slider"></div></div></label>
+
+                <div class="filter-section-title">Gdzie obejrzeć? (VOD)</div>
+                <div class="modern-chip-group" style="margin-bottom: 16px;"><label class="modern-chip"><input type="radio" name="vod-filter" value="all" ${state.filterByVod === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
+            filterOptionsHTML += topVodProviders.map(v => `<label class="modern-chip"><input type="radio" name="vod-filter" value="${v}" ${state.filterByVod === v ? 'checked' : ''}><span>${v.replace(' Plus', '+').replace('Amazon ', '')}</span></label>`).join('');
+            filterOptionsHTML += `</div><div style="font-size:0.75rem; color:var(--text-secondary); margin-top:-8px; margin-bottom:12px;">*Aby filtr zadziałał dla starych wpisów, otwórz najpierw ich szczegóły.</div>`;
+
+            filterOptionsHTML += `
                 <div class="filter-section-title">Gatunek</div>
                 <div class="modern-chip-group"><label class="modern-chip"><input type="radio" name="genre-filter" value="all" ${state.filterByGenre === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
             if (uniqueGenres.length > 0) filterOptionsHTML += uniqueGenres.map(g => `<label class="modern-chip"><input type="radio" name="genre-filter" value="${escapeHTML(g)}" ${state.filterByGenre === g ? 'checked' : ''}><span>${escapeHTML(g)}</span></label>`).join('');
@@ -1835,10 +1847,11 @@ document.addEventListener('click', (e) => {
                 state.filterFavoritesOnly = document.getElementById('filter-favorites-checkbox').checked;
                 const selGenre = document.querySelector('input[name="genre-filter"]:checked'); if (selGenre) state.filterByGenre = selGenre.value;
                 const selTag = document.querySelector('input[name="tag-filter"]:checked'); if(selTag) state.filterByCustomTag = selTag.value;
+                const selVod = document.querySelector('input[name="vod-filter"]:checked'); if(selVod) state.filterByVod = selVod.value;
                 await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); modalContainer.innerHTML = '';
             };
             modalContainer.querySelector('.reset-btn').onclick = async () => {
-                state.filterFavoritesOnly = false; state.filterByGenre = 'all'; state.filterByCustomTag = 'all';
+                state.filterFavoritesOnly = false; state.filterByGenre = 'all'; state.filterByCustomTag = 'all'; state.filterByVod = 'all';
                 await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); modalContainer.innerHTML = '';
             };
         }
@@ -1955,12 +1968,15 @@ document.addEventListener('click', (e) => {
                 <h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3>
                 <ul class="info-feature-list">
                     <li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie własnych tagów i ręcznych wpisów.</span></li>
-                    <li class="info-feature-item">${checkIcon} <span>Zaawansowane śledzenie odcinków (z datami premier).</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Zaawansowane śledzenie odcinków (z datami premier.)</span></li>
                     <li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li>
-                    <li class="info-feature-item">${checkIcon} <span>Działanie offline z możliwościa instalacji jaki PWA.</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Filtrowanie po VOD (Netflix, HBO, Disney+ itp.)</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Historia ponownych seansów.</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Działanie offline jako PWA.</span></li>
                 </ul>
-                <div class="important-note"><strong>Ważne:</strong> Wszystkie dane są przechowywane <strong>wyłącznie w przeglądarce na tym urządzeniu</strong>. Nie są wysyłane na żaden serwer.
-                <p>Aby uniknąć utraty danych,<strong>regularnie twórz kopię zapasową</strong> w ustawieniach Profilu.</p></div>
+                <div class="important-note"><strong>Ważne:</strong> Wszystkie dane są przechowywane <strong>wyłącznie na Twoim urządzeniu</strong>. Nie są wysyłane na żaden serwer.
+                <p>Aby uniknąć utraty danych,<strong> regularnie twórz kopię zapasową</strong> w ustawieniach Profilu.</p>
+                </div>
                 <p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p></div></div></div>`;
             const c = document.getElementById('customAlertContainer'); c.innerHTML = infoHTML;
             const modal = c.querySelector('.modal-overlay'); const close = () => c.innerHTML = '';
@@ -1975,10 +1991,10 @@ document.addEventListener('click', (e) => {
         const showConfig = () => { document.getElementById('mainContent').style.display = 'none'; const c = document.getElementById('configSection'); c.style.display = 'block'; c.innerHTML = `<div style="max-width:800px; margin:24px auto; background-color: var(--card-color); padding: 24px; border-radius: var(--radius-lg); text-align: center;"><h2>Konfiguracja</h2><p style="color: var(--text-secondary); max-width: 400px; margin: 16px auto;">Wklej poniżej swój klucz API z The Movie Database (TMDb), aby rozpocząć.</p><div style="display: flex; gap: 10px; margin-top: 20px;"><input type="text" id="apiKeyInput" placeholder="Twój klucz API (v3 auth)" style="flex-grow:1; padding:15px; border-radius:var(--radius-md); font-size: 1em;"><button id="saveApiKeyButton" style="padding:15px 20px; border:none; background:var(--primary-color); color:white; border-radius:var(--radius-md); cursor:pointer;">Zapisz</button></div></div>`; document.getElementById('saveApiKeyButton').addEventListener('click', () => { const key = document.getElementById('apiKeyInput').value.trim(); if (key) { localStorage.setItem('tmdbApiKey', key); API_KEY = key; showCustomAlert('Gotowe!', 'Zapisano.', 'success'); init(); } else showCustomAlert('Błąd', 'Błędny klucz.', 'error'); }); };
 
         const showCustomAlert = (title, message, type = 'info') => {
-        // Odpal wibrację na podstawie typu toasta!
-    if (type === 'success') triggerHaptic('success');
-    else if (type === 'error') triggerHaptic('error');
-    else triggerHaptic('medium');
+            if (type === 'success') triggerHaptic('success');
+            else if (type === 'error') triggerHaptic('error');
+            else triggerHaptic('medium');
+
             const toastContainer = document.getElementById('toast-container');
             const toast = document.createElement('div'); toast.className = `modern-toast ${type}`;
             const icons = { success: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`, error: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`, info: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>` };
@@ -2068,13 +2084,12 @@ document.addEventListener('click', (e) => {
                 const maxOrd = data[targetList].length > 0 ? Math.max(...data[targetList].map(i => i.customOrder || 0)) : -1;
                 details.customOrder = maxOrd + 1;
             }
-            if (list === 'watched') { details.rating = null; details.review = ""; }
+            if (list === 'watched') { details.rating = null; details.review = ""; details.watchDates = [Date.now()]; }
 
             data[targetList].unshift(details); await saveData();
             switchMainTab(type === 'movie' ? 'movies' : 'series'); switchSubTab(list);
             document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none';
             showCustomAlert('Sukces!', `"${escapeHTML(details.title)}" dodano do listy.`, 'success'); return true;
-
         }
 
         async function handleQuickAddItem(button) {
@@ -2084,9 +2099,16 @@ document.addEventListener('click', (e) => {
 
         async function getItemDetails(id, type) {
             try {
-                const res = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images&include_image_language=pl,en,null`);
+                const res = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images,watch/providers&include_image_language=pl,en,null`);
                 if (!res.ok) return null; const d = await res.json();
-                const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), releaseDate: d.release_date || d.first_air_date || null, overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [], isFavorite: false, customTags: [] };
+
+                let vodList = [];
+                if (d['watch/providers'] && d['watch/providers'].results && d['watch/providers'].results.PL) {
+                    const pl = d['watch/providers'].results.PL;
+                    if (pl.flatrate) vodList = pl.flatrate.map(p => p.provider_name);
+                }
+
+                const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), releaseDate: d.release_date || d.first_air_date || null, overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [], isFavorite: false, customTags: [], vod: vodList };
                 if (type === 'tv') {
                     item.status = d.status;
                     item.nextEpisodeToAir = d.next_episode_to_air ? { date: d.next_episode_to_air.air_date, season: d.next_episode_to_air.season_number, episode: d.next_episode_to_air.episode_number } : null;
@@ -2162,8 +2184,9 @@ document.addEventListener('click', (e) => {
             if (iIdx > -1) {
                 const [item] = data[fList].splice(iIdx, 1);
                 item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder;
+                item.watchDates = [Date.now()];
                 data[tList].unshift(item); await saveData(); switchSubTab('watched');
-                 showCustomAlert('Obejrzane!', `"${escapeHTML(item.title)}" oznaczono jako obejrzane.`, 'success');
+                showCustomAlert('Obejrzane!', `"${escapeHTML(item.title)}" oznaczono jako obejrzane.`, 'success');
             }
         }
 
@@ -2190,6 +2213,9 @@ document.addEventListener('click', (e) => {
                     });
                 }
             });
+            ['moviesWatched', 'seriesWatched'].forEach(k => {
+                if (dt[k]) { dt[k].forEach(i => { if (!i.watchDates) i.watchDates = [i.dateAdded || Date.now()]; }); }
+            });
             ['moviesToWatch', 'seriesToWatch'].forEach(k => {
                 if (dt[k] && dt[k].length > 0 && dt[k][0].customOrder === undefined) dt[k].forEach((i, idx) => { i.customOrder = idx; });
             });
@@ -2200,12 +2226,44 @@ document.addEventListener('click', (e) => {
             ['moviesToWatch', 'moviesWatched', 'seriesToWatch', 'seriesWatched'].forEach(k => {
                 if (viewState[k] && viewState[k].displayLimit === undefined) viewState[k].displayLimit = 30;
                 if (viewState[k] && viewState[k].filterByCustomTag === undefined) viewState[k].filterByCustomTag = 'all';
+                if (viewState[k] && viewState[k].filterByVod === undefined) viewState[k].filterByVod = 'all';
             });
         }
 
         function isDataEmpty() { return Object.values(data).every(list => !list || list.length === 0); }
         function backupData() { if (isDataEmpty()) { showCustomAlert('Uwaga', 'Brak danych do eksportu.', 'info'); return; } const str = JSON.stringify({ data, viewState }, null, 2); const b = new Blob([str], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `penguinflix_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href); showCustomAlert('Sukces', 'Pobrano.', 'success'); }
-        async function restoreData(e) { const f = e.target.files[0]; if (!f) return; const cf = await showCustomConfirm('Przywracanie kopii', 'Ta operacja nadpisze obecne dane. Kontynuować?'); if (!cf) { e.target.value = ''; return; } const r = new FileReader(); r.onload = async (evt) => { try { const res = JSON.parse(evt.target.result); if (res.data && res.data.moviesToWatch !== undefined) { viewState = res.viewState || viewState; migrateData(res.data); data = res.data; await saveData(); switchMainTab(viewState.activeMainTab || 'movies'); showCustomAlert('Sukces!', 'Przywrócono kopie zapasową.', 'success'); } else throw new Error(); } catch { showCustomAlert('Błąd', 'Zły format pliku.', 'error'); } }; r.readAsText(f); e.target.value = ''; }
+
+        async function restoreData(e) {
+            const f = e.target.files[0];
+            if (!f) return;
+            const cf = await showCustomConfirm('Przywracanie kopii', 'Ta operacja nadpisze obecne dane. Kontynuować?');
+            if (!cf) { e.target.value = ''; return; }
+            const r = new FileReader();
+            r.onload = async (evt) => {
+                try {
+                    const res = JSON.parse(evt.target.result);
+                                        if (res.data && res.data.moviesToWatch !== undefined) {
+                        viewState = res.viewState || viewState;
+                        // Wymuszamy domyślny widok po przywróceniu
+                        viewState.activeMainTab = 'movies';
+                        viewState.moviesSubTab = 'toWatch';
+
+                        migrateData(res.data);
+                        data = res.data;
+                        await saveData();
+
+                        switchMainTab('movies');
+                        switchSubTab('toWatch');
+
+                        showCustomAlert('Sukces!', `Przywrócono dane z pliku "${f.name}".`, 'success');
+                    } else throw new Error();
+                } catch {
+                    showCustomAlert('Błąd', 'Zły format pliku.', 'error');
+                }
+            };
+            r.readAsText(f);
+            e.target.value = '';
+        }
 
         function getModalHeaderHTML(item, isAdded) {
             const bgImage = item.backdrop || item.poster || POSTER_PLACEHOLDER;
@@ -2258,14 +2316,10 @@ document.addEventListener('click', (e) => {
             </div>`;
 
             const modal = dModal.querySelector('.modal-overlay'); const close = () => { dModal.innerHTML = ''; };
-
-            // BEZPIECZNE NASŁUCHIWANIE ZDARZEŃ W PODGLĄDZIE
             modal.addEventListener('click', async (e) => {
                 if (e.target === modal) { close(); return; }
-                const cast = e.target.closest('.cast-member[data-actor-id]');
-                if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-                const rec = e.target.closest('.recommendation-item');
-                if (rec) { openPreviewModal(rec.dataset.id, rec.dataset.type); return; }
+                const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
+                const rec = e.target.closest('.recommendation-item'); if (rec) { openPreviewModal(rec.dataset.id, rec.dataset.type); return; }
 
                 const removeIcon = e.target.closest('.remove-tag');
                 if (removeIcon) {
@@ -2297,10 +2351,10 @@ document.addEventListener('click', (e) => {
         async function openDetailsModal(id, type) {
             const { listName, item } = getListAndItem(id, type); if (!item) return;
 
-            if (!String(id).startsWith('custom_') && (!item.backdrop || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
+            if (!String(id).startsWith('custom_') && (!item.backdrop || item.vod === undefined || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
                 const fd = await getItemDetails(id, type);
                 if (fd) {
-                    item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate;
+                    item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate; item.vod = fd.vod || [];
                     if (type === 'tv') { item.status = fd.status !== undefined ? fd.status : item.status; item.nextEpisodeToAir = fd.nextEpisodeToAir !== undefined ? fd.nextEpisodeToAir : item.nextEpisodeToAir; item.seasons = fd.seasons || item.seasons; item.numberOfSeasons = fd.numberOfSeasons || item.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes || item.numberOfEpisodes; if (!item.progress) item.progress = {}; } else if (type === 'movie') { item.runtime = fd.runtime || item.runtime; }
                     await saveData();
                 }
@@ -2335,6 +2389,35 @@ document.addEventListener('click', (e) => {
 
             const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
 
+            let rewatchHTML = '';
+           if (isWatched) {
+                if (!item.watchDates) item.watchDates = [item.dateAdded || Date.now()];
+                const datesList = item.watchDates.map((ts, idx) => {
+                    const dateStr = new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+                    return `<div class="rewatch-item"><span class="rewatch-item-date"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color);"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10A10 10 0 0 1 2 12 10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7h1.5z"/></svg> ${dateStr}</span><button class="icon-button delete-rewatch-btn" data-idx="${idx}" title="Usuń ten seans"><svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button></div>`;
+                }).join('');
+
+                rewatchHTML = `
+                <div class="rewatch-section">
+                    <div class="rewatch-accordion-header">
+                        <h3 class="rewatch-accordion-title">
+                            <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Historia seansów
+                            <span class="rewatch-badge">${item.watchDates.length}</span>
+                        </h3>
+                        <svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <div class="rewatch-accordion-content">
+                        <div class="rewatch-list">
+                            ${datesList}
+                            <button id="add-rewatch-btn" class="rewatch-add-btn">
+                                <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                                Obejrzano dzisiaj
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }
             dModal.innerHTML = `
             <div class="modal-overlay">
                 <div class="modern-modal-wrapper">
@@ -2348,6 +2431,7 @@ document.addEventListener('click', (e) => {
                             <div id="seasons-container"></div>
                             <div id="cast-container"></div>
                             <div id="recommendations-container"></div>
+                            ${rewatchHTML}
                             ${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}
                         </div>
                     </div>
@@ -2370,19 +2454,49 @@ document.addEventListener('click', (e) => {
 
             const close = () => { dModal.innerHTML = ''; renderList(data[listName], listName, true); };
 
-            // BEZPIECZNE NASŁUCHIWANIE ZDARZEŃ
             modal.addEventListener('click', async (e) => {
                 if (e.target === modal) { close(); return; }
-                const cast = e.target.closest('.cast-member[data-actor-id]');
-                if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-                const rec = e.target.closest('.recommendation-item');
-                if (rec) { openPreviewModal(rec.dataset.id, rec.dataset.type); return; }
+                                // OBSŁUGA ZWIJANIA/ROZWIJANIA PAMIĘTNIKA
+                const rewatchHeader = e.target.closest('.rewatch-accordion-header');
+                if (rewatchHeader) {
+                    triggerHaptic('light');
+                    rewatchHeader.parentElement.classList.toggle('expanded');
+                    return;
+                }
+                const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
+                const rec = e.target.closest('.recommendation-item'); if (rec) { openPreviewModal(rec.dataset.id, rec.dataset.type); return; }
 
                 const removeIcon = e.target.closest('.remove-tag');
                 if (removeIcon) {
                     const tagToRemove = removeIcon.dataset.tag;
                     item.customTags = item.customTags.filter(t => t !== tagToRemove);
                     await saveData(); openDetailsModal(id, type); return;
+                }
+
+                const addRewatchBtn = e.target.closest('#add-rewatch-btn');
+                if (addRewatchBtn) {
+                    triggerHaptic('success');
+                    item.watchDates.push(Date.now());
+                    await saveData();
+                    openDetailsModal(id, type);
+                    showCustomAlert('Świetnie!', 'Dodano dzisiejszy seans do pamiętnika.', 'success');
+                    return;
+                }
+
+                const delRewatchBtn = e.target.closest('.delete-rewatch-btn');
+                if (delRewatchBtn) {
+                    if (item.watchDates.length <= 1) {
+                        showCustomAlert('Uwaga', 'Nie możesz usunąć jedynego seansu z wpisu.', 'info');
+                        return;
+                    }
+                    const cf = await showCustomConfirm('Usunąć seans?', 'Czy na pewno chcesz usunąć tę datę z historii oglądania?');
+                    if (cf) {
+                        const idx = parseInt(delRewatchBtn.dataset.idx);
+                        item.watchDates.splice(idx, 1);
+                        await saveData();
+                        openDetailsModal(id, type);
+                    }
+                    return;
                 }
             });
             modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
@@ -2534,7 +2648,7 @@ document.addEventListener('click', (e) => {
                 const type = document.querySelector('input[name="custom-type"]:checked').value; const lst = document.querySelector('input[name="custom-list"]:checked').value;
                 const tList = (type === 'movie' ? 'movies' : 'series') + (lst === 'toWatch' ? 'ToWatch' : 'Watched');
                 const nIt = { id: `custom_${Date.now()}`, title: t, year: escapeHTML(document.getElementById('custom-year').value) || '', poster: escapeHTML(document.getElementById('custom-poster').value.trim()) || null, type: type, overview: 'Dodano ręcznie.', genres: [], isFavorite: false, customTags: [], dateAdded: Date.now(), releaseDate: null };
-                if (lst === 'toWatch') { const mx = data[tList].length > 0 ? Math.max(...data[tList].map(i => i.customOrder || 0)) : -1; nIt.customOrder = mx + 1; } else { nIt.rating = null; nIt.review = ""; }
+                if (lst === 'toWatch') { const mx = data[tList].length > 0 ? Math.max(...data[tList].map(i => i.customOrder || 0)) : -1; nIt.customOrder = mx + 1; } else { nIt.rating = null; nIt.review = ""; nIt.watchDates = [Date.now()]; }
                 if (type === 'movie') nIt.runtime = null;
                 data[tList].unshift(nIt); await saveData(); switchMainTab(type === 'movie' ? 'movies' : 'series'); switchSubTab(lst); close(); showCustomAlert('Gotowe', `Dodano.`, 'success');
             });
@@ -2591,13 +2705,8 @@ document.addEventListener('click', (e) => {
             setupSwipeToClose(modal, close);
             modal.addEventListener('click', e => {
                 if (e.target === modal) close();
-
-                // POPRAWKA: Kliknięcie w polecany film/serial aktora z "znany z" otwiera podgląd
                 const kfItem = e.target.closest('.known-for-item');
-                if (kfItem && kfItem.dataset.id && kfItem.dataset.type) {
-                    openPreviewModal(kfItem.dataset.id, kfItem.dataset.type);
-                    return;
-                }
+                if (kfItem && kfItem.dataset.id && kfItem.dataset.type) { openPreviewModal(kfItem.dataset.id, kfItem.dataset.type); return; }
 
                 const h = e.target.closest('.filmography-item-header'); if(h) { const d = h.nextElementSibling; if(d && d.classList.contains('filmography-item-details')) { d.style.display = d.style.display === 'block' ? 'none' : 'block'; } }
                 const add = e.target.closest('.add-filmography-item-btn'); if(add) addItemFromFilmography(add);
@@ -2631,5 +2740,7 @@ document.addEventListener('click', (e) => {
 
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(() => console.log('SW ok')).catch(e => console.log('SW błąd', e)); }); }
     </script>
+</body>
+</html>
 </body>
 </html>
