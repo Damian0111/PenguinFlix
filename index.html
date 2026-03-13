@@ -1842,22 +1842,46 @@
             if (!(await addItemToList(id, type, list))) button.disabled = false;
         }
 
-        async function getItemDetails(id, type) {
+               async function getItemDetails(id, type) {
             try {
-                const res = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images,watch/providers&include_image_language=pl,en,null`);
+                const res = await fetch(`${API_BASE_URL}/${type}/${id}?api_key=${API_KEY}&language=pl-PL&append_to_response=images,watch/providers,release_dates&include_image_language=pl,en,null`);
                 if (!res.ok) return null; const d = await res.json();
 
-                              let vodList = [];
+                let vodList = [];
                 if (d['watch/providers'] && d['watch/providers'].results && d['watch/providers'].results.PL) {
                     const pl = d['watch/providers'].results.PL;
                     let provs = [];
                     if (pl.flatrate) provs.push(...pl.flatrate);
                     if (pl.free) provs.push(...pl.free);
                     if (pl.ads) provs.push(...pl.ads);
-                    vodList = [...new Set(provs.map(p => p.provider_name))]; // Pobiera wszystkie unikalne nazwy
+                    vodList = [...new Set(provs.map(p => p.provider_name))];
                 }
 
-                const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null, type: type, year: (d.release_date || d.first_air_date || '').substring(0, 4), releaseDate: d.release_date || d.first_air_date || null, overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [], isFavorite: false, customTags: [], vod: vodList };
+                // --- INTELIGENTNE WYBIERANIE DATY PREMIERY (Polska -> USA Kinowa -> Domyślna) ---
+                let finalReleaseDate = d.release_date || d.first_air_date || null;
+
+                if (type === 'movie' && d.release_dates && d.release_dates.results) {
+                    const plRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'PL');
+                    const usRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'US');
+
+                    if (plRelease && plRelease.release_dates && plRelease.release_dates.length > 0) {
+                        // Szukamy premiery kinowej w PL (typ 3)
+                        const plTheatrical = plRelease.release_dates.find(rd => rd.type === 3);
+                        finalReleaseDate = plTheatrical ? plTheatrical.release_date.substring(0, 10) : plRelease.release_dates[0].release_date.substring(0, 10);
+                    }
+                    else if (usRelease && usRelease.release_dates && usRelease.release_dates.length > 0) {
+                        // Jeśli brak PL, szukamy premiery kinowej w USA (typ 3 - ignorujemy festiwale typ 1)
+                        const usTheatrical = usRelease.release_dates.find(rd => rd.type === 3);
+                        if (usTheatrical) {
+                            finalReleaseDate = usTheatrical.release_date.substring(0, 10);
+                        } else {
+                            finalReleaseDate = usRelease.release_dates[0].release_date.substring(0, 10);
+                        }
+                    }
+                }
+
+                const item = { id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null, type: type, year: (finalReleaseDate || '').substring(0, 4), releaseDate: finalReleaseDate, overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [], isFavorite: false, customTags: [], vod: vodList };
+
                 if (type === 'tv') {
                     item.status = d.status;
                     item.nextEpisodeToAir = d.next_episode_to_air ? { date: d.next_episode_to_air.air_date, season: d.next_episode_to_air.season_number, episode: d.next_episode_to_air.episode_number } : null;
