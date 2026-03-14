@@ -1,7 +1,9 @@
-const CACHE_NAME = 'penguinflix-cache-v3'; // Zmienione na v3, żeby wymusić przejęcie kontroli
+const CACHE_NAME = 'penguinflix-cache-v4'; // Podbite do v4 po rozbiciu na pliki CSS i JS
 const URLS_TO_CACHE = [
   './',
   './index.html',
+  './styles.css',      // NOWOŚĆ: Dodany plik CSS
+  './app.js',          // NOWOŚĆ: Dodany plik JS
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
@@ -38,8 +40,8 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Ignorujemy zapytania do zewnętrznego API
-  if (event.request.url.includes('api.themoviedb.org') || event.request.url.includes('youtube.com')) {
+  // Ignorujemy zapytania do zewnętrznego API TMDB oraz YouTube (dla trailerów)
+  if (event.request.url.includes('api.themoviedb.org') || event.request.url.includes('image.tmdb.org') || event.request.url.includes('youtube.com')) {
     return;
   }
   
@@ -56,7 +58,7 @@ self.addEventListener('fetch', event => {
       })
       .catch(() => {
         // Złapanie błędu (.catch) nastąpi tylko, gdy NIE MASZ INTERNETU.
-        // Wtedy i tylko wtedy wyciągamy starą wersję aplikacji z pamięci.
+        // Wtedy i tylko wtedy wyciągamy z pamięci nasze pliki index, css i js.
         return caches.match(event.request);
       })
   );
