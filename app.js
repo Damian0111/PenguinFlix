@@ -312,18 +312,30 @@ function setupEventListeners() {
 
     let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
     const mainContent = document.getElementById('mainContent');
-    const handleSwipeGesture = () => {
+       const handleSwipeGesture = () => {
         const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
         if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
             if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
                 const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
-                if (deltaX < 0 && currentSubTab === 'toWatch') switchSubTab('watched');
-                else if (deltaX > 0 && currentSubTab === 'watched') switchSubTab('toWatch');
+                if (deltaX < 0 && currentSubTab === 'toWatch') {
+                    triggerHaptic('light'); // Wibracja przy geście w lewo
+                    switchSubTab('watched');
+                }
+                else if (deltaX > 0 && currentSubTab === 'watched') {
+                    triggerHaptic('light'); // Wibracja przy geście w prawo
+                    switchSubTab('toWatch');
+                }
             } else if (viewState.activeMainTab === 'profile') {
                 const activeBtn = document.querySelector('.ptab-btn.active');
                 const currentPtab = activeBtn ? activeBtn.dataset.ptab : 'stats';
-                if (deltaX < 0 && currentPtab === 'stats') switchProfileTab('settings');
-                else if (deltaX > 0 && currentPtab === 'settings') switchProfileTab('stats');
+                if (deltaX < 0 && currentPtab === 'stats') {
+                    triggerHaptic('light'); // Wibracja w profilu
+                    switchProfileTab('settings');
+                }
+                else if (deltaX > 0 && currentPtab === 'settings') {
+                    triggerHaptic('light'); // Wibracja w profilu
+                    switchProfileTab('stats');
+                }
             }
         }
     };
