@@ -1546,4 +1546,24 @@ async function refreshStaleSeries() {
     if (needsSave) { await saveData(); const activeList = getActiveListId(); if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true); }
 }
 
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(() => console.log('SW ok')).catch(e => console.log('SW błąd', e)); }); }
+// REJESTRACJA SERVICE WORKERA Z AUTO-ODŚWIEŻANIEM
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then(reg => {
+            console.log('SW zarejestrowany');
+            
+            // Nasłuchujemy, czy w tle instaluje się nowa wersja SW (np. zmiana z v4 na v5)
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    // Jeśli nowa wersja się zainstalowała i jest gotowa do przejęcia kontroli
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        console.log('Nowa wersja dostępna! Odświeżam...');
+                        // Wymuszamy natychmiastowe odświeżenie okna, by wczytać nowy CSS/JS
+                        window.location.reload();
+                    }
+                });
+            });
+        }).catch(e => console.log('SW błąd', e));
+    });
+}
