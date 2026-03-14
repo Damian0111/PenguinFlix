@@ -133,24 +133,27 @@ const toggleTheme = () => {
 // ==========================================
 // 4. API WRAPPER (Fetch)
 // ==========================================
-async function fetchFromTMDB(endpoint, params = {}) {
+// DODANO: Parametr `signal` na końcu
+async function fetchFromTMDB(endpoint, params = {}, signal = null) {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     url.searchParams.append('api_key', API_KEY);
-    
-    // Dodajemy język polski, chyba że celowo wyłączyliśmy go w parametrach (np. dla wideo)
-    if (params.language !== false) {
-        url.searchParams.append('language', params.language || 'pl-PL');
-    }
+    if (params.language !== false) url.searchParams.append('language', params.language || 'pl-PL');
     
     Object.keys(params).forEach(key => {
         if (key !== 'language') url.searchParams.append(key, params[key]);
     });
 
     try {
-        const response = await fetch(url);
+        // DODANO: Przekazanie opcji signal do fetch
+        const options = signal ? { signal } : {};
+        const response = await fetch(url, options);
         if (!response.ok) throw new Error(response.status);
         return await response.json();
-    } catch (error) { return null; }
+    } catch (error) {
+        // Ignorujemy błędy, jeśli zapytanie zostało celowo przerwane przez AbortController
+        if (error.name === 'AbortError') return 'ABORTED';
+        return null;
+    }
 }
 
 // ==========================================
@@ -209,8 +212,14 @@ function setupEventListeners() {
     document.getElementById('btn-info').addEventListener('click', showInfoModal);
 
     const searchInput = document.getElementById('searchInput');
+       let searchAbortController = null; // Globalny kontroler zapytań wyszukiwarki
+
     const debouncedMainSearch = debounce(async (query) => {
         const searchResultsContainer = document.getElementById('searchResults');
+        
+        // ZABICIE POPRZEDNIEGO ZAPYTANIA: Jeśli użytkownik wpisze nową literę, przerywamy stary pobór danych
+        if (searchAbortController) searchAbortController.abort();
+
         if (!query) { searchResultsContainer.style.display = 'none'; fullSearchResults = []; return; }
         searchResultsContainer.style.display = 'block';
         searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px; text-align:center;">Wyszukiwanie...</div>`;
@@ -218,21 +227,34 @@ function setupEventListeners() {
         let searchTerm = query; let year = null; const yearMatch = query.match(/\b(\d{4})\b$/);
         if (yearMatch) { year = yearMatch[1]; searchTerm = query.replace(/\b\d{4}\b$/, '').trim(); }
 
+        // Tworzymy nowy kontroler dla tego konkretnego zapytania
+        searchAbortController = new AbortController();
+        const signal = searchAbortController.signal;
+
         try {
             let finalResults = [];
             if (year && searchTerm) {
-                const mRes = await fetchFromTMDB('/search/movie', {query: searchTerm, year: year, include_adult: false});
-                const sRes = await fetchFromTMDB('/search/tv', {query: searchTerm, first_air_date_year: year, include_adult: false});
+                // Przekazujemy signal do fetchFromTMDB
+                const mRes = await fetchFromTMDB('/search/movie', {query: searchTerm, year: year, include_adult: false}, signal);
+                const sRes = await fetchFromTMDB('/search/tv', {query: searchTerm, first_air_date_year: year, include_adult: false}, signal);
+                
+                if (mRes === 'ABORTED' || sRes === 'ABORTED') return; // Ciche wyjście, zapytanie przerwane
+
                 if(mRes) mRes.results.forEach(i => i.media_type = 'movie');
                 if(sRes) sRes.results.forEach(i => i.media_type = 'tv');
                 finalResults = [...(mRes?.results||[]), ...(sRes?.results||[])].sort((a, b) => b.popularity - a.popularity);
             } else {
-                const resData = await fetchFromTMDB('/search/multi', {query: searchTerm, include_adult: false});
+                const resData = await fetchFromTMDB('/search/multi', {query: searchTerm, include_adult: false}, signal);
+                if (resData === 'ABORTED') return; // Ciche wyjście
                 finalResults = resData ? resData.results : [];
             }
             fullSearchResults = finalResults; displaySearchResults(fullSearchResults);
-        } catch (error) { searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">Błąd sieci.</div>`; }
-    }, 400);
+        } catch (error) { 
+            if (error.name !== 'AbortError') {
+                searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">Błąd sieci.</div>`; 
+            }
+        }
+    }, 300); // Zmniejszyłem opóźnienie z 400 do 300, bo dzięki AbortController możemy reagować szybciej!
 
     searchInput.addEventListener('input', (e) => debouncedMainSearch(e.target.value.trim()));
     searchInput.addEventListener('focus', () => { if(searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
@@ -323,14 +345,7 @@ function setupEventListeners() {
         } finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
     });
 
-    mainContent.addEventListener('click', (e) => {
-        const loadMoreBtn = e.target.closest('.load-more-btn');
-        if (loadMoreBtn) {
-            const listId = loadMoreBtn.dataset.list;
-            viewState[listId].displayLimit = (viewState[listId].displayLimit || 30) + 30;
-            renderList(data[listId], listId, true);
-        }
-    });
+   
 }
 
 // ==========================================
@@ -414,36 +429,24 @@ function updateToolbarUI(mainTabId) {
     parentTab.querySelector('.btn-view-toggle').innerHTML = viewState.globalViewMode === 'grid' ? ICONS.list : ICONS.grid;
 }
 
+let listIntersectionObserver = null; // Zmienna trzymająca naszego obserwatora scrolla
+
 function renderList(originalItems, listId, preserveLimit = false) {
     const container = document.getElementById(`${listId}ListContainer`); if (!container) return;
     const state = viewState[listId];
     if (!preserveLimit) state.displayLimit = 30;
     let itemsToRender = [...(originalItems || [])];
 
-    if (state.localSearch) {
-        const query = state.localSearch.toLowerCase();
-        itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query)));
-    }
+    // ... (Filtrowanie i Sortowanie zostaje takie same jak było) ...
+    if (state.localSearch) { const query = state.localSearch.toLowerCase(); itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query))); }
     if (state.filterFavoritesOnly) itemsToRender = itemsToRender.filter(item => item.isFavorite);
     if (state.filterByGenre !== 'all') itemsToRender = itemsToRender.filter(item => item.genres && item.genres.includes(state.filterByGenre));
     if (state.filterByCustomTag && state.filterByCustomTag !== 'all') itemsToRender = itemsToRender.filter(item => (item.customTags || []).includes(state.filterByCustomTag));
-    if (state.filterByVod && state.filterByVod !== 'all') {
-        const targetVod = state.filterByVod.toLowerCase();
-        itemsToRender = itemsToRender.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod)));
-    }
+    if (state.filterByVod && state.filterByVod !== 'all') { const targetVod = state.filterByVod.toLowerCase(); itemsToRender = itemsToRender.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod))); }
 
     const [sortBy, direction] = state.sortBy.split('_');
     if (sortBy === 'custom') { itemsToRender.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0)); }
-    else {
-        itemsToRender.sort((a, b) => {
-            let valA, valB;
-            switch (sortBy) {
-                case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-                case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA;
-                default: return 0;
-            }
-        });
-    }
+    else { itemsToRender.sort((a, b) => { let valA, valB; switch (sortBy) { case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA; default: return 0; } }); }
 
     const limit = state.displayLimit || 30;
     const pagedItems = itemsToRender.slice(0, limit);
@@ -452,23 +455,18 @@ function renderList(originalItems, listId, preserveLimit = false) {
         const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
         let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
         const safeTitle = escapeHTML(item.title); const safeOverview = escapeHTML(item.overview);
+        const listPosterSrc = item.poster ? item.poster.replace('w500', 'w300') : POSTER_PLACEHOLDER;
 
         if (isToWatchList) {
             if (!item.releaseDate || item.releaseDate === '') {
-                isUnreleased = true;
-                unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Brak daty premiery</div>`;
-                unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Zapowiedź</div>`;
+                isUnreleased = true; unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Brak daty premiery</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Zapowiedź</div>`;
             } else {
                 const today = new Date(); today.setHours(0, 0, 0, 0); const releaseDate = new Date(item.releaseDate);
-                if (releaseDate > today) {
-                    isUnreleased = true;
-                    const formattedDate = releaseDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
-                    unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Premiera: ${formattedDate}</div>`;
-                    unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
-                }
+                if (releaseDate > today) { isUnreleased = true; const formattedDate = releaseDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }); unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Premiera: ${formattedDate}</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`; }
             }
         }
 
+        // DODANO: class="fade-image" onload="this.classList.add('loaded')"
         if (viewState.globalViewMode === 'grid') {
             let favoriteBadge = item.isFavorite ? `<div class="grid-badge-favorite">${ICONS.star}</div>` : '';
             let infoBadge = ''; let quickTrackBtnGrid = ''; let nextAirDateHTMLGrid = '';
@@ -477,17 +475,16 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
                 if (watchedCount > 0) { const pct = Math.round((watchedCount/item.numberOfEpisodes)*100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
                 const nextEpInfo = getNextEpisodeInfo(item);
-                if (nextEpInfo && !isUnreleased) quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track" aria-label="Oznacz ${nextEpInfo.string} jako obejrzany">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
+                if (nextEpInfo && !isUnreleased) quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
             }
             let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
-            return `<li class="grid-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><div class="grid-title-fallback">${safeTitle}</div><img src="${item.poster || POSTER_PLACEHOLDER}" alt="${safeTitle}" loading="lazy" onerror="this.style.opacity=0;">${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}</li>`;
+            return `<li class="grid-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><div class="grid-title-fallback">${safeTitle}</div><img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}</li>`;
         } else {
             let extraInfo = '';
             if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
             else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
-                const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
-                const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
+                const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0); const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
                 const nextEpInfo = getNextEpisodeInfo(item); let nextEpHTML = '';
                 if (nextEpInfo) { nextEpHTML = `<button class="quick-track-btn" data-action="quick-track">${ICONS.quickTrack} Obejrzano ${nextEpInfo.string}</button>`; }
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) {
@@ -497,7 +494,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 }
                 extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
             }
-            return `<li class="list-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><img src="${item.poster || POSTER_PLACEHOLDER}" alt="Okładka" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span class="meta">${item.year}</span>${unreleasedBadgeList}<p class="overview">${safeOverview}</p>${extraInfo}</div><div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div></li>`;
+            return `<li class="list-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span class="meta">${item.year}</span>${unreleasedBadgeList}<p class="overview">${safeOverview}</p>${extraInfo}</div><div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div></li>`;
         }
     }).join('');
 
@@ -506,12 +503,30 @@ function renderList(originalItems, listId, preserveLimit = false) {
     ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
     ul.innerHTML = itemsToRender.length > 0 ? listHTML : `<div class="empty-state-simple">Brak pozycji do wyświetlenia.</div>`;
 
-    let loadMoreContainer = container.querySelector('.load-more-wrap');
-    if (loadMoreContainer) loadMoreContainer.remove();
+    // USUWANIE STAREGO PRZYCISKU POKAŻ WIĘCEJ
+    let oldSentinel = container.querySelector('.infinite-scroll-sentinel');
+    if (oldSentinel) oldSentinel.remove();
+    
+    // Odpinamy starego obserwatora (by zapobiec wyciekom pamięci)
+    if (listIntersectionObserver) listIntersectionObserver.disconnect();
+
+    // NOWOŚĆ: INFINITE SCROLL
     if (itemsToRender.length > limit) {
-        loadMoreContainer = document.createElement('div'); loadMoreContainer.className = 'load-more-wrap'; loadMoreContainer.style.cssText = 'text-align: center; padding: 24px 0 10px; width: 100%;';
-        loadMoreContainer.innerHTML = `<button class="load-more-btn" data-list="${listId}">Pokaż więcej (${itemsToRender.length - limit})</button>`;
-        container.appendChild(loadMoreContainer);
+        let sentinel = document.createElement('div');
+        sentinel.className = 'infinite-scroll-sentinel';
+        // Niewidzialny blok na dole listy o wysokości 20px
+        sentinel.style.cssText = 'height: 20px; width: 100%; margin-top: 10px;';
+        container.appendChild(sentinel);
+
+        // Ustawiamy obserwatora: Jeśli krawędź ekranu zbliży się do sentinel'a na 300px, załaduj kolejne elementy
+        listIntersectionObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                viewState[listId].displayLimit += 30;
+                renderList(data[listId], listId, true);
+            }
+        }, { rootMargin: "300px" });
+        
+        listIntersectionObserver.observe(sentinel);
     }
 
     if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
@@ -1034,8 +1049,7 @@ function renderRecommendationsHTML(recs, type) {
 
 async function openPreviewModal(id, type) {
     const dModal = document.getElementById('detailsModalContainer');
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="align-items:center; justify-content:center; height:200px; color:var(--text-secondary);">Ładowanie...</div></div>`;
-
+dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
     const item = await getItemDetails(id, type);
     if (!item) { dModal.innerHTML = ''; showCustomAlert('Błąd', 'Brak danych.', 'error'); return; }
 
@@ -1319,7 +1333,7 @@ function openCustomAddModal() {
 
 async function openActorDetailsModal(actorId) {
     const c = document.getElementById('actorModalContainer');
-    c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="actor-modal-content" style="text-align:center; color: var(--text-secondary);">Ładowanie...</div></div>`;
+    c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
     const ad = await getActorDetails(actorId);
     if (!ad) { c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="actor-modal-content" style="text-align:center; color: var(--primary-color);">Błąd pobierania danych.</div></div>`; setTimeout(() => c.innerHTML = '', 2000); return; }
 
