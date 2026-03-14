@@ -554,6 +554,34 @@ ul { padding: 0; margin: 0; list-style: none; }
     margin-top: 4px;
     font-weight: 700;
 }
+/* ==========================================
+   UX: FADE-IN OBRAZKÓW & SKELETONS
+========================================== */
+/* Płynne pojawianie się obrazków po załadowaniu */
+.fade-image {
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+}
+.fade-image.loaded {
+    opacity: 1;
+}
+
+/* Szkielet ładowania (Skeleton Screen) */
+@keyframes skeletonPulse {
+    0% { background-color: color-mix(in srgb, var(--card-color) 100%, transparent); }
+    50% { background-color: color-mix(in srgb, var(--border-color) 50%, var(--card-color)); }
+    100% { background-color: color-mix(in srgb, var(--card-color) 100%, transparent); }
+}
+
+.skeleton-box {
+    animation: skeletonPulse 1.5s infinite ease-in-out;
+    border-radius: var(--radius-md);
+}
+
+.skeleton-modal-header { height: 300px; width: 100%; border-radius: 0; }
+.skeleton-title { height: 28px; width: 60%; margin: 20px 24px 10px; }
+.skeleton-text-line { height: 14px; width: 85%; margin: 8px 24px; }
+.skeleton-text-line.short { width: 50%; }
 @media(max-width: 400px) { .config-input-group { flex-direction: column; } }
 .config-input { flex-grow: 1; padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color: var(--text-color); font-size: 1rem; outline: none; transition: border-color 0.2s; min-width: 0; width: 100%; box-sizing: border-box;}
 .config-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 15%, transparent); }
