@@ -777,6 +777,41 @@ async function getCredits(id, type) {
     const result = data.cast.slice(0, 15);
     await db.setCache(cacheKey, result); return result;
 }
+async function getReviews(id, type) {
+    if (String(id).startsWith('custom_')) return [];
+    const cacheKey = `reviews_${type}_${id}`;
+    const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
+    
+    // Najpierw szukamy po polsku
+    let data = await fetchFromTMDB(`/${type}/${id}/reviews`, { page: 1, language: 'pl-PL' });
+    
+    // Jeśli nie ma opinii PL, pobieramy po angielsku (odpinamy język)
+    if (!data || !data.results || data.results.length === 0) {
+        data = await fetchFromTMDB(`/${type}/${id}/reviews`, { page: 1, language: 'en-US' });
+    }
+    
+    const finalRes = data?.results ? data.results.slice(0, 5) : []; // Bierzemy max 5 opinii
+    await db.setCache(cacheKey, finalRes); 
+    return finalRes;
+}
+
+function renderReviewsHTML(reviews) {
+    if (!reviews || reviews.length === 0) return '';
+    const cards = reviews.map(r => {
+        const ratingBadge = r.author_details?.rating ? `<span class="public-review-rating">★ ${r.author_details.rating}</span>` : '';
+        // Usuwamy tagi HTML z treści opinii dla bezpieczeństwa (ludzie czasem używają markdowna w recenzjach na tmdb)
+        const cleanContent = escapeHTML(r.content).replace(/\n/g, '<br>');
+        return `
+            <div class="public-review-card">
+                <div class="public-review-header">
+                    <div class="public-review-author">${escapeHTML(r.author)}</div>
+                    ${ratingBadge}
+                </div>
+                <div class="public-review-content">${cleanContent}</div>
+            </div>`;
+    }).join('');
+    return `<div class="reviews-section"><h3>Opinie</h3><div class="reviews-scroller">${cards}</div></div>`;
+}
 
 async function getWatchProviders(id, type) {
     if (String(id).startsWith('custom_')) return null;
@@ -1049,7 +1084,9 @@ function renderRecommendationsHTML(recs, type) {
 
 async function openPreviewModal(id, type) {
     const dModal = document.getElementById('detailsModalContainer');
-dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
+    // Szkielet ładowania
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
+
     const item = await getItemDetails(id, type);
     if (!item) { dModal.innerHTML = ''; showCustomAlert('Błąd', 'Brak danych.', 'error'); return; }
 
@@ -1061,26 +1098,33 @@ dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"
     if (item.type === 'tv' && !isSeriesFinished(item)) canWatch = false;
     else if (item.type === 'movie') { if (!item.releaseDate) canWatch = false; else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); if (rd > t) canWatch = false; } }
 
-   
     let fHTML = isAlreadyAdded ? `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>` : canWatch ? `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>` : `<div class="modal-sticky-footer"><button id="previewAddToWatchBtn" class="modal-btn primary" style="width: 100%;">Dodaj do Obejrzenia</button></div>`;
     const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
 
-    // NOWOŚĆ: Generowanie bloku z oceną
-    let tmdbRatingHTML = item.tmdbRating && item.tmdbRating > 0 ? `
-        <div class="tmdb-rating-wrapper">
-            <svg class="tmdb-rating-star" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            <div class="tmdb-rating-info">
-                <div class="tmdb-rating-score">${item.tmdbRating} <span class="max-score">/ 10</span></div>
-                <div class="tmdb-rating-label">Ocena TMDb</div>
-            </div>
-        </div>
-    ` : '';
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${tmdbRatingHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div></div></div>${fHTML}</div></div>`;
+    // Nowa ocena TMDb
+    let tmdbRatingHTML = item.tmdbRating && item.tmdbRating > 0 ? `<div class="tmdb-rating-wrapper"><svg class="tmdb-rating-star" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info"><div class="tmdb-rating-score">${item.tmdbRating} <span class="max-score">/ 10</span></div><div class="tmdb-rating-label">Ocena TMDb</div></div></div>` : '';
+
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${tmdbRatingHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
+
     const modal = dModal.querySelector('.modal-overlay'); const close = () => { dModal.innerHTML = ''; };
     modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-        const rec = e.target.closest('.recommendation-item'); if (rec) { openPreviewModal(rec.dataset.id, rec.dataset.type); return; }
+        
+        // ZAAWANSOWANE KLIKANIE W POLECANE TYTUŁY
+        const rec = e.target.closest('.recommendation-item'); 
+        if (rec) { 
+            const recId = rec.dataset.id;
+            const recType = rec.dataset.type;
+            const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(recId) && i.type === recType);
+            if (isInLibrary) {
+                openDetailsModal(recId, recType); // Jeśli mamy go w bibliotece, otwórz jego szczegóły!
+            } else {
+                openPreviewModal(recId, recType); // Jeśli nie, otwórz podgląd z opcją dodania
+            }
+            return; 
+        }
+        
         const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) {
             const tagToRemove = removeIcon.dataset.tag;
@@ -1097,6 +1141,7 @@ dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
     getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
+    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs); });
 
     if (!isAlreadyAdded) {
         const wBtn = document.getElementById('previewAddToWatchBtn'); const wdBtn = document.getElementById('previewAddToWatchedBtn');
@@ -1104,19 +1149,14 @@ dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"
         if (wdBtn) wdBtn.onclick = async () => { if (await addItemToList(id, type, 'watched')) close(); };
     }
 }
-
 async function openDetailsModal(id, type) {
     const { listName, item } = getListAndItem(id, type); if (!item) return;
 
-      // DODANO: || item.tmdbRating === undefined
     if (!String(id).startsWith('custom_') && (!item.backdrop || item.vod === undefined || item.tmdbRating === undefined || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
         const fd = await getItemDetails(id, type);
         if (fd) {
             item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate; item.vod = fd.vod || [];
-            
-            // DODANO: Zapisywanie dociągniętej oceny w bazie
             item.tmdbRating = fd.tmdbRating || item.tmdbRating; 
-
             if (type === 'tv') { item.status = fd.status !== undefined ? fd.status : item.status; item.nextEpisodeToAir = fd.nextEpisodeToAir !== undefined ? fd.nextEpisodeToAir : item.nextEpisodeToAir; item.seasons = fd.seasons || item.seasons; item.numberOfSeasons = fd.numberOfSeasons || item.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes || item.numberOfEpisodes; if (!item.progress) item.progress = {}; } else if (type === 'movie') { item.runtime = fd.runtime || item.runtime; }
             await saveData();
         }
@@ -1151,7 +1191,7 @@ async function openDetailsModal(id, type) {
 
     const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
 
-        let rewatchHTML = '';
+    let rewatchHTML = '';
     if (isWatched) {
         if (!item.watchDates) item.watchDates = [item.dateAdded || Date.now()];
         const datesList = item.watchDates.map((ts, idx) => {
@@ -1161,18 +1201,9 @@ async function openDetailsModal(id, type) {
         rewatchHTML = `<div class="rewatch-section"><div class="rewatch-accordion-header"><h3 class="rewatch-accordion-title"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Historia seansów<span class="rewatch-badge">${item.watchDates.length}</span></h3><svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></div><div class="rewatch-accordion-content"><div class="rewatch-list">${datesList}<button id="add-rewatch-btn" class="rewatch-add-btn"><svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Obejrzano dzisiaj</button></div></div></div>`;
     }
 
-    // NOWOŚĆ: Generowanie bloku z oceną
-    let tmdbRatingHTML = item.tmdbRating && item.tmdbRating > 0 ? `
-        <div class="tmdb-rating-wrapper">
-            <svg class="tmdb-rating-star" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            <div class="tmdb-rating-info">
-                <div class="tmdb-rating-score">${item.tmdbRating} <span class="max-score">/ 10</span></div>
-                <div class="tmdb-rating-label">Ocena TMDb</div>
-            </div>
-        </div>
-    ` : '';
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${tmdbRatingHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
+    let tmdbRatingHTML = item.tmdbRating && item.tmdbRating > 0 ? `<div class="tmdb-rating-wrapper"><svg class="tmdb-rating-star" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info"><div class="tmdb-rating-score">${item.tmdbRating} <span class="max-score">/ 10</span></div><div class="tmdb-rating-label">Ocena TMDb</div></div></div>` : '';
 
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${tmdbRatingHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
@@ -1191,7 +1222,21 @@ async function openDetailsModal(id, type) {
         const rewatchHeader = e.target.closest('.rewatch-accordion-header');
         if (rewatchHeader) { triggerHaptic('light'); rewatchHeader.parentElement.classList.toggle('expanded'); return; }
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-        const rec = e.target.closest('.recommendation-item'); if (rec) { openPreviewModal(rec.dataset.id, rec.dataset.type); return; }
+        
+        // ZAAWANSOWANE KLIKANIE W POLECANE TYTUŁY
+        const rec = e.target.closest('.recommendation-item'); 
+        if (rec) { 
+            const recId = rec.dataset.id;
+            const recType = rec.dataset.type;
+            const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(recId) && i.type === recType);
+            if (isInLibrary) {
+                openDetailsModal(recId, recType); // Otwiera normalny widok jeśli masz w kolekcji
+            } else {
+                openPreviewModal(recId, recType); // Otwiera podgląd jeśli to nowy film
+            }
+            return; 
+        }
+
         const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) { const tagToRemove = removeIcon.dataset.tag; item.customTags = item.customTags.filter(t => t !== tagToRemove); await saveData(); openDetailsModal(id, type); return; }
         const addRewatchBtn = e.target.closest('#add-rewatch-btn');
@@ -1211,6 +1256,7 @@ async function openDetailsModal(id, type) {
         getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     }
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
+    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs); });
 
     if (isToWatch) populateAndRenderSeriesSections(item, document.getElementById('seasons-container'));
 
