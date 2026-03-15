@@ -15,6 +15,11 @@
 </head>
 <body>
     <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display: none;" id="force-light-mode-hack">
+        <!-- PULL TO REFRESH -->
+    <div id="ptr-container"><svg id="ptr-spinner" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></div>
+    
+    <!-- SMART BACKUP ALERT -->
+    <div id="smart-backup-container"></div>
     <div id="toast-container"></div>
 
     <header id="fixed-header">
@@ -100,9 +105,7 @@
                 </div>
                 <div class="discover-grid" id="main-discover-grid"></div>
 
-                <button id="fab-randomize" class="fab-randomizer" aria-label="Wylosuj film lub serial" title="Wylosuj co obejrzeć">
-                    <svg viewBox="0 0 24 24"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg>
-                </button>
+                
             </div>
 
             <div id="tab-profile" class="main-tab-content">
@@ -151,6 +154,12 @@
                     <div class="settings-section">
                         <div class="settings-section-title">Twoja Biblioteka</div>
                         <div class="settings-group">
+                            <!-- WKLEJ TO W USTAWIENIACH BIBLIOTEKI -->
+<button class="settings-item" id="btn-backup-settings">
+    <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+    <span class="text">Przypomnij o backupie</span>
+    <svg class="chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+</button>
                             <button class="settings-item" id="btn-custom-add">
                                 <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 <span class="text">Dodaj tytuł ręcznie</span>
@@ -210,6 +219,15 @@
     <div id="actorModalContainer"></div>
     <div id="customAlertContainer"></div>
     <div id="trailerModalContainer"></div>
+
+                    
+            <button id="fab-randomize" class="fab-randomizer" aria-label="Wylosuj film lub serial" title="Wylosuj co obejrzeć">
+                <svg viewBox="0 0 24 24"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg>
+            </button>
+        <!-- Przycisk powrotu na górę -->
+    <button id="scrollToTopBtn" class="scroll-to-top" aria-label="Wróć na górę">
+        <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>
+    </button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <!-- Podpięcie zewnętrznego pliku JS -->
