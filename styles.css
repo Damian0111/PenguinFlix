@@ -167,12 +167,40 @@ ul { padding: 0; margin: 0; list-style: none; }
 .discover-poster-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .discover-item-title { font-size: 0.9rem; font-weight: 600; text-align: center; line-height: 1.3; color: var(--text-color); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
 
-.fab-randomizer { position: fixed; bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px); right: 16px; width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-color), #ff4b2b); border: none; box-shadow: 0 6px 16px rgba(229, 9, 20, 0.4); cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 1100; transition: transform 0.2s, box-shadow 0.2s, filter 0.2s; }
-.fab-randomizer.visible { display: flex; animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+/* ==========================================
+   KOSTKA LOSOWANIA (Zakładka Odkrywaj)
+========================================== */
+.fab-randomizer { 
+    position: fixed !important; /* To słowo "fixed" sprawia, że pływa nad ekranem */
+    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px) !important; 
+    right: 16px !important; 
+    width: 60px; 
+    height: 60px; 
+    border-radius: 50%; 
+    background: linear-gradient(135deg, var(--primary-color), #ff4b2b); 
+    border: none; 
+    box-shadow: 0 6px 16px rgba(229, 9, 20, 0.4); 
+    cursor: pointer; 
+    display: none; 
+    align-items: center; 
+    justify-content: center; 
+    z-index: 1100; /* Z-index musi być wyższy niż reszta strony */
+    transition: transform 0.2s, box-shadow 0.2s, filter 0.2s; 
+}
+
+.fab-randomizer.visible { 
+    display: flex !important; 
+    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+}
+
 .fab-randomizer:active { transform: scale(0.9); }
 .fab-randomizer svg { width: 28px; height: 28px; fill: white; }
 .fab-randomizer.rolling svg { animation: rollDice 0.6s ease-in-out; }
-@keyframes rollDice { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(180deg) scale(1.3); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes rollDice { 
+    0% { transform: rotate(0deg) scale(1); } 
+    50% { transform: rotate(180deg) scale(1.3); } 
+    100% { transform: rotate(360deg) scale(1); } 
+}
 
 .profile-header { text-align: center; margin-bottom: 24px; margin-top: 16px; width: 100%; box-sizing: border-box; }
 .profile-header .avatar-icon { width: 80px; height: 80px; fill: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 15%, transparent); border-radius: 50%; padding: 16px; margin: 0 auto 12px;}
@@ -654,6 +682,87 @@ body.modal-active .bottom-nav {
     content-visibility: auto; 
     contain-intrinsic-size: 114px; /* Przeglądarka wie ile miejsca zajmie element, zanim go narysuje! */
 }
+/* ==========================================
+   EFEKT WOW: PULL TO REFRESH
+========================================== */
+#ptr-container { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-start; z-index: 995; pointer-events: none; transform: translateY(-50px); transition: transform 0.2s ease-out; }
+#ptr-container.refreshing { transform: translateY(calc(var(--header-height) + var(--safe-top) + 20px)) !important; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+#ptr-spinner { width: 32px; height: 32px; fill: var(--primary-color); background: var(--card-color); border-radius: 50%; padding: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid var(--border-color); }
+#ptr-container.refreshing #ptr-spinner { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* ==========================================
+   EFEKT WOW: CROSS-FADE ZAKŁADEK
+========================================== */
+@keyframes tabFadeIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.main-tab-content.active { animation: tabFadeIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+/* ==========================================
+   PRZYCISK "WRÓĆ NA GÓRĘ" (Premium)
+========================================== */
+.scroll-to-top {
+    position: fixed;
+    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px);
+    right: 16px; /* Przeniesione na prawo! */
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--card-color);
+    color: var(--text-color);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 900;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    /* Animacja pojawiania się */
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8) translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+}
+
+/* Kiedy wyświetli się w zakładce Odkrywaj, ucieknie nad kostkę losowania */
+/* Ukrywamy strzałkę całkowicie na zakładkach Odkrywaj i Profil */
+body[data-active-tab="discover"] .scroll-to-top,
+body[data-active-tab="profile"] .scroll-to-top {
+    display: none !important;
+}
+.scroll-to-top.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1) translateY(0);
+}
+
+.scroll-to-top:hover {
+    background: color-mix(in srgb, var(--bg-color) 40%, var(--card-color));
+}
+
+.scroll-to-top:active {
+    transform: scale(0.9);
+}
+
+/* Lżejsza, ładniejsza strzałka */
+.scroll-to-top svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ==========================================
+   Przypomnienie o backupie(SMART BACKUP)
+========================================== */
+.smart-backup-toast { position: fixed; top: max(env(safe-area-inset-top, 16px), 16px); left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; padding: 14px 20px; border-radius: var(--radius-lg); z-index: 10000; display: flex; align-items: center; gap: 12px; box-shadow: 0 12px 32px rgba(59, 130, 246, 0.4); width: 90%; max-width: 400px; animation: slideDownToast 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.smart-backup-toast button { background: white; color: #1e3a8a; border: none; padding: 6px 12px; border-radius: var(--radius-pill); font-weight: bold; font-size: 0.8rem; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.smart-backup-close { background: transparent !important; color: rgba(255,255,255,0.7) !important; padding: 4px !important; }
 @media(max-width: 400px) { .config-input-group { flex-direction: column; } }
 .config-input { flex-grow: 1; padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color)); color: var(--text-color); font-size: 1rem; outline: none; transition: border-color 0.2s; min-width: 0; width: 100%; box-sizing: border-box;}
 .config-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 15%, transparent); }
