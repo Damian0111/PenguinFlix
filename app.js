@@ -1200,18 +1200,9 @@ function getModalHeaderHTML(item, isAdded) {
     const bgFilter = item.backdrop ? '' : 'filter: blur(20px) brightness(0.5); transform: scale(1.1);';
     let rTime = ''; if (item.type === 'movie' && item.runtime) rTime = ` • ${formatRuntime(item.runtime)}`;
     let sBadge = item.type === 'tv' ? getStatusBadge(item.status) : '';
-    
-    // Stary przycisk tagów (zostawiamy bez zmian)
     let addTagBtnHTML = isAdded ? `<button id="modal-manage-tags-btn" class="hero-fav-btn" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>` : '';
 
-    // NOWOŚĆ: Przycisk udostępniania wpinamy w to samo miejsce!
-    let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udostępnij" data-title="${escapeHTML(item.title)}" data-type="${item.type}" data-id="${item.id}">${ICONS.share}</button>`;
-
-    return `<div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modal-hero-header"><div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div><div class="hero-gradient"></div><div class="hero-content">
-        <div class="hero-poster-wrapper">
-            <img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" fetchpriority="high" decoding="sync" onerror="this.src='${POSTER_PLACEHOLDER}';">
-        </div>
-        <div class="hero-text"><div class="hero-title-row"><h2 class="hero-title">${escapeHTML(item.title)}</h2><div class="hero-actions-container" style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;"><div id="hero-fav-container"></div>${addTagBtnHTML}${shareBtnHTML}</div></div><div class="hero-meta">${item.year}${rTime}${sBadge}</div><div id="trailer-section-container"></div></div></div></div>`;
+    return `<div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modal-hero-header"><div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div><div class="hero-gradient"></div><div class="hero-content"><div class="hero-poster-wrapper"><img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" fetchpriority="high" decoding="sync" onerror="this.src='${POSTER_PLACEHOLDER}';"></div><div class="hero-text"><div class="hero-title-row"><h2 class="hero-title">${escapeHTML(item.title)}</h2><div class="hero-actions-container" style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;"><div id="hero-fav-container"></div>${addTagBtnHTML}</div></div><div class="hero-meta">${item.year}${rTime}${sBadge}</div><div id="trailer-section-container"></div></div></div></div>`;
 }
 
 function renderProvidersHTML(providers) {
@@ -1235,7 +1226,6 @@ function renderReviewsHTML(reviews) {
     }).join('');
     return `<div class="reviews-section"><h3>Opinie społeczności</h3><div class="reviews-scroller">${cards}</div></div>`;
 }
-
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
     const dModal = document.getElementById('detailsModalContainer');
@@ -1254,12 +1244,11 @@ async function openPreviewModal(id, type) {
 
     let fHTML = isAlreadyAdded ? `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>` : canWatch ? `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>` : `<div class="modal-sticky-footer"><button id="previewAddToWatchBtn" class="modal-btn primary" style="width: 100%;">Dodaj do Obejrzenia</button></div>`;
     const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
+let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udostępnij">${ICONS.share}</button>`;
+    let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
+    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}${shareBtnHTML}</div>`;
 
-    let tmdbRatingHTML = item.tmdbRating && item.tmdbRating > 0 ? `<div class="tmdb-rating-wrapper"><svg class="tmdb-rating-star" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info"><div class="tmdb-rating-score">${item.tmdbRating} <span class="max-score">/ 10</span></div><div class="tmdb-rating-label">Ocena TMDb</div></div></div>` : '';
-
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${tmdbRatingHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
-
-    
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay'); 
     const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); };
@@ -1283,10 +1272,11 @@ async function openPreviewModal(id, type) {
 
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openPreviewModal(id, type)));
-     const shareBtn = modal.querySelector('#modal-share-btn');
+
+    const shareBtn = modal.querySelector('#modal-share-btn');
     if(shareBtn) {
-        shareBtn.addEventListener('click', (e) => {
-            handleNativeShare(e.currentTarget.dataset.title, e.currentTarget.dataset.type, e.currentTarget.dataset.id);
+        shareBtn.addEventListener('click', () => {
+            handleNativeShare(item.title, item.poster, item.year, item.tmdbRating, item.overview);
         });
     }
 
@@ -1294,7 +1284,7 @@ async function openPreviewModal(id, type) {
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
     getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
-    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs); });
+    if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs); });
 
     if (!isAlreadyAdded) {
         const wBtn = document.getElementById('previewAddToWatchBtn'); const wdBtn = document.getElementById('previewAddToWatchedBtn');
@@ -1357,20 +1347,20 @@ async function openDetailsModal(id, type) {
         }).join('');
         rewatchHTML = `<div class="rewatch-section"><div class="rewatch-accordion-header"><h3 class="rewatch-accordion-title"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Historia seansów<span class="rewatch-badge">${item.watchDates.length}</span></h3><svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></div><div class="rewatch-accordion-content"><div class="rewatch-list">${datesList}<button id="add-rewatch-btn" class="rewatch-add-btn"><svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Obejrzano dzisiaj</button></div></div></div>`;
     }
+let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udostępnij">${ICONS.share}</button>`;
+    let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
+    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}${shareBtnHTML}</div>`;
 
-    let tmdbRatingHTML = item.tmdbRating && item.tmdbRating > 0 ? `<div class="tmdb-rating-wrapper"><svg class="tmdb-rating-star" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info"><div class="tmdb-rating-score">${item.tmdbRating} <span class="max-score">/ 10</span></div><div class="tmdb-rating-label">Ocena TMDb</div></div></div>` : '';
-
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${tmdbRatingHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
-
-   
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
-     const shareBtn = modal.querySelector('#modal-share-btn');
+
+    const shareBtn = modal.querySelector('#modal-share-btn');
     if(shareBtn) {
-        shareBtn.addEventListener('click', (e) => {
-            handleNativeShare(e.currentTarget.dataset.title, e.currentTarget.dataset.type, e.currentTarget.dataset.id);
+        shareBtn.addEventListener('click', () => {
+            handleNativeShare(item.title, item.poster, item.year, item.tmdbRating, item.overview);
         });
     }
 
@@ -1602,6 +1592,103 @@ function setupInteractiveStars(item) {
     updUI(cr);
 }
 
+// --- NATYWNE UDOSTĘPNIANIE (GENERATOR INFOGRAFIKI PREMIUM) ---
+async function handleNativeShare(title, posterUrl, year, rating, overview) {
+    triggerHaptic('medium');
+    showCustomAlert('Generowanie...', 'Tworzę infografikę...', 'info');
+
+    try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const canvasWidth = 1080;
+        
+        const wrapText = (context, text, maxWidth) => {
+            const words = String(text).split(' '); let lines = []; let currentLine = words[0] || '';
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i]; const width = context.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
+            }
+            lines.push(currentLine); return lines;
+        };
+
+        const roundRect = (ctx, x, y, width, height, radius) => {
+            ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.lineTo(x + width - radius, y); ctx.quadraticCurveTo(x + width, y, x + width, y + radius); ctx.lineTo(x + width, y + height - radius); ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height); ctx.lineTo(x + radius, y + height); ctx.quadraticCurveTo(x, y + height, x, y + height - radius); ctx.lineTo(x, y + radius); ctx.quadraticCurveTo(x, y, x + radius, y); ctx.closePath();
+        };
+
+        const padding = 60; const posterWidth = 320; const posterHeight = 480; const textX = padding + posterWidth + 50; const maxTextWidth = canvasWidth - textX - padding;
+
+        ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        const safeTitle = title ? String(title) : "Tytuł nieznany";
+        const titleLines = wrapText(ctx, safeTitle, maxTextWidth); const titleHeight = titleLines.length * 76;
+        
+        ctx.font = '28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        const cleanOverview = (!overview || overview === "null" || overview === "") ? "Brak opisu dla tego tytułu." : String(overview);
+        const overviewLines = wrapText(ctx, cleanOverview, maxTextWidth); const overviewHeight = overviewLines.length * 40;
+
+        const calculatedTextHeight = titleHeight + 40 + 50 + 40 + overviewHeight;
+        const canvasHeight = Math.max(padding + posterHeight + padding, padding + calculatedTextHeight + padding);
+        canvas.height = canvasHeight; canvas.width = canvasWidth;
+
+        let hasImage = false; const img = new Image();
+        if (posterUrl && posterUrl !== POSTER_PLACEHOLDER) {
+            img.crossOrigin = "anonymous";
+            img.src = posterUrl.replace('w500', 'w780') + '?t=' + new Date().getTime(); 
+            await new Promise((resolve) => { img.onload = () => { hasImage = true; resolve(); }; img.onerror = () => { resolve(); }; });
+        }
+
+        if (hasImage) {
+            ctx.filter = 'blur(60px) saturate(1.5)';
+            const scale = Math.max(canvasWidth / img.width, canvasHeight / img.height);
+            const x = (canvasWidth / 2) - (img.width / 2) * scale; const y = (canvasHeight / 2) - (img.height / 2) * scale;
+            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+            ctx.filter = 'none'; 
+            const grd = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+            grd.addColorStop(0, 'rgba(16, 17, 20, 0.75)'); grd.addColorStop(1, 'rgba(16, 17, 20, 0.95)');
+            ctx.fillStyle = grd; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        } else { ctx.fillStyle = '#101114'; ctx.fillRect(0, 0, canvasWidth, canvasHeight); }
+
+        if (hasImage) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)'; ctx.shadowBlur = 30; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 15;
+            ctx.save(); roundRect(ctx, padding, padding, posterWidth, posterHeight, 20); ctx.fill(); ctx.clip();
+            ctx.shadowColor = 'transparent'; ctx.drawImage(img, padding, padding, posterWidth, posterHeight); ctx.restore();
+        }
+
+        let drawY = padding + 60;
+        ctx.fillStyle = '#FFFFFF'; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
+        ctx.font = '900 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        titleLines.forEach(line => { ctx.fillText(line, textX, drawY); drawY += 76; });
+        ctx.shadowColor = 'transparent'; drawY += 10;
+
+        const drawBadge = (text, startX, startY, bgColor, textColor) => {
+            ctx.font = 'bold 22px -apple-system, sans-serif'; const textWidth = ctx.measureText(text).width;
+            ctx.fillStyle = bgColor; roundRect(ctx, startX, startY, textWidth + 30, 44, 22); ctx.fill();
+            ctx.fillStyle = textColor; ctx.fillText(text, startX + 15, startY + 31); return startX + textWidth + 45; 
+        };
+
+        let badgeX = textX;
+        if (year && year !== 'null') badgeX = drawBadge(year, badgeX, drawY, 'rgba(255, 255, 255, 0.15)', '#FFFFFF');
+        if (rating && rating !== 'null') drawBadge(`⭐ TMDB: ${rating}`, badgeX, drawY, 'rgba(245, 197, 24, 0.2)', '#F5C518');
+
+        drawY += 80;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.font = '28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        overviewLines.forEach(line => { ctx.fillText(line, textX, drawY); drawY += 42; });
+
+        canvas.toBlob(async (blob) => {
+            const file = new File([blob], `${safeTitle.replace(/[^a-z0-9]/gi, '_')}.jpg`, { type: 'image/jpeg' });
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file], title: safeTitle, text: `Sprawdź to! 🍿` }); } 
+                catch (e) { if (e.name !== 'AbortError') showCustomAlert('Błąd', 'Udostępnianie anulowane.', 'error'); }
+            } else {
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+                showCustomAlert('Gotowe!', 'Karta filmu pobrana na urządzenie.', 'success');
+            }
+        }, 'image/jpeg', 0.82);
+
+    } catch (err) { 
+        console.error(err); 
+        showCustomAlert('Błąd', 'Wystąpił problem przy generowaniu karty.', 'error'); 
+    }
+}
 // ==========================================
 // 12. ZARZĄDZANIE DANYMI I SYNCHRONIZACJA
 // ==========================================
@@ -1708,35 +1795,8 @@ async function refreshStaleSeries() {
     await checkAndRefreshList('seriesToWatch');
     if (needsSave) { await saveData(); const activeList = getActiveListId(); if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true); }
 }
-// --- NATYWNE UDOSTĘPNIANIE (WEB SHARE API) ---
-function handleNativeShare(title, type, id) {
-    triggerHaptic('medium');
-    
-    const isMovie = type === 'movie';
-    const typeLabel = isMovie ? 'film' : 'serial';
-    const shareUrl = `https://www.themoviedb.org/${isMovie ? 'movie' : 'tv'}/${id}`;
-    
-    const shareData = {
-        title: `PenguinFlix Poleca`,
-        text: `Musisz sprawdzić ten ${typeLabel}: ${title}! 🐧🍿`,
-        url: shareUrl
-    };
+// --- NATYWNE UDOSTĘPNIANIE (GENERATOR OBRAZKÓW CANVAS) ---
 
-    // Sprawdzamy, czy urządzenie wspiera natywne, piękne okno udostępniania
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-        navigator.share(shareData).catch((e) => {
-            // Ignorujemy błąd, jeśli użytkownik kliknął Share i się rozmyślił (anulował)
-            if (e.name !== 'AbortError') console.error('Błąd udostępniania:', e);
-        });
-    } else {
-        // Fallback dla komputerów / starszych przeglądarek: Kopiujemy link do schowka
-        navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`).then(() => {
-            showCustomAlert('Skopiowano', 'Link do tytułu skopiowany do schowka!', 'success');
-        }).catch(() => {
-            showCustomAlert('Błąd', 'Twoje urządzenie nie wspiera udostępniania.', 'error');
-        });
-    }
-}
 
 // ==========================================
 // 13. PWA (Service Worker) z AUTO-UPDATE
