@@ -26,7 +26,8 @@ const ICONS = {
     grid: `<svg viewBox="0 0 24 24"><path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/></svg>`,
     star: `<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`,
     delete: `<svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`,
-    close: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+    close: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+    share: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>`,
 };
 
 // ==========================================
@@ -1199,9 +1200,18 @@ function getModalHeaderHTML(item, isAdded) {
     const bgFilter = item.backdrop ? '' : 'filter: blur(20px) brightness(0.5); transform: scale(1.1);';
     let rTime = ''; if (item.type === 'movie' && item.runtime) rTime = ` • ${formatRuntime(item.runtime)}`;
     let sBadge = item.type === 'tv' ? getStatusBadge(item.status) : '';
+    
+    // Stary przycisk tagów (zostawiamy bez zmian)
     let addTagBtnHTML = isAdded ? `<button id="modal-manage-tags-btn" class="hero-fav-btn" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>` : '';
 
-    return `<div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modal-hero-header"><div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div><div class="hero-gradient"></div><div class="hero-content"><img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" fetchpriority="high" decoding="sync" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="hero-text"><div class="hero-title-row"><h2 class="hero-title">${escapeHTML(item.title)}</h2><div class="hero-actions-container" style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;"><div id="hero-fav-container"></div>${addTagBtnHTML}</div></div><div class="hero-meta">${item.year}${rTime}${sBadge}</div><div id="trailer-section-container"></div></div></div></div>`;
+    // NOWOŚĆ: Przycisk udostępniania wpinamy w to samo miejsce!
+    let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udostępnij" data-title="${escapeHTML(item.title)}" data-type="${item.type}" data-id="${item.id}">${ICONS.share}</button>`;
+
+    return `<div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modal-hero-header"><div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div><div class="hero-gradient"></div><div class="hero-content">
+        <div class="hero-poster-wrapper">
+            <img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" fetchpriority="high" decoding="sync" onerror="this.src='${POSTER_PLACEHOLDER}';">
+        </div>
+        <div class="hero-text"><div class="hero-title-row"><h2 class="hero-title">${escapeHTML(item.title)}</h2><div class="hero-actions-container" style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;"><div id="hero-fav-container"></div>${addTagBtnHTML}${shareBtnHTML}</div></div><div class="hero-meta">${item.year}${rTime}${sBadge}</div><div id="trailer-section-container"></div></div></div></div>`;
 }
 
 function renderProvidersHTML(providers) {
@@ -1273,6 +1283,12 @@ async function openPreviewModal(id, type) {
 
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openPreviewModal(id, type)));
+     const shareBtn = modal.querySelector('#modal-share-btn');
+    if(shareBtn) {
+        shareBtn.addEventListener('click', (e) => {
+            handleNativeShare(e.currentTarget.dataset.title, e.currentTarget.dataset.type, e.currentTarget.dataset.id);
+        });
+    }
 
     getWatchProviders(id, type).then(p => { const c = document.getElementById('providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
@@ -1351,6 +1367,12 @@ async function openDetailsModal(id, type) {
     const modal = dModal.querySelector('.modal-overlay');
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
+     const shareBtn = modal.querySelector('#modal-share-btn');
+    if(shareBtn) {
+        shareBtn.addEventListener('click', (e) => {
+            handleNativeShare(e.currentTarget.dataset.title, e.currentTarget.dataset.type, e.currentTarget.dataset.id);
+        });
+    }
 
     if (isWatched) { const rTx = document.getElementById('reviewText'); if (rTx) rTx.value = item.review || ''; }
     const fC = modal.querySelector('#hero-fav-container');
@@ -1685,6 +1707,35 @@ async function refreshStaleSeries() {
     };
     await checkAndRefreshList('seriesToWatch');
     if (needsSave) { await saveData(); const activeList = getActiveListId(); if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true); }
+}
+// --- NATYWNE UDOSTĘPNIANIE (WEB SHARE API) ---
+function handleNativeShare(title, type, id) {
+    triggerHaptic('medium');
+    
+    const isMovie = type === 'movie';
+    const typeLabel = isMovie ? 'film' : 'serial';
+    const shareUrl = `https://www.themoviedb.org/${isMovie ? 'movie' : 'tv'}/${id}`;
+    
+    const shareData = {
+        title: `PenguinFlix Poleca`,
+        text: `Musisz sprawdzić ten ${typeLabel}: ${title}! 🐧🍿`,
+        url: shareUrl
+    };
+
+    // Sprawdzamy, czy urządzenie wspiera natywne, piękne okno udostępniania
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        navigator.share(shareData).catch((e) => {
+            // Ignorujemy błąd, jeśli użytkownik kliknął Share i się rozmyślił (anulował)
+            if (e.name !== 'AbortError') console.error('Błąd udostępniania:', e);
+        });
+    } else {
+        // Fallback dla komputerów / starszych przeglądarek: Kopiujemy link do schowka
+        navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`).then(() => {
+            showCustomAlert('Skopiowano', 'Link do tytułu skopiowany do schowka!', 'success');
+        }).catch(() => {
+            showCustomAlert('Błąd', 'Twoje urządzenie nie wspiera udostępniania.', 'error');
+        });
+    }
 }
 
 // ==========================================
