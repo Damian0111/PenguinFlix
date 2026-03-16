@@ -313,6 +313,9 @@ body[data-active-tab="discover"] .scroll-to-top, body[data-active-tab="profile"]
     .modern-modal-wrapper { border-radius: 24px 24px 0 0; margin-top: auto; max-height: 94vh; animation: slideUpSheet 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); border-bottom: none; }
     .modal-hero-header { height: 250px; }
     .modal-drag-handle { display: block !important; }
+    /* Nowa linijka - ukrywa krzyżyk na telefonach */
+    .modal-top-close-btn { display: none !important; }
+     .modal-top-close-btn, .close-reviews-btn { display: none !important; }
 }
 
 .modal-drag-handle { display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 40px; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.75); z-index: 999; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
@@ -593,11 +596,11 @@ body[data-active-tab="discover"] .scroll-to-top, body[data-active-tab="profile"]
 .add-tag-input { font-size: 0.95rem; padding: 10px 0; flex-grow: 1; min-width: 0; width: 100%; border: none; background: transparent; color: var(--text-color); outline: none; }
 .add-tag-btn { padding: 10px 15px; border-radius: 12px; font-size: 0.88rem; font-weight: 800; background: linear-gradient(135deg, var(--info-color), #60a5fa); color: white; border: none; cursor: pointer; flex-shrink: 0; white-space: nowrap; transition: transform 0.2s; }
 .add-tag-btn:active { transform: scale(0.95); }
-.existing-tags-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; justify-content: flex-start; max-height: 170px; overflow-y: auto; padding-right: 4px; }
-.existing-tag-wrap { display: inline-flex; align-items: stretch; border-radius: 14px; overflow: hidden; border: 1px solid var(--border-color); background: var(--card-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.existing-tag-btn { padding: 8px 12px; font-size: 0.85rem; font-weight: 600; color: var(--text-color); background: transparent; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.existing-tags-group { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 170px; overflow-y: auto; padding-right: 4px; }
+.existing-tag-wrap { display: flex; width: 100%; align-items: stretch; border-radius: 14px; overflow: hidden; border: 1px solid var(--border-color); background: var(--card-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-shrink: 0; }
+.existing-tag-btn { flex-grow: 1; justify-content: flex-start; padding: 10px 14px; font-size: 0.9rem; font-weight: 600; color: var(--text-color); background: transparent; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
 .existing-tag-btn:hover { color: var(--info-color); }
-.delete-global-tag-btn { padding: 0 12px; border: none; border-left: 1px solid var(--border-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.delete-global-tag-btn { padding: 0 16px; border: none; border-left: 1px solid var(--border-color); background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .delete-global-tag-btn:hover { background: color-mix(in srgb, var(--primary-color) 25%, transparent); }
 
 .config-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; padding: 20px; text-align: center; animation: fadeIn 0.4s; }
@@ -626,13 +629,47 @@ body[data-active-tab="discover"] .scroll-to-top, body[data-active-tab="profile"]
 /* OPINIE UŻYTKOWNIKÓW */
 .reviews-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color); }
 .reviews-section h3 { margin-bottom: 16px; margin-top: 0; }
-.reviews-scroller { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
+.reviews-header-btn {
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    color: var(--primary-color);
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease-out;
+}
+.reviews-header-btn:hover {
+    background: var(--primary-color);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+.reviews-header-btn:active {
+    transform: scale(0.95);
+}
+.reviews-header-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.reviews-scroller { display: flex; align-items: stretch; gap: 16px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
 .reviews-scroller::-webkit-scrollbar { display: none; }
 .public-review-card { background: color-mix(in srgb, var(--bg-color) 40%, var(--card-color)); border: 1px solid var(--border-color); padding: 16px; border-radius: var(--radius-md); min-width: 260px; max-width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .public-review-header { display: flex; align-items: center; justify-content: space-between; }
 .public-review-author { font-weight: 700; font-size: 0.95rem; color: var(--text-color); display: flex; align-items: center; gap: 8px; }
 .public-review-rating { background: var(--warning-color); color: #000; padding: 2px 6px; border-radius: 6px; font-size: 0.75rem; font-weight: 900; }
-.public-review-content { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.public-review-content { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; transition: all 0.3s ease; }
+.public-review-content.expanded { -webkit-line-clamp: unset; }
 
 /* OCENA TMDB (MODAL) */
 .tmdb-rating-wrapper { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-left: 4px; }
