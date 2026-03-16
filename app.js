@@ -231,16 +231,32 @@ function setupEventListeners() {
             localStorage.setItem('hapticsEnabled', hapticsEnabled);
             if (hapticsEnabled) triggerHaptic('success');
         });
-            // --- NATYWNY GEST WSTECZ (ANDROID) ---
+               // --- NATYWNY GEST WSTECZ (ANDROID & iOS) ---
     window.addEventListener('popstate', (e) => {
-        // Gdy użytkownik klika "wstecz", sprawdzamy co jest otwarte (od najwyższej warstwy do najniższej)
         const trailer = document.getElementById('trailerModalContainer');
         const actor = document.getElementById('actorModalContainer');
         const details = document.getElementById('detailsModalContainer');
         
-        if (trailer.innerHTML !== '') { trailer.innerHTML = ''; return; }
-        if (actor.innerHTML !== '') { actor.innerHTML = ''; toggleAppDepthEffect(false); return; }
-        if (details.innerHTML !== '') { details.innerHTML = ''; toggleAppDepthEffect(false); return; }
+        // ZABEZPIECZENIE: Zamykamy modale, jeśli są otwarte
+        if (trailer && trailer.innerHTML !== '') { trailer.innerHTML = ''; return; }
+        if (actor && actor.innerHTML !== '') { actor.innerHTML = ''; toggleAppDepthEffect(false); return; }
+        if (details && details.innerHTML !== '') { details.innerHTML = ''; toggleAppDepthEffect(false); return; }
+
+        // OBSŁUGA ZAKŁADEK: Jeśli cofamy, wracamy do poprzednio zapisanej zakładki!
+        if (e.state) {
+            // Jeśli historia ma zapisany główny Tab (np. Filmy) - idziemy tam
+            if (e.state.mainTab && e.state.mainTab !== viewState.activeMainTab) {
+                // Wywołujemy przełączenie, ale cichcem blokujemy mu ponowne dopisanie historii, by nie zrobić pętli
+                switchMainTab(e.state.mainTab, true); 
+            }
+            // Jeśli ma zapisaną górną zakładkę (Obejrzane/Do Obejrzena) - idziemy tam
+            if (e.state.subTab) {
+                const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
+                if (e.state.subTab !== currentSubTab) {
+                    switchSubTab(e.state.subTab, true);
+                }
+            }
+        }
     });
             // --- OBSŁUGA PRZYCISKU "WRÓĆ NA GÓRĘ" ---
     const scrollToTopBtn = document.getElementById('scrollToTopBtn');
@@ -348,15 +364,21 @@ function setupEventListeners() {
         renderList(data[listId], listId);
     }, 250);
     document.querySelectorAll('.localSearchInput').forEach(input => input.addEventListener('input', handleLocalSearchDebounced));
-    document.querySelectorAll('.clearLocalSearch').forEach(btn => {
+      document.querySelectorAll('.clearLocalSearch').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const listId = getActiveListId(); if(!listId) return;
             viewState[listId].localSearch = '';
-            const input = e.target.previousElementSibling; input.value = ''; e.target.style.display = 'none';
-            renderList(data[listId], listId); input.focus();
+            
+            // Używamy e.currentTarget - to gwarantuje, że JS zawsze patrzy na przycisk (button), a nie na SVG w jego środku!
+            const button = e.currentTarget; 
+            const input = button.previousElementSibling; 
+            
+            input.value = ''; 
+            button.style.display = 'none';
+            renderList(data[listId], listId); 
+            input.focus();
         });
     });
-
        document.getElementById('searchResults').addEventListener('click', (e) => {
         const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
         if (quickAdd) { 
@@ -476,9 +498,16 @@ function getActiveListId() {
     return null;
 }
 
-function switchMainTab(tabId) {
+// DODANO: Drugi parametr isGoingBack (zapobiega nieskończonym pętlom)
+function switchMainTab(tabId, isGoingBack = false) {
+    // Jeśli to NIE jest cofanie strzałką Wstecz, dopisz nową kartę do historii!
+    if (!isGoingBack) {
+        history.pushState({ mainTab: tabId, subTab: (tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab) }, '');
+    }
+
     viewState.activeMainTab = tabId;
     document.body.setAttribute('data-active-tab', tabId);
+    
     document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.maintab === tabId));
     document.querySelectorAll('.main-tab-content').forEach(container => container.classList.toggle('active', container.id === `tab-${tabId}`));
 
@@ -516,10 +545,16 @@ function switchMainTab(tabId) {
     }
     saveData();
 }
+// DODANO: Parametr isGoingBack
+function switchSubTab(subTabId, isGoingBack = false) {
+    // Jeśli to NIE jest cofanie, dopiszmy zmianę pod-karty do pamięci telefonu!
+    if (!isGoingBack) {
+        history.pushState({ mainTab: viewState.activeMainTab, subTab: subTabId }, '');
+    }
 
-function switchSubTab(subTabId) {
     if (viewState.activeMainTab === 'movies') viewState.moviesSubTab = subTabId;
     else if (viewState.activeMainTab === 'series') viewState.seriesSubTab = subTabId;
+    
     document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.subtab === subTabId));
     const listId = getActiveListId(); const parentTab = document.getElementById(`tab-${viewState.activeMainTab}`);
     parentTab.querySelectorAll('.list-container').forEach(c => c.classList.remove('active'));
