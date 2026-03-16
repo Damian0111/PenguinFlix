@@ -1039,13 +1039,14 @@ async function getTrailerKey(id, type) {
 
 async function getReviews(id, type) {
     if (String(id).startsWith('custom_')) return [];
-    const cacheKey = `reviews_${type}_${id}`;
+    const cacheKey = `reviews_full_${type}_${id}`;
     const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
+    
     let data = await fetchFromTMDB(`/${type}/${id}/reviews`, { page: 1, language: 'pl-PL' });
     if (!data || !data.results || data.results.length === 0) {
         data = await fetchFromTMDB(`/${type}/${id}/reviews`, { page: 1, language: 'en-US' });
     }
-    const finalRes = data?.results ? data.results.slice(0, 5) : []; 
+    const finalRes = data?.results ? data.results : []; // Pobieramy wszystkie, nie tylko pierwsze 5!
     await db.setCache(cacheKey, finalRes); 
     return finalRes;
 }
@@ -1201,12 +1202,76 @@ function openManageTagsModal(item, onUpdate) {
 function showInfoModal() {
     toggleAppDepthEffect(true);
     const checkIcon = `<svg class="info-feature-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-    const infoHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 32px 24px;"><h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;"><svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg><span>PenguinFlix</span></h2><p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik filmów i seriali.</p><h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3><ul class="info-feature-list"><li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie własnych tagów i ręcznych wpisów.</span></li><li class="info-feature-item">${checkIcon} <span>Zaawansowane śledzenie odcinków (z datami premier.)</span></li><li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li><li class="info-feature-item">${checkIcon} <span>Filtrowanie po VOD (Netflix, HBO, Disney+ itp.)</span></li><li class="info-feature-item">${checkIcon} <span>Historia ponownych seansów.</span></li><li class="info-feature-item">${checkIcon} <span>Działanie offline jako PWA.</span></li></ul><div class="important-note"><strong>Ważne:</strong> Wszystkie dane są przechowywane <strong>wyłącznie na Twoim urządzeniu</strong>. Nie są wysyłane na żaden serwer.<p>Aby uniknąć utraty danych,<strong> regularnie twórz kopię zapasową</strong> w ustawieniach Profilu.</p></div><p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p></div></div></div>`;
-    const c = document.getElementById('customAlertContainer'); c.innerHTML = infoHTML;
-    const modal = c.querySelector('.modal-overlay'); const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
-    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
-}
+    
+    // Nowe, stylowe kafelki opisujące mocne strony aplikacji
+    const strengthsHTML = `
+        <h3 style="text-align: left; margin-top: 24px; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Mocne strony aplikacji</h3>
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+            <div style="background: color-mix(in srgb, var(--success-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--success-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;">
+                <svg style="width:24px; height:24px; fill:none; stroke:var(--success-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <div>
+                    <strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">100% Prywatności</strong>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Brak kont, logowania i śledzenia. Twoje dane są przypisane tylko do Twojego urządzenia i nie trafiają na żadne zewnętrzne serwery.</span>
+                </div>
+            </div>
+            <div style="background: color-mix(in srgb, var(--info-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;">
+                <svg style="width:24px; height:24px; fill:none; stroke:var(--info-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                <div>
+                    <strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Szybkość i niezależność</strong>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Działa jako PWA (możesz dodać do ekranu głównego). Ładuje się błyskawicznie i nie zużywa niepotrzebnie baterii w tle.</span>
+                </div>
+            </div>
+            <div style="background: color-mix(in srgb, var(--primary-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;">
+                <svg style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                <div>
+                    <strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Czysty interfejs</strong>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Bez reklam, bez abonamentu. Stworzone z myślą o prostocie.</span>
+                </div>
+            </div>
+        </div>
+    `;
 
+    // Reszta modala ułożona w czytelny sposób (za pomocą backticks ` `)
+    const infoHTML = `
+    <div class="modal-overlay">
+        <div class="modern-modal-wrapper">
+            <div class="modal-drag-handle"></div>
+            <button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button>
+            <div class="modern-modal-scroll" style="padding: 32px 24px;">
+                <h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;">
+                    <svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg>
+                    <span>PenguinFlix</span>
+                </h2>
+                <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik filmów i seriali.</p>
+                
+                <h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3>
+                <ul class="info-feature-list">
+                    <li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie tagów i ręcznych wpisów.</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Śledzenie odcinków (z kalendarzem premier).</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li>
+                    <li class="info-feature-item">${checkIcon} <span>Zaawansowane filtry VOD (Netflix, HBO itp.).</span></li>
+                </ul>
+
+                ${strengthsHTML}
+
+                <div class="important-note">
+                    <strong>Ważne:</strong> Z racji pełnej prywatności i braku chmury, aby uniknąć utraty danych (np. przy zmianie telefonu), <strong>regularnie twórz kopię zapasową</strong> w zakładce Profil!
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z API The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p>
+            </div>
+        </div>
+    </div>`;
+    
+    const c = document.getElementById('customAlertContainer'); 
+    c.innerHTML = infoHTML;
+    
+    const modal = c.querySelector('.modal-overlay'); 
+    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
+    
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
+    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
+    setupSwipeToClose(modal, close);
+}
 function showConfig() {
     document.getElementById('mainContent').style.display = 'none';
     const c = document.getElementById('configSection'); c.style.display = 'block';
@@ -1322,14 +1387,71 @@ function renderRecommendationsHTML(recs, type) {
     return `<div class="recommendations-section"><h3>Polecane tytuły</h3><div class="recommendations-scroller">${rHTML}</div></div>`;
 }
 
-function renderReviewsHTML(reviews) {
+function renderReviewsHTML(reviews, id, type) {
     if (!reviews || reviews.length === 0) return '';
-    const cards = reviews.map(r => {
+    
+    // Bierzemy maksymalnie 4 opinie do "podglądu" na suwaku
+    const previewReviews = reviews.slice(0, 4);
+    
+    const cards = previewReviews.map(r => {
         const ratingBadge = r.author_details?.rating ? `<span class="public-review-rating">★ ${r.author_details.rating}</span>` : '';
         const cleanContent = escapeHTML(r.content).replace(/\n/g, '<br>');
-        return `<div class="public-review-card"><div class="public-review-header"><div class="public-review-author">${escapeHTML(r.author)}</div>${ratingBadge}</div><div class="public-review-content">${cleanContent}</div></div>`;
+        return `<div class="public-review-card" onclick="openFullReviewsModal('${id}', '${type}')" style="cursor:pointer; transition:transform 0.2s;"><div class="public-review-header"><div class="public-review-author">${escapeHTML(r.author)}</div>${ratingBadge}</div><div class="public-review-content">${cleanContent}</div></div>`;
     }).join('');
-    return `<div class="reviews-section"><h3>Opinie społeczności</h3><div class="reviews-scroller">${cards}</div></div>`;
+
+    // Tworzymy elegancki nagłówek z przyciskiem po prawej stronie
+    return `
+    <div class="reviews-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0;">Opinie społeczności</h3>
+            <button class="reviews-header-btn" onclick="openFullReviewsModal('${id}', '${type}')">
+                Wszystkie (${reviews.length}) 
+                <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+        </div>
+        <div class="reviews-scroller">${cards}</div>
+    </div>`;
+}
+
+// Nowa funkcja 3: Tworzy duży modal z pełnymi tekstami
+async function openFullReviewsModal(id, type) {
+    const c = document.getElementById('actorModalContainer'); // Wykorzystujemy kontener aktorów, by nałożył się na wierzch!
+    c.innerHTML = `<div class="modal-overlay" style="z-index: 3000;"><div class="modern-modal-wrapper"><div class="modern-modal-scroll" style="padding: 40px; text-align:center; color:var(--text-secondary);">Ładowanie opinii...</div></div></div>`;
+
+    const reviews = await getReviews(id, type);
+    if (!reviews || reviews.length === 0) { c.innerHTML = ''; return; }
+
+    const listHTML = reviews.map(r => {
+        const ratingBadge = r.author_details?.rating ? `<span class="public-review-rating">★ ${r.author_details.rating}</span>` : '';
+        const cleanContent = escapeHTML(r.content).replace(/\n/g, '<br>');
+        return `<div style="background:var(--card-color); border:1px solid var(--border-color); padding:20px; border-radius:var(--radius-md); margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
+                <strong style="font-size:1.1rem;">${escapeHTML(r.author)}</strong>${ratingBadge}
+            </div>
+            <div style="font-size:0.95rem; color:var(--text-secondary); line-height:1.6;">${cleanContent}</div>
+        </div>`;
+    }).join('');
+
+    c.innerHTML = `
+    <div class="modal-overlay actor-modal-overlay" id="fullReviewsOverlay">
+        <div class="modern-modal-wrapper" style="padding:0;">
+            <div class="modal-drag-handle"></div>
+            <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; background:var(--bg-color); z-index:10;">
+                <h3 style="margin:0; font-size:1.2rem;">Opinie (${reviews.length})</h3>
+                <button class="icon-button close-reviews-btn" style="background:var(--card-color);">${ICONS.close}</button>
+            </div>
+            <div class="modern-modal-scroll" style="padding: 24px;">
+                ${listHTML}
+            </div>
+        </div>
+    </div>`;
+
+    const overlay = c.querySelector('#fullReviewsOverlay');
+    const close = () => { c.innerHTML = ''; }; // Zamyka tylko recenzje, nie rusza tła!
+    
+    overlay.addEventListener('click', e => { if(e.target === overlay) close(); });
+    c.querySelector('.close-reviews-btn').addEventListener('click', close);
+    setupSwipeToClose(overlay, close);
 }
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
@@ -1414,8 +1536,7 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
     getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
-    if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs); });
-
+if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
     if (!isAlreadyAdded) {
         const wBtn = document.getElementById('previewAddToWatchBtn'); const wdBtn = document.getElementById('previewAddToWatchedBtn');
         if (wBtn) wBtn.onclick = async () => { if (await addItemToList(id, type, 'toWatch')) close(); };
@@ -1465,7 +1586,7 @@ async function openDetailsModal(id, type) {
         else if (!isSeriesFinished(item)) {
             const aStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
             if(aStr) nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></div>`;
-            else nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">⏳ Jesteś na bieżąco! Brak daty.</div>`;
+            else nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">⏳ Jesteś na bieżąco! Nieznana data premiery.</div>`;
         }
     }
 
@@ -1557,8 +1678,7 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
         getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     }
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
-    if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs); });
-
+if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
     if (isToWatch) populateAndRenderSeriesSections(item, document.getElementById('seasons-container'));
 
     if (isWatched) {
@@ -1718,7 +1838,23 @@ async function openActorDetailsModal(actorId) {
     
     modal.addEventListener('click', e => {
         if (e.target === modal) close();
-        const kfItem = e.target.closest('.known-for-item'); if (kfItem && kfItem.dataset.id && kfItem.dataset.type) { openPreviewModal(kfItem.dataset.id, kfItem.dataset.type); return; }
+                const kfItem = e.target.closest('.known-for-item'); 
+        if (kfItem && kfItem.dataset.id && kfItem.dataset.type) { 
+            const rId = kfItem.dataset.id; 
+            const rType = kfItem.dataset.type;
+            
+            // 1. Zamykamy modala aktora (odpala się też cofnięcie historii)
+            close(); 
+            
+            // 2. Po krótkiej pauzie otwieramy nowy film
+            setTimeout(() => {
+                const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType);
+                if (isInLibrary) openDetailsModal(rId, rType); 
+                else openPreviewModal(rId, rType);
+            }, 50);
+            
+            return; 
+        }
         const h = e.target.closest('.filmography-item-header'); if(h) { const d = h.nextElementSibling; if(d && d.classList.contains('filmography-item-details')) { d.style.display = d.style.display === 'block' ? 'none' : 'block'; } }
         const add = e.target.closest('.add-filmography-item-btn'); if(add) addItemFromFilmography(add);
     });
