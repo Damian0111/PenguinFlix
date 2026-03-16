@@ -345,9 +345,12 @@ function setupEventListeners() {
         });
     });
 
-    document.getElementById('searchResults').addEventListener('click', (e) => {
+       document.getElementById('searchResults').addEventListener('click', (e) => {
         const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
-        if (quickAdd) handleQuickAddItem(quickAdd);
+        if (quickAdd) { 
+            e.stopPropagation(); // Blokada echa!
+            handleQuickAddItem(quickAdd); 
+        }
         else if (item && !item.classList.contains('show-all-results-btn')) { if (item.dataset.id && item.dataset.type) openPreviewModal(item.dataset.id, item.dataset.type); }
     });
 
@@ -707,11 +710,19 @@ async function handleQuickAddItem(button) {
 }
 
 async function addItemToList(id, type, list) {
-    const existing = Object.values(data).flat().find(i => String(i.id) === String(id) && i.type === type);
-    if (existing) { showCustomAlert('Już na liście', `Tytuł jest już w bibliotece.`, 'info'); return false; }
+    // Zamek nr 1: Sprawdzenie przed pobraniem danych z sieci
+    if (Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type)) { 
+        showCustomAlert('Już na liście', `Tytuł jest już w bibliotece.`, 'info'); 
+        return false; 
+    }
 
     const details = await getItemDetails(id, type);
     if (!details) { showCustomAlert('Błąd', 'Nie udało się pobrać danych.', 'error'); return false; }
+
+    // Zamek nr 2: Sprawdzenie PO pobraniu danych z sieci (Kluczowe naprawienie błędu klonowania przy wyścigu)
+    if (Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type)) { 
+        return false; 
+    }
 
     if (list === 'watched') {
         if (type === 'tv' && !isSeriesFinished(details)) { showCustomAlert('Uwaga', `Serial wciąż trwa. Dodaj do "Do obejrzenia".`, 'info'); return false; }
@@ -730,7 +741,8 @@ async function addItemToList(id, type, list) {
     data[targetList].unshift(details); await saveData();
     switchMainTab(type === 'movie' ? 'movies' : 'series'); switchSubTab(list);
     document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none';
-    showCustomAlert('Sukces!', `"${escapeHTML(details.title)}" dodano do listy.`, 'success'); return true;
+    showCustomAlert('Sukces!', `"${escapeHTML(details.title)}" dodano do listy.`, 'success'); 
+    return true;
 }
 
 // ==========================================
@@ -843,17 +855,33 @@ async function getItemDetails(id, type) {
         vodList = [...new Set(provs.map(p => p.provider_name))];
     }
 
+    // --- KULOODPORNY SYSTEM DAT PREMIER ---
     let finalReleaseDate = d.release_date || d.first_air_date || null;
+    
     if (type === 'movie' && d.release_dates && d.release_dates.results) {
+        const globalYear = finalReleaseDate ? parseInt(finalReleaseDate.substring(0, 4)) : 0;
         const plRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'PL');
         const usRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'US');
-        if (plRelease && plRelease.release_dates && plRelease.release_dates.length > 0) {
-            const plTheatrical = plRelease.release_dates.find(rd => rd.type === 3);
-            finalReleaseDate = plTheatrical ? plTheatrical.release_date.substring(0, 10) : plRelease.release_dates[0].release_date.substring(0, 10);
-        }
-        else if (usRelease && usRelease.release_dates && usRelease.release_dates.length > 0) {
-            const usTheatrical = usRelease.release_dates.find(rd => rd.type === 3);
-            finalReleaseDate = usTheatrical ? usTheatrical.release_date.substring(0, 10) : usRelease.release_dates[0].release_date.substring(0, 10);
+
+        // Funkcja szukająca NAJSTARSZEJ KINOWEJ premiery (type === 3)
+        const getTheatricalDate = (countryData) => {
+            if (!countryData || !countryData.release_dates) return null;
+            const theatricals = countryData.release_dates.filter(rd => rd.type === 3);
+            if (theatricals.length === 0) return null;
+            theatricals.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+            return theatricals[0].release_date.substring(0, 10);
+        };
+
+        // Bierzemy datę kinową PL (albo US, jeśli brak PL)
+        let localDate = getTheatricalDate(plRelease) || getTheatricalDate(usRelease);
+
+        if (localDate) {
+            const localYear = parseInt(localDate.substring(0, 4));
+            // ZŁOTA ZASADA: Używamy lokalnej daty TYLKO, jeśli różni się od światowej o max 1 rok!
+            // Jeśli różnica jest większa (np. 1997 vs 2012 = 15 lat), to wiemy, że to reedycja i to ignorujemy.
+            if (globalYear > 0 && Math.abs(localYear - globalYear) <= 1) {
+                finalReleaseDate = localDate;
+            }
         }
     }
 
@@ -881,7 +909,6 @@ async function getItemDetails(id, type) {
     } else if (type === 'movie') { item.runtime = d.runtime || null; }
     return item;
 }
-
 async function getCredits(id, type) {
     if (String(id).startsWith('custom_')) return [];
     const cacheKey = `credits_${type}_${id}`;
@@ -1191,8 +1218,11 @@ function showAllResultsModal() {
     modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
     modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
     setupSwipeToClose(modal, close);
-    
-    modal.querySelector('.all-results-list').addEventListener('click', (e) => { const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item'); if (addBtn) { handleQuickAddItem(addBtn); close(); } else if (item) { if (item.dataset.id) { openPreviewModal(item.dataset.id, item.dataset.type); close(); } } });
+        modal.querySelector('.all-results-list').addEventListener('click', (e) => { 
+        const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item'); 
+        if (addBtn) { e.stopPropagation(); handleQuickAddItem(addBtn); close(); } 
+        else if (item) { if (item.dataset.id) { openPreviewModal(item.dataset.id, item.dataset.type); close(); } } 
+    });
 }
 
 function getModalHeaderHTML(item, isAdded) {
