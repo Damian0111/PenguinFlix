@@ -32,13 +32,21 @@ html { scroll-behavior: smooth; color-scheme: light dark; height: 100%; backgrou
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif;
-    background-color: var(--bg-color); color: var(--text-color); margin: 0; min-height: 100vh;
+    background-color: var(--bg-color); 
+    color: var(--text-color); 
+    margin: 0; 
+    min-height: 100vh;
     padding-top: calc(var(--header-height) + var(--safe-top));
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom));
+    transform-origin: top center;
     transition: background-color var(--transition-speed), color var(--transition-speed), padding-top 0.3s ease-in-out;
-    overflow-x: hidden; overscroll-behavior-y: none;
-     transform-origin: top center;
-    transition: background-color var(--transition-speed), color var(--transition-speed), padding-top 0.3s ease-in-out;
+    
+    overflow-x: hidden; 
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    
+    /* ZŁOTA KULA NA CHROMIUM: Całkowicie wyłącza natywne reakcje na poziomy dotyk! */
+    touch-action: pan-y; 
 }
 
 body.header-hidden { padding-top: calc(16px + var(--safe-top)) !important; }
@@ -756,6 +764,18 @@ body[data-active-tab="profile"] .scroll-to-top {
     stroke-linecap: round;
     stroke-linejoin: round;
 }
+/* ==========================================
+   PINEZKOWANIE (PINING)
+========================================== */
+.grid-badge-pin { position: absolute; top: 6px; right: 6px; background: rgba(59, 130, 246, 0.9); backdrop-filter: blur(4px); padding: 5px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 6; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.grid-badge-pin svg { width: 14px; height: 14px; fill: white; }
+
+/* Przesuwamy kosz w lewo, jeśli na kafelku jest pinezka */
+.grid-item.is-pinned .grid-badge-delete { right: 38px; }
+
+/* Pinezka na liście pionowej */
+.list-badge-pin { display: inline-flex; align-items: center; gap: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 8px; vertical-align: middle; }
+.list-badge-pin svg { width: 12px; height: 12px; fill: currentColor; }
 
 /* ==========================================
    Przypomnienie o backupie(SMART BACKUP)
