@@ -28,6 +28,7 @@ const ICONS = {
     delete: `<svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`,
     close: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
     share: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>`,
+    pin: `<svg viewBox="0 0 24 24"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></svg>`,
 };
 
 // ==========================================
@@ -230,6 +231,17 @@ function setupEventListeners() {
             localStorage.setItem('hapticsEnabled', hapticsEnabled);
             if (hapticsEnabled) triggerHaptic('success');
         });
+            // --- NATYWNY GEST WSTECZ (ANDROID) ---
+    window.addEventListener('popstate', (e) => {
+        // Gdy użytkownik klika "wstecz", sprawdzamy co jest otwarte (od najwyższej warstwy do najniższej)
+        const trailer = document.getElementById('trailerModalContainer');
+        const actor = document.getElementById('actorModalContainer');
+        const details = document.getElementById('detailsModalContainer');
+        
+        if (trailer.innerHTML !== '') { trailer.innerHTML = ''; return; }
+        if (actor.innerHTML !== '') { actor.innerHTML = ''; toggleAppDepthEffect(false); return; }
+        if (details.innerHTML !== '') { details.innerHTML = ''; toggleAppDepthEffect(false); return; }
+    });
             // --- OBSŁUGA PRZYCISKU "WRÓĆ NA GÓRĘ" ---
     const scrollToTopBtn = document.getElementById('scrollToTopBtn');
     if (scrollToTopBtn) {
@@ -549,8 +561,23 @@ function renderList(originalItems, listId, preserveLimit = false) {
     if (state.filterByVod && state.filterByVod !== 'all') { const targetVod = state.filterByVod.toLowerCase(); itemsToRender = itemsToRender.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod))); }
 
     const [sortBy, direction] = state.sortBy.split('_');
-    if (sortBy === 'custom') { itemsToRender.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0)); }
-    else { itemsToRender.sort((a, b) => { let valA, valB; switch (sortBy) { case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA; default: return 0; } }); }
+    
+    // Sortowanie z potężnym priorytetem PINEZEK (isPinned)
+    itemsToRender.sort((a, b) => {
+        // Jeśli nie korzystamy z lokalnej wyszukiwarki, pinezki lecą na samą górę!
+        if (!state.localSearch) {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+        }
+
+        // Dopiero w obrębie przypiętych/nieprzypiętych sortujemy normalnie
+        let valA, valB; 
+        switch (sortBy) { 
+            case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
+            case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA; 
+            default: return 0; 
+        } 
+    });
 
     const limit = state.displayLimit || 30;
     const pagedItems = itemsToRender.slice(0, limit);
@@ -560,6 +587,11 @@ function renderList(originalItems, listId, preserveLimit = false) {
         let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
         const safeTitle = escapeHTML(item.title); const safeOverview = escapeHTML(item.overview);
         const listPosterSrc = item.poster ? item.poster.replace('w500', 'w300') : POSTER_PLACEHOLDER;
+        
+        // PINEZKA (HTML)
+        const pinClass = item.isPinned ? 'is-pinned' : '';
+        const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
+        const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
 
         if (isToWatchList) {
             if (!item.releaseDate || item.releaseDate === '') {
@@ -582,7 +614,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
             }
             let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
-            return `<li class="grid-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><div class="grid-title-fallback">${safeTitle}</div><img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}</li>`;
+            return `<li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><div class="grid-title-fallback">${safeTitle}</div><img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">${pinGridHTML}${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}</li>`;
         } else {
             let extraInfo = '';
             if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
@@ -597,7 +629,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 }
                 extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
             }
-            return `<li class="list-item ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span class="meta">${item.year}</span>${unreleasedBadgeList}<p class="overview">${safeOverview}</p>${extraInfo}</div><div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div></li>`;
+            return `<li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span class="meta">${item.year}${pinListHTML}</span>${unreleasedBadgeList}<p class="overview">${safeOverview}</p>${extraInfo}</div><div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div></li>`;
         }
     }).join('');
 
@@ -608,7 +640,6 @@ function renderList(originalItems, listId, preserveLimit = false) {
 
     let oldSentinel = container.querySelector('.infinite-scroll-sentinel');
     if (oldSentinel) oldSentinel.remove();
-    
     if (listIntersectionObserver) listIntersectionObserver.disconnect();
 
     if (itemsToRender.length > limit) {
@@ -616,23 +647,14 @@ function renderList(originalItems, listId, preserveLimit = false) {
         sentinel.className = 'infinite-scroll-sentinel';
         sentinel.style.cssText = 'height: 20px; width: 100%; margin-top: 10px;';
         container.appendChild(sentinel);
-
         listIntersectionObserver = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-                viewState[listId].displayLimit += 30;
-                renderList(data[listId], listId, true);
-            }
+            if (entries[0].isIntersecting) { viewState[listId].displayLimit += 30; renderList(data[listId], listId, true); }
         }, { rootMargin: "300px" });
-        
         listIntersectionObserver.observe(sentinel);
     }
-
-    if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
-    const isCustomSortActive = state.sortBy === 'custom_asc';
-    const isCustomSortableList = listId === 'moviesToWatch' || listId === 'seriesToWatch';
-    if (isCustomSortableList && isCustomSortActive && !state.localSearch) { initializeSortable(listId, ul, viewState.globalViewMode); }
+    
+    // Sortable usunięte na rzecz przypinania!
 }
-
 function initializeSortable(listId, listEl, viewMode) {
     if (!listEl || listEl.children.length < 2) return;
     sortableInstance = new Sortable(listEl, {
@@ -1032,7 +1054,6 @@ async function openSortModal() {
         { value: 'year_asc', label: 'Rok (najstarsze)', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>' }
     ];
     if (isWatched) { opts.push({ value: 'rating_desc', label: 'Ocena (najwyższa)', icon: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>' }, { value: 'rating_asc', label: 'Ocena (najniższa)', icon: '<path d="M12 17.75l-6.17 3.12 1.18-7.03L2 9.1l7.15-.61L12 2l2.85 6.49 7.15.61-5.01 4.74 1.18 7.03z"></path>' }); }
-    if (isCustom) opts.unshift({ value: 'custom_asc', label: 'Własna kolejność', icon: '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line>' });
 
     const optsHTML = opts.map(o => `<label class="modern-radio-row"><input type="radio" name="sort" value="${o.value}" ${state.sortBy === o.value ? 'checked' : ''}><svg class="icon" viewBox="0 0 24 24">${o.icon}</svg><span class="label-text">${o.label}</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>`).join('');
     const modal = document.getElementById('detailsModalContainer');
@@ -1042,8 +1063,9 @@ async function openSortModal() {
     setupSwipeToClose(modal.querySelector('.modal-overlay'), close);
     modal.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) close(); };
     modal.querySelector('.apply-btn').onclick = async () => { const sel = document.querySelector('input[name="sort"]:checked'); if (sel) state.sortBy = sel.value; await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close(); };
-    modal.querySelector('.reset-btn').onclick = async () => { state.sortBy = isCustom ? 'custom_asc' : 'dateAdded_desc'; await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close(); };
+    modal.querySelector('.reset-btn').onclick = async () => { state.sortBy = 'dateAdded_desc'; await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close(); };
 }
+
 function openBackupSettingsModal() {
     toggleAppDepthEffect(true);
     const currentFreq = localStorage.getItem('smartBackupFreq') || '30';
@@ -1230,11 +1252,29 @@ function getModalHeaderHTML(item, isAdded) {
     const bgFilter = item.backdrop ? '' : 'filter: blur(20px) brightness(0.5); transform: scale(1.1);';
     let rTime = ''; if (item.type === 'movie' && item.runtime) rTime = ` • ${formatRuntime(item.runtime)}`;
     let sBadge = item.type === 'tv' ? getStatusBadge(item.status) : '';
-    let addTagBtnHTML = isAdded ? `<button id="modal-manage-tags-btn" class="hero-fav-btn" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>` : '';
 
-    return `<div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modal-hero-header"><div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div><div class="hero-gradient"></div><div class="hero-content"><div class="hero-poster-wrapper"><img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" fetchpriority="high" decoding="sync" onerror="this.src='${POSTER_PLACEHOLDER}';"></div><div class="hero-text"><div class="hero-title-row"><h2 class="hero-title">${escapeHTML(item.title)}</h2><div class="hero-actions-container" style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;"><div id="hero-fav-container"></div>${addTagBtnHTML}</div></div><div class="hero-meta">${item.year}${rTime}${sBadge}</div><div id="trailer-section-container"></div></div></div></div>`;
+    return `<div class="modal-drag-handle"></div>
+    <button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button>
+    <div class="modal-hero-header">
+        <div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div>
+        <div class="hero-gradient"></div>
+        <div class="hero-content">
+            <div class="hero-poster-wrapper">
+                <img src="${item.poster || POSTER_PLACEHOLDER}" class="hero-poster-mini" fetchpriority="high" decoding="sync" onerror="this.src='${POSTER_PLACEHOLDER}';">
+            </div>
+            <div class="hero-text">
+                <div class="hero-title-row">
+                    <h2 class="hero-title">${escapeHTML(item.title)}</h2>
+                    <div class="hero-actions-container" style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;">
+                        <div id="hero-fav-container"></div>
+                    </div>
+                </div>
+                <div class="hero-meta">${item.year}${rTime}${sBadge}</div>
+                <div id="trailer-section-container"></div>
+            </div>
+        </div>
+    </div>`;
 }
-
 function renderProvidersHTML(providers) {
     if (!providers || providers.length === 0) return '';
     const lHTML = providers.map(p => `<img class="provider-logo" src="${IMAGE_BASE_URL.replace('w500','w92')}${p.logo_path}" alt="${escapeHTML(p.provider_name)}" title="${escapeHTML(p.provider_name)}">`).join('');
@@ -1258,6 +1298,8 @@ function renderReviewsHTML(reviews) {
 }
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
+    history.pushState({ modalOpen: true }, '');
+
     const dModal = document.getElementById('detailsModalContainer');
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
 
@@ -1274,14 +1316,22 @@ async function openPreviewModal(id, type) {
 
     let fHTML = isAlreadyAdded ? `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>` : canWatch ? `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>` : `<div class="modal-sticky-footer"><button id="previewAddToWatchBtn" class="modal-btn primary" style="width: 100%;">Dodaj do Obejrzenia</button></div>`;
     const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
-let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udostępnij">${ICONS.share}</button>`;
+
+    // --- PASEK AKCJI (OCENA I PRZYCISKI) ---
+    let addTagBtnHTML = isAlreadyAdded ? `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>` : '';
+    
+    // ZAAWANSOWANA PINEZKA (Dynamiczny wygląd)
+    let pinBtnHTML = isAlreadyAdded ? `<button id="modal-pin-btn" style="background:${localItem && localItem.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${localItem && localItem.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${localItem && localItem.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>` : '';
+    
+// NOWOŚĆ: Przycisk Share spójny z Tagami i Pinezką!
+let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
-    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}${shareBtnHTML}</div>`;
+    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay'); 
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); };
+    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); if(history.state && history.state.modalOpen) history.back(); };
     
     modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
@@ -1303,10 +1353,25 @@ let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udo
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openPreviewModal(id, type)));
 
+    const pinBtn = modal.querySelector('#modal-pin-btn');
+    if (pinBtn && localItem) {
+        pinBtn.addEventListener('click', async (e) => {
+            triggerHaptic('light');
+            localItem.isPinned = !localItem.isPinned;
+            e.currentTarget.style.background = localItem.isPinned ? 'var(--info-color)' : 'var(--card-color)';
+            e.currentTarget.style.borderColor = localItem.isPinned ? 'var(--info-color)' : 'var(--border-color)';
+            e.currentTarget.style.color = localItem.isPinned ? '#ffffff' : 'var(--text-secondary)';
+            await saveData();
+            const listId = getActiveListId();
+            if (listId) renderList(data[listId], listId, true);
+        });
+    }
+
     const shareBtn = modal.querySelector('#modal-share-btn');
     if(shareBtn) {
-        shareBtn.addEventListener('click', () => {
-            handleNativeShare(item.title, item.poster, item.year, item.tmdbRating, item.overview);
+        shareBtn.addEventListener('click', (e) => {
+            const btn = e.currentTarget;
+            handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
         });
     }
 
@@ -1325,7 +1390,10 @@ let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udo
 
 async function openDetailsModal(id, type) {
     toggleAppDepthEffect(true);
-    const { listName, item } = getListAndItem(id, type); if (!item) { toggleAppDepthEffect(false); return; }
+    history.pushState({ modalOpen: true }, '');
+
+    const { listName, item } = getListAndItem(id, type); 
+    if (!item) { toggleAppDepthEffect(false); return; }
 
     const dModal = document.getElementById('detailsModalContainer');
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
@@ -1377,20 +1445,43 @@ async function openDetailsModal(id, type) {
         }).join('');
         rewatchHTML = `<div class="rewatch-section"><div class="rewatch-accordion-header"><h3 class="rewatch-accordion-title"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Historia seansów<span class="rewatch-badge">${item.watchDates.length}</span></h3><svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></div><div class="rewatch-accordion-content"><div class="rewatch-list">${datesList}<button id="add-rewatch-btn" class="rewatch-add-btn"><svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Obejrzano dzisiaj</button></div></div></div>`;
     }
-let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udostępnij">${ICONS.share}</button>`;
+
+    let addTagBtnHTML = `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>`;
+    
+    // ZAAWANSOWANA PINEZKA (Dynamiczny wygląd)
+    let pinBtnHTML = `<button id="modal-pin-btn" style="background:${item.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${item.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${item.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
+    
+// NOWOŚĆ: Przycisk Share spójny z Tagami i Pinezką!
+let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
-    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}${shareBtnHTML}</div>`;
+    
+    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
+    
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
 
+    const pinBtn = modal.querySelector('#modal-pin-btn');
+    if (pinBtn) {
+        pinBtn.addEventListener('click', async (e) => {
+            triggerHaptic('light');
+            item.isPinned = !item.isPinned;
+            e.currentTarget.style.background = item.isPinned ? 'var(--info-color)' : 'var(--card-color)';
+            e.currentTarget.style.borderColor = item.isPinned ? 'var(--info-color)' : 'var(--border-color)';
+            e.currentTarget.style.color = item.isPinned ? '#ffffff' : 'var(--text-secondary)';
+            await saveData();
+            renderList(data[listName], listName, true);
+        });
+    }
+
     const shareBtn = modal.querySelector('#modal-share-btn');
     if(shareBtn) {
-        shareBtn.addEventListener('click', () => {
-            handleNativeShare(item.title, item.poster, item.year, item.tmdbRating, item.overview);
+        shareBtn.addEventListener('click', (e) => {
+            const btn = e.currentTarget;
+            handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
         });
     }
 
@@ -1401,7 +1492,7 @@ let shareBtnHTML = `<button id="modal-share-btn" class="hero-fav-btn" title="Udo
         fC.querySelector('#modal-favorite-btn').addEventListener('click', async (e) => { item.isFavorite = !item.isFavorite; e.currentTarget.classList.toggle('active', item.isFavorite); await saveData(); renderList(data[listName], listName, true); });
     }
 
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); };
+    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if(history.state && history.state.modalOpen) history.back(); };
     
     modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
@@ -1554,6 +1645,7 @@ function openCustomAddModal() {
 }
 
 async function openActorDetailsModal(actorId) {
+    history.pushState({ modalOpen: true }, '');
     toggleAppDepthEffect(true);
     const c = document.getElementById('actorModalContainer');
     c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
@@ -1586,7 +1678,7 @@ async function openActorDetailsModal(actorId) {
     }
 
     const modal = c.querySelector('.modal-overlay'); 
-    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); }; 
+    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); if(history.state && history.state.modalOpen) history.back(); };
     setupSwipeToClose(modal, close);
     
     modal.addEventListener('click', e => {
