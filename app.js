@@ -110,7 +110,7 @@ function triggerHaptic(type = 'light') {
         else if (type === 'heavy') navigator.vibrate(50);
         else if (type === 'success') navigator.vibrate([20, 50, 30]);
         else if (type === 'error') navigator.vibrate([50, 50, 50]);
-    } catch(e) {}
+    } catch (e) { }
 }
 
 const applyTheme = () => {
@@ -135,15 +135,14 @@ const toggleAppDepthEffect = (isActive) => {
         document.body.classList.add('modal-active');
     } else {
         setTimeout(() => {
-            const isAnyModalOpen = document.getElementById('detailsModalContainer').innerHTML !== '' || 
-                                   document.getElementById('actorModalContainer').innerHTML !== '';
+            const isAnyModalOpen = document.getElementById('detailsModalContainer').innerHTML !== '' ||
+                document.getElementById('actorModalContainer').innerHTML !== '';
             if (!isAnyModalOpen) {
                 document.body.classList.remove('modal-active');
             }
         }, 50);
     }
 };
-
 
 // ==========================================
 // 4. API WRAPPER (Fetch)
@@ -152,7 +151,7 @@ async function fetchFromTMDB(endpoint, params = {}, signal = null) {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     url.searchParams.append('api_key', API_KEY);
     if (params.language !== false) url.searchParams.append('language', params.language || 'pl-PL');
-    
+
     Object.keys(params).forEach(key => {
         if (key !== 'language') url.searchParams.append(key, params[key]);
     });
@@ -181,33 +180,32 @@ async function init() {
         switchMainTab(viewState.activeMainTab || 'movies');
         refreshStaleSeries();
         checkSmartBackup();
+        setTimeout(() => {
+            if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
+        }, 2000);
+
     } else { showConfig(); }
     setupEventListeners();
 }
-
 function checkSmartBackup() {
-    // Odczytujemy ustawienia użytkownika (Domyślnie 30 dni)
     const freqStr = localStorage.getItem('smartBackupFreq');
     const frequencyDays = freqStr === null ? 30 : parseInt(freqStr);
-    
-    // Jeśli użytkownik wybrał "Wyłączone" (0), to przerywamy
+
     if (frequencyDays === 0) return;
 
     const lastBackup = parseInt(localStorage.getItem('lastBackupDate') || '0');
     const lastChange = parseInt(localStorage.getItem('lastDataChangeDate') || '0');
     const totalItems = Object.values(data).flat().length;
 
-    // WARUNEK: Mamy filmy W BAZIE ORAZ zrobiliśmy jakieś zmiany od ostatniego backupu
     if (totalItems > 0 && lastChange > lastBackup) {
         const now = Date.now();
         const daysSinceBackup = lastBackup === 0 ? 999 : (now - lastBackup) / (1000 * 60 * 60 * 24);
 
         if (daysSinceBackup >= frequencyDays) {
             const c = document.getElementById('smart-backup-container');
-            if(c) {
+            if (c) {
                 c.innerHTML = `<div class="smart-backup-toast"><div><strong style="display:block;font-size:0.9rem;">Czas na backup!</strong><span style="font-size:0.8rem;opacity:0.9;">Masz niezapisane zmiany w kolekcji.</span></div><button id="quick-backup-btn">Eksportuj</button><button class="smart-backup-close">X</button></div>`;
                 document.getElementById('quick-backup-btn').onclick = () => { backupData(); c.innerHTML = ''; };
-                // Zamknięcie (X) odkłada przypomnienie na następny cykl (udajemy, że zrobiono backup dzisiaj)
                 c.querySelector('.smart-backup-close').onclick = () => { c.innerHTML = ''; localStorage.setItem('lastBackupDate', Date.now()); };
             }
         }
@@ -231,25 +229,22 @@ function setupEventListeners() {
             localStorage.setItem('hapticsEnabled', hapticsEnabled);
             if (hapticsEnabled) triggerHaptic('success');
         });
-               // --- NATYWNY GEST WSTECZ (ANDROID & iOS) ---
+    }
+
+    // --- NATYWNY GEST WSTECZ ---
     window.addEventListener('popstate', (e) => {
         const trailer = document.getElementById('trailerModalContainer');
         const actor = document.getElementById('actorModalContainer');
         const details = document.getElementById('detailsModalContainer');
-        
-        // ZABEZPIECZENIE: Zamykamy modale, jeśli są otwarte
+
         if (trailer && trailer.innerHTML !== '') { trailer.innerHTML = ''; return; }
         if (actor && actor.innerHTML !== '') { actor.innerHTML = ''; toggleAppDepthEffect(false); return; }
         if (details && details.innerHTML !== '') { details.innerHTML = ''; toggleAppDepthEffect(false); return; }
 
-        // OBSŁUGA ZAKŁADEK: Jeśli cofamy, wracamy do poprzednio zapisanej zakładki!
         if (e.state) {
-            // Jeśli historia ma zapisany główny Tab (np. Filmy) - idziemy tam
             if (e.state.mainTab && e.state.mainTab !== viewState.activeMainTab) {
-                // Wywołujemy przełączenie, ale cichcem blokujemy mu ponowne dopisanie historii, by nie zrobić pętli
-                switchMainTab(e.state.mainTab, true); 
+                switchMainTab(e.state.mainTab, true);
             }
-            // Jeśli ma zapisaną górną zakładkę (Obejrzane/Do Obejrzena) - idziemy tam
             if (e.state.subTab) {
                 const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
                 if (e.state.subTab !== currentSubTab) {
@@ -258,23 +253,19 @@ function setupEventListeners() {
             }
         }
     });
-            // --- OBSŁUGA PRZYCISKU "WRÓĆ NA GÓRĘ" ---
+
+    // --- OBSŁUGA PRZYCISKU WRÓĆ NA GÓRĘ ---
     const scrollToTopBtn = document.getElementById('scrollToTopBtn');
     if (scrollToTopBtn) {
         window.addEventListener('scroll', () => {
-            // Przycisk pojawia się, gdy zjedziemy w dół o ponad 400 pikseli
-            if (window.scrollY > 400) {
-                scrollToTopBtn.classList.add('visible');
-            } else {
-                scrollToTopBtn.classList.remove('visible');
-            }
+            if (window.scrollY > 400) scrollToTopBtn.classList.add('visible');
+            else scrollToTopBtn.classList.remove('visible');
         }, { passive: true });
 
         scrollToTopBtn.addEventListener('click', () => {
             triggerHaptic('light');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
-    }
     }
 
     document.querySelector('.bottom-nav').addEventListener('click', (e) => {
@@ -323,30 +314,30 @@ function setupEventListeners() {
         try {
             let finalResults = [];
             if (year && searchTerm) {
-                const mRes = await fetchFromTMDB('/search/movie', {query: searchTerm, year: year, include_adult: false}, signal);
-                const sRes = await fetchFromTMDB('/search/tv', {query: searchTerm, first_air_date_year: year, include_adult: false}, signal);
+                const mRes = await fetchFromTMDB('/search/movie', { query: searchTerm, year: year, include_adult: false }, signal);
+                const sRes = await fetchFromTMDB('/search/tv', { query: searchTerm, first_air_date_year: year, include_adult: false }, signal);
                 if (mRes === 'ABORTED' || sRes === 'ABORTED') return;
-                if(mRes) mRes.results.forEach(i => i.media_type = 'movie');
-                if(sRes) sRes.results.forEach(i => i.media_type = 'tv');
-                finalResults = [...(mRes?.results||[]), ...(sRes?.results||[])].sort((a, b) => b.popularity - a.popularity);
+                if (mRes) mRes.results.forEach(i => i.media_type = 'movie');
+                if (sRes) sRes.results.forEach(i => i.media_type = 'tv');
+                finalResults = [...(mRes?.results || []), ...(sRes?.results || [])].sort((a, b) => b.popularity - a.popularity);
             } else {
-                const resData = await fetchFromTMDB('/search/multi', {query: searchTerm, include_adult: false}, signal);
+                const resData = await fetchFromTMDB('/search/multi', { query: searchTerm, include_adult: false }, signal);
                 if (resData === 'ABORTED') return;
                 finalResults = resData ? resData.results : [];
             }
             fullSearchResults = finalResults; displaySearchResults(fullSearchResults);
-        } catch (error) { 
-            if (error.name !== 'AbortError') searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">Błąd sieci.</div>`; 
+        } catch (error) {
+            if (error.name !== 'AbortError') searchResultsContainer.innerHTML = `<div class="placeholder" style="padding:20px;text-align:center;color:var(--primary-color);">Błąd sieci.</div>`;
         }
     }, 300);
 
     searchInput.addEventListener('input', (e) => {
         const val = e.target.value.trim();
-        if(searchClearBtn) searchClearBtn.style.display = val.length > 0 ? 'flex' : 'none';
+        if (searchClearBtn) searchClearBtn.style.display = val.length > 0 ? 'flex' : 'none';
         debouncedMainSearch(val);
     });
-    
-    if(searchClearBtn) {
+
+    if (searchClearBtn) {
         searchClearBtn.addEventListener('click', () => {
             searchInput.value = '';
             searchClearBtn.style.display = 'none';
@@ -354,37 +345,33 @@ function setupEventListeners() {
             if (searchAbortController) searchAbortController.abort();
         });
     }
-    searchInput.addEventListener('focus', () => { if(searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
+    searchInput.addEventListener('focus', () => { if (searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
 
     // --- LOKALNA WYSZUKIWARKA ---
     const handleLocalSearchDebounced = debounce((e) => {
-        const listId = getActiveListId(); if(!listId) return;
+        const listId = getActiveListId(); if (!listId) return;
         viewState[listId].localSearch = e.target.value;
         e.target.nextElementSibling.style.display = e.target.value ? 'flex' : 'none';
         renderList(data[listId], listId);
     }, 250);
     document.querySelectorAll('.localSearchInput').forEach(input => input.addEventListener('input', handleLocalSearchDebounced));
-      document.querySelectorAll('.clearLocalSearch').forEach(btn => {
+
+    document.querySelectorAll('.clearLocalSearch').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const listId = getActiveListId(); if(!listId) return;
+            const listId = getActiveListId(); if (!listId) return;
             viewState[listId].localSearch = '';
-            
-            // Używamy e.currentTarget - to gwarantuje, że JS zawsze patrzy na przycisk (button), a nie na SVG w jego środku!
-            const button = e.currentTarget; 
-            const input = button.previousElementSibling; 
-            
-            input.value = ''; 
+            const button = e.currentTarget;
+            const input = button.previousElementSibling;
+            input.value = '';
             button.style.display = 'none';
-            renderList(data[listId], listId); 
+            renderList(data[listId], listId);
             input.focus();
         });
     });
-       document.getElementById('searchResults').addEventListener('click', (e) => {
+
+    document.getElementById('searchResults').addEventListener('click', (e) => {
         const quickAdd = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
-        if (quickAdd) { 
-            e.stopPropagation(); // Blokada echa!
-            handleQuickAddItem(quickAdd); 
-        }
+        if (quickAdd) { e.stopPropagation(); handleQuickAddItem(quickAdd); }
         else if (item && !item.classList.contains('show-all-results-btn')) { if (item.dataset.id && item.dataset.type) openPreviewModal(item.dataset.id, item.dataset.type); }
     });
 
@@ -402,7 +389,7 @@ function setupEventListeners() {
 
     // --- GESTY SWIPE & PULL TO REFRESH ---
     let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
-    let ptrCurrentY = 0; let isPulling = false; 
+    let ptrCurrentY = 0; let isPulling = false;
     const mainContent = document.getElementById('mainContent');
     const ptrContainer = document.getElementById('ptr-container');
     const ptrSpinner = document.getElementById('ptr-spinner');
@@ -422,37 +409,37 @@ function setupEventListeners() {
         }
     };
 
-    mainContent.addEventListener('touchstart', e => { 
-        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; 
-        touchstartX = e.touches[0].clientX; touchstartY = e.touches[0].clientY; 
+    mainContent.addEventListener('touchstart', e => {
+        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return;
+        touchstartX = e.touches[0].clientX; touchstartY = e.touches[0].clientY;
         if (window.scrollY === 0) isPulling = true;
     }, { passive: true });
 
-    mainContent.addEventListener('touchmove', e => { 
-        if (e.target.closest('.modal-overlay')) return; 
-        const deltaY = e.touches[0].clientY - touchstartY; 
+    mainContent.addEventListener('touchmove', e => {
+        if (e.target.closest('.modal-overlay')) return;
+        const deltaY = e.touches[0].clientY - touchstartY;
         if (isPulling && deltaY > 0 && window.scrollY === 0) {
             e.preventDefault(); ptrCurrentY = deltaY;
-            if(ptrContainer) {
+            if (ptrContainer) {
                 ptrContainer.style.transform = `translateY(${Math.min(ptrCurrentY - 50, 80)}px)`;
                 if (ptrCurrentY > 60 && ptrSpinner) ptrSpinner.style.transform = `rotate(${ptrCurrentY * 2}deg)`;
             }
         }
     }, { passive: false });
 
-    mainContent.addEventListener('touchend', async e => { 
-        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return; 
-        touchendX = e.changedTouches[0].clientX; touchendY = e.changedTouches[0].clientY; 
-        handleSwipeGesture(); 
+    mainContent.addEventListener('touchend', async e => {
+        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return;
+        touchendX = e.changedTouches[0].clientX; touchendY = e.changedTouches[0].clientY;
+        handleSwipeGesture();
         if (isPulling) {
             isPulling = false;
-            if (ptrCurrentY > 100 && ptrContainer) { 
+            if (ptrCurrentY > 100 && ptrContainer) {
                 ptrContainer.classList.add('refreshing'); triggerHaptic('medium');
                 if (viewState.activeMainTab === 'discover') {
                     const activePill = document.querySelector('.discover-pill.active');
                     await loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false);
                 } else if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
-                    const listId = getActiveListId(); if (listId === 'seriesToWatch') await refreshStaleSeries(); 
+                    const listId = getActiveListId(); if (listId === 'seriesToWatch') await refreshStaleSeries();
                     renderList(data[listId], listId, true);
                 }
                 setTimeout(() => { ptrContainer.classList.remove('refreshing'); ptrContainer.style.transform = ''; }, 600);
@@ -475,11 +462,11 @@ function setupEventListeners() {
     document.getElementById('discover-genres').addEventListener('click', handlePillClick);
 
     document.getElementById('fab-randomize').addEventListener('click', async (e) => {
-        const btn = e.currentTarget; if(btn.disabled) return;
+        const btn = e.currentTarget; if (btn.disabled) return;
         triggerHaptic('medium'); btn.disabled = true; btn.classList.add('rolling');
         try {
             const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
-            const res = await fetchFromTMDB(`/${type}/popular`, {page: randomPage});
+            const res = await fetchFromTMDB(`/${type}/popular`, { page: randomPage });
             if (res && res.results) {
                 const validItems = res.results.filter(i => i.poster_path);
                 if (validItems.length > 0) openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
@@ -498,16 +485,12 @@ function getActiveListId() {
     return null;
 }
 
-// DODANO: Drugi parametr isGoingBack (zapobiega nieskończonym pętlom)
 function switchMainTab(tabId, isGoingBack = false) {
-    // Jeśli to NIE jest cofanie strzałką Wstecz, dopisz nową kartę do historii!
-    if (!isGoingBack) {
-        history.pushState({ mainTab: tabId, subTab: (tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab) }, '');
-    }
+    if (!isGoingBack) { history.pushState({ mainTab: tabId, subTab: (tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab) }, ''); }
 
     viewState.activeMainTab = tabId;
     document.body.setAttribute('data-active-tab', tabId);
-    
+
     document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.maintab === tabId));
     document.querySelectorAll('.main-tab-content').forEach(container => container.classList.toggle('active', container.id === `tab-${tabId}`));
 
@@ -545,16 +528,13 @@ function switchMainTab(tabId, isGoingBack = false) {
     }
     saveData();
 }
-// DODANO: Parametr isGoingBack
+
 function switchSubTab(subTabId, isGoingBack = false) {
-    // Jeśli to NIE jest cofanie, dopiszmy zmianę pod-karty do pamięci telefonu!
-    if (!isGoingBack) {
-        history.pushState({ mainTab: viewState.activeMainTab, subTab: subTabId }, '');
-    }
+    if (!isGoingBack) { history.pushState({ mainTab: viewState.activeMainTab, subTab: subTabId }, ''); }
 
     if (viewState.activeMainTab === 'movies') viewState.moviesSubTab = subTabId;
     else if (viewState.activeMainTab === 'series') viewState.seriesSubTab = subTabId;
-    
+
     document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.subtab === subTabId));
     const listId = getActiveListId(); const parentTab = document.getElementById(`tab-${viewState.activeMainTab}`);
     parentTab.querySelectorAll('.list-container').forEach(c => c.classList.remove('active'));
@@ -580,7 +560,6 @@ function updateToolbarUI(mainTabId) {
     parentTab.querySelector('.btn-view-toggle').innerHTML = viewState.globalViewMode === 'grid' ? ICONS.list : ICONS.grid;
 }
 
-// --- INFINITE SCROLL RENDEROWANIE ---
 let listIntersectionObserver = null;
 
 function renderList(originalItems, listId, preserveLimit = false) {
@@ -596,22 +575,18 @@ function renderList(originalItems, listId, preserveLimit = false) {
     if (state.filterByVod && state.filterByVod !== 'all') { const targetVod = state.filterByVod.toLowerCase(); itemsToRender = itemsToRender.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod))); }
 
     const [sortBy, direction] = state.sortBy.split('_');
-    
-    // Sortowanie z potężnym priorytetem PINEZEK (isPinned)
+
     itemsToRender.sort((a, b) => {
-        // Jeśli nie korzystamy z lokalnej wyszukiwarki, pinezki lecą na samą górę!
         if (!state.localSearch) {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
         }
-
-        // Dopiero w obrębie przypiętych/nieprzypiętych sortujemy normalnie
-        let valA, valB; 
-        switch (sortBy) { 
-            case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
-            case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA; 
-            default: return 0; 
-        } 
+        let valA, valB;
+        switch (sortBy) {
+            case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA;
+            default: return 0;
+        }
     });
 
     const limit = state.displayLimit || 30;
@@ -621,9 +596,9 @@ function renderList(originalItems, listId, preserveLimit = false) {
         const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
         let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
         const safeTitle = escapeHTML(item.title); const safeOverview = escapeHTML(item.overview);
-        const listPosterSrc = item.poster ? item.poster.replace('w500', 'w300') : POSTER_PLACEHOLDER;
-        
-        // PINEZKA (HTML)
+        // OPTYMALIZACJA RAM/TRANSFERU: Dla siatki pobieramy 185px, dla listy pobieramy 92px. Są błyskawiczne!
+        const posterSize = viewState.globalViewMode === 'grid' ? 'w185' : 'w92';
+        const listPosterSrc = item.poster ? item.poster.replace('w500', posterSize) : POSTER_PLACEHOLDER;
         const pinClass = item.isPinned ? 'is-pinned' : '';
         const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
         const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
@@ -643,7 +618,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
             if (isWatched && item.rating > 0) { infoBadge = `<div class="grid-badge-info">★ ${item.rating}</div>`; }
             else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
                 const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
-                if (watchedCount > 0) { const pct = Math.round((watchedCount/item.numberOfEpisodes)*100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
+                if (watchedCount > 0) { const pct = Math.round((watchedCount / item.numberOfEpisodes) * 100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
                 const nextEpInfo = getNextEpisodeInfo(item);
                 if (nextEpInfo && !isUnreleased) quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
@@ -683,13 +658,12 @@ function renderList(originalItems, listId, preserveLimit = false) {
         sentinel.style.cssText = 'height: 20px; width: 100%; margin-top: 10px;';
         container.appendChild(sentinel);
         listIntersectionObserver = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) { viewState[listId].displayLimit += 30; renderList(data[listId], listId, true); }
-        }, { rootMargin: "300px" });
+            if (entries[0].isIntersecting) { viewState[listId].displayLimit += 20; renderList(data[listId], listId, true); }
+        }, { rootMargin: "150px" });
         listIntersectionObserver.observe(sentinel);
     }
-    
-    // Sortable usunięte na rzecz przypinania!
 }
+
 function initializeSortable(listId, listEl, viewMode) {
     if (!listEl || listEl.children.length < 2) return;
     sortableInstance = new Sortable(listEl, {
@@ -725,10 +699,10 @@ function handleListItemClick(e) {
                 saveData().then(() => { renderList(data[listName], listName, true); showCustomAlert('Usunięto', `"${escapeHTML(item.title)}" usunięto z biblioteki.`, 'success'); });
             }
         });
-    } else if (quickTrackBtn) { 
-        e.stopPropagation(); handleQuickTrack(id); 
-    } else { 
-        openDetailsModal(id, type); 
+    } else if (quickTrackBtn) {
+        e.stopPropagation(); handleQuickTrack(id);
+    } else {
+        openDetailsModal(id, type);
     }
 }
 
@@ -744,7 +718,7 @@ async function handleQuickTrack(id) {
     if (totalWatched >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) {
         renderList(data[listName], listName, true);
         setTimeout(async () => {
-            if(await showCustomConfirm('Gratulacje! 🎉', `Obejrzałeś cały serial "${escapeHTML(item.title)}". Przenieść do Obejrzanych?`)) await handleMoveItem(item.id, 'tv');
+            if (await showCustomConfirm('Gratulacje! 🎉', `Obejrzałeś cały serial "${escapeHTML(item.title)}". Przenieść do Obejrzanych?`)) await handleMoveItem(item.id, 'tv');
         }, 400);
     } else { renderList(data[listName], listName, true); }
 }
@@ -767,41 +741,64 @@ async function handleQuickAddItem(button) {
 }
 
 async function addItemToList(id, type, list) {
-    // Zamek nr 1: Sprawdzenie przed pobraniem danych z sieci
-    if (Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type)) { 
-        showCustomAlert('Już na liście', `Tytuł jest już w bibliotece.`, 'info'); 
-        return false; 
+    if (Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type)) {
+        showCustomAlert('Już na liście', `Tytuł jest już w bibliotece.`, 'info');
+        return false;
     }
 
-    const details = await getItemDetails(id, type);
-    if (!details) { showCustomAlert('Błąd', 'Nie udało się pobrać danych.', 'error'); return false; }
+    const fullDetails = await getItemDetails(id, type);
+    if (!fullDetails) { showCustomAlert('Błąd', 'Nie udało się pobrać danych.', 'error'); return false; }
 
-    // Zamek nr 2: Sprawdzenie PO pobraniu danych z sieci (Kluczowe naprawienie błędu klonowania przy wyścigu)
-    if (Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type)) { 
-        return false; 
-    }
+    if (Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type)) return false;
 
     if (list === 'watched') {
-        if (type === 'tv' && !isSeriesFinished(details)) { showCustomAlert('Uwaga', `Serial wciąż trwa. Dodaj do "Do obejrzenia".`, 'info'); return false; }
-        if (type === 'movie' && details.releaseDate) { const td = new Date(); td.setHours(0,0,0,0); const rd = new Date(details.releaseDate); rd.setHours(0,0,0,0); if (rd > td) { showCustomAlert('Uwaga', `Film nie miał premiery.`, 'info'); return false; } }
+        if (type === 'tv' && !isSeriesFinished(fullDetails)) { showCustomAlert('Uwaga', `Serial wciąż trwa. Dodaj do "Do obejrzenia".`, 'info'); return false; }
+        if (type === 'movie' && fullDetails.releaseDate) { const td = new Date(); td.setHours(0, 0, 0, 0); const rd = new Date(fullDetails.releaseDate); rd.setHours(0, 0, 0, 0); if (rd > td) { showCustomAlert('Uwaga', `Film nie miał premiery.`, 'info'); return false; } }
     }
 
-    details.dateAdded = Date.now(); details.customTags = [];
+    // KOMPRESJA: Tworzymy "lekki" obiekt tylko do wyświetlania na liście. 
+    // Odcinamy ciężkie dane: backdrop, vod, pełny overview (zostawiamy max 120 znaków dla widoku listy)
+    const liteItem = {
+        id: fullDetails.id,
+        title: fullDetails.title,
+        type: fullDetails.type,
+        poster: fullDetails.poster,
+        year: fullDetails.year,
+        releaseDate: fullDetails.releaseDate,
+        genres: fullDetails.genres ? fullDetails.genres.slice(0, 3) : [], // Tylko 3 gatunki
+        overview: fullDetails.overview ? fullDetails.overview.substring(0, 120) + '...' : '', // Ucięty opis
+        isFavorite: false,
+        customTags: [],
+        dateAdded: Date.now()
+    };
+
+    if (type === 'tv') {
+        liteItem.status = fullDetails.status;
+        liteItem.nextEpisodeToAir = fullDetails.nextEpisodeToAir;
+        liteItem.seasons = fullDetails.seasons;
+        liteItem.numberOfEpisodes = fullDetails.numberOfEpisodes;
+        liteItem.progress = {};
+    }
+
     const targetList = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`;
 
-    if (list === 'toWatch' && (targetList === 'moviesToWatch' || targetList === 'seriesToWatch')) {
+    if (list === 'toWatch') {
         const maxOrd = data[targetList].length > 0 ? Math.max(...data[targetList].map(i => i.customOrder || 0)) : -1;
-        details.customOrder = maxOrd + 1;
+        liteItem.customOrder = maxOrd + 1;
+    } else {
+        liteItem.rating = null; liteItem.review = ""; liteItem.watchDates = [Date.now()];
     }
-    if (list === 'watched') { details.rating = null; details.review = ""; details.watchDates = [Date.now()]; }
 
-    data[targetList].unshift(details); await saveData();
+    data[targetList].unshift(liteItem);
+    await saveData();
+
     switchMainTab(type === 'movie' ? 'movies' : 'series'); switchSubTab(list);
     document.getElementById('searchInput').value = ''; document.getElementById('searchResults').style.display = 'none';
-    showCustomAlert('Sukces!', `"${escapeHTML(details.title)}" dodano do listy.`, 'success'); 
+    const clearBtn = document.getElementById('searchClearBtn'); if (clearBtn) clearBtn.style.display = 'none';
+
+    showCustomAlert('Sukces!', `"${escapeHTML(liteItem.title)}" dodano do listy.`, 'success');
     return true;
 }
-
 // ==========================================
 // 8. ZAKŁADKA ODKRYWAJ I STATYSTYKI
 // ==========================================
@@ -811,19 +808,19 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false) {
     let res, typeOver = null;
 
     try {
-        if (isGenre) { res = await fetchFromTMDB('/discover/movie', {sort_by: 'popularity.desc', with_genres: endpoint, page: 1}); typeOver = 'movie'; }
+        if (isGenre) { res = await fetchFromTMDB('/discover/movie', { sort_by: 'popularity.desc', with_genres: endpoint, page: 1 }); typeOver = 'movie'; }
         else {
-            switch(endpoint) {
-                case 'movies_popular': res = await fetchFromTMDB('/movie/popular', {region:'PL'}); typeOver = 'movie'; break;
+            switch (endpoint) {
+                case 'movies_popular': res = await fetchFromTMDB('/movie/popular', { region: 'PL' }); typeOver = 'movie'; break;
                 case 'series_popular': res = await fetchFromTMDB('/tv/popular'); typeOver = 'tv'; break;
-                case 'in_theaters': res = await fetchFromTMDB('/movie/now_playing', {region:'PL'}); typeOver = 'movie'; break;
-                case 'top_rated': res = await fetchFromTMDB('/movie/top_rated', {region:'PL'}); typeOver = 'movie'; break;
+                case 'in_theaters': res = await fetchFromTMDB('/movie/now_playing', { region: 'PL' }); typeOver = 'movie'; break;
+                case 'top_rated': res = await fetchFromTMDB('/movie/top_rated', { region: 'PL' }); typeOver = 'movie'; break;
                 default: res = await fetchFromTMDB('/trending/all/week'); break;
             }
         }
         if (res) {
             let results = res.results.filter(i => i.poster_path).slice(0, 18);
-            if(typeOver) results.forEach(i => i.media_type = typeOver); else results = results.filter(i => i.media_type === 'movie' || i.media_type === 'tv');
+            if (typeOver) results.forEach(i => i.media_type = typeOver); else results = results.filter(i => i.media_type === 'movie' || i.media_type === 'tv');
             renderDiscoverGridHTML(results, gridContainer);
         } else { gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Błąd pobierania danych.</div>`; }
     } catch { gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Sprawdź połączenie sieciowe.</div>`; }
@@ -831,7 +828,7 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false) {
 
 function renderDiscoverGridHTML(results, gridContainer) {
     if (!results || results.length === 0) { gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Brak wyników.</div>`; return; }
-    
+
     let html = '';
     const heroItem = results[0];
     if (heroItem) {
@@ -848,12 +845,12 @@ function renderDiscoverGridHTML(results, gridContainer) {
     }).join('');
 
     gridContainer.innerHTML = html + gridItems;
-    gridContainer.onclick = (e) => { 
-        const item = e.target.closest('.discover-item') || e.target.closest('.discover-hero'); 
+    gridContainer.onclick = (e) => {
+        const item = e.target.closest('.discover-item') || e.target.closest('.discover-hero');
         if (item) {
             const id = item.dataset.id; const type = item.dataset.type;
             const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
-            if (isInLibrary) openDetailsModal(id, type); 
+            if (isInLibrary) openDetailsModal(id, type);
             else openPreviewModal(id, type);
         }
     };
@@ -863,36 +860,36 @@ function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
     let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
     let runtime = 0; let gCounts = {}; let sumRat = 0; let ratCount = 0;
-    let dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }; let decades = {};
+    let dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; let decades = {};
     let tCol = data.moviesToWatch.length + tMovies + data.seriesToWatch.length + tSeries; let tComp = tMovies + tSeries;
 
     data.moviesWatched.forEach(m => {
         if (m.runtime) runtime += m.runtime;
-        if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if(b>0 && b<=5) dist[b]++; }
-        if (m.year) { let d = Math.floor(parseInt(m.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
+        if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if (b > 0 && b <= 5) dist[b]++; }
+        if (m.year) { let d = Math.floor(parseInt(m.year) / 10) * 10; decades[d] = (decades[d] || 0) + 1; }
         if (m.genres) m.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; });
     });
 
     [...data.seriesWatched, ...data.seriesToWatch].forEach(s => {
-        if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if(b>0 && b<=5) dist[b]++; }
-        if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
+        if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if (b > 0 && b <= 5) dist[b]++; }
+        if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year) / 10) * 10; decades[d] = (decades[d] || 0) + 1; }
     });
-    data.seriesWatched.forEach(s => { if(s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
+    data.seriesWatched.forEach(s => { if (s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
 
     let timeStr = '0h';
     if (runtime > 0) { const hrs = Math.floor(runtime / 60); const days = Math.floor(hrs / 24); if (days > 0) timeStr = `<span class="highlight">${days}d</span> ${hrs % 24}h`; else timeStr = `<span class="highlight">${hrs}h</span>`; }
 
     let topDec = "Brak"; let maxDec = 0;
-    for (const [dec, count] of Object.entries(decades)) { if(count > maxDec) { maxDec = count; topDec = dec + "s"; } }
+    for (const [dec, count] of Object.entries(decades)) { if (count > maxDec) { maxDec = count; topDec = dec + "s"; } }
 
     let compRate = tCol > 0 ? Math.round((tComp / tCol) * 100) : 0;
     const avgRat = ratCount > 0 ? (sumRat / ratCount).toFixed(1) : '-';
-    const topG = Object.entries(gCounts).sort((a,b) => b[1] - a[1]).slice(0, 3);
+    const topG = Object.entries(gCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
     const topGHTML = topG.length > 0 ? `<div class="top-genres-list">${topG.map(g => `<span class="profile-genre-tag"><strong style="color: var(--primary-color);">${g[1]}</strong> ${escapeHTML(g[0])}</span>`).join('')}</div>` : '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">Brak danych</div>';
 
-    let maxRat = Math.max(...Object.values(dist)); if(maxRat === 0) maxRat = 1;
+    let maxRat = Math.max(...Object.values(dist)); if (maxRat === 0) maxRat = 1;
     let chart = `<div class="rating-bars">`;
-    for(let i=1; i<=5; i++) { let hPct = (dist[i] / maxRat) * 100; chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`; }
+    for (let i = 1; i <= 5; i++) { let hPct = (dist[i] / maxRat) * 100; chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`; }
     chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
 
     c.innerHTML = `<div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div><div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div><div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div><div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><div class="label">Śr. Ocen</div><div class="value">${avgRat}</div></div><div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div><div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div><div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div><div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>`;
@@ -912,15 +909,13 @@ async function getItemDetails(id, type) {
         vodList = [...new Set(provs.map(p => p.provider_name))];
     }
 
-    // --- KULOODPORNY SYSTEM DAT PREMIER ---
     let finalReleaseDate = d.release_date || d.first_air_date || null;
-    
+
     if (type === 'movie' && d.release_dates && d.release_dates.results) {
         const globalYear = finalReleaseDate ? parseInt(finalReleaseDate.substring(0, 4)) : 0;
         const plRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'PL');
         const usRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'US');
 
-        // Funkcja szukająca NAJSTARSZEJ KINOWEJ premiery (type === 3)
         const getTheatricalDate = (countryData) => {
             if (!countryData || !countryData.release_dates) return null;
             const theatricals = countryData.release_dates.filter(rd => rd.type === 3);
@@ -929,33 +924,19 @@ async function getItemDetails(id, type) {
             return theatricals[0].release_date.substring(0, 10);
         };
 
-        // Bierzemy datę kinową PL (albo US, jeśli brak PL)
         let localDate = getTheatricalDate(plRelease) || getTheatricalDate(usRelease);
-
         if (localDate) {
             const localYear = parseInt(localDate.substring(0, 4));
-            // ZŁOTA ZASADA: Używamy lokalnej daty TYLKO, jeśli różni się od światowej o max 1 rok!
-            // Jeśli różnica jest większa (np. 1997 vs 2012 = 15 lat), to wiemy, że to reedycja i to ignorujemy.
-            if (globalYear > 0 && Math.abs(localYear - globalYear) <= 1) {
-                finalReleaseDate = localDate;
-            }
+            if (globalYear > 0 && Math.abs(localYear - globalYear) <= 1) finalReleaseDate = localDate;
         }
     }
 
-    const item = { 
-        id: d.id, 
-        title: d.title || d.name, 
-        poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, 
-        backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null, 
-        type: type, 
-        year: (finalReleaseDate || '').substring(0, 4), 
-        releaseDate: finalReleaseDate, 
-        overview: d.overview, 
-        genres: d.genres ? d.genres.map(g => g.name) : [], 
-        isFavorite: false, 
-        customTags: [], 
-        vod: vodList,
-        tmdbRating: d.vote_average ? parseFloat(d.vote_average).toFixed(1) : null
+    const item = {
+        id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null,
+        backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null,
+        type: type, year: (finalReleaseDate || '').substring(0, 4), releaseDate: finalReleaseDate,
+        overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [],
+        isFavorite: false, customTags: [], vod: vodList, tmdbRating: d.vote_average ? parseFloat(d.vote_average).toFixed(1) : null
     };
 
     if (type === 'tv') {
@@ -966,12 +947,13 @@ async function getItemDetails(id, type) {
     } else if (type === 'movie') { item.runtime = d.runtime || null; }
     return item;
 }
+
 async function getCredits(id, type) {
     if (String(id).startsWith('custom_')) return [];
     const cacheKey = `credits_${type}_${id}`;
     const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
     const data = await fetchFromTMDB(`/${type}/${id}/credits`);
-    if(!data) return [];
+    if (!data) return [];
     const result = data.cast.slice(0, 15);
     await db.setCache(cacheKey, result); return result;
 }
@@ -994,10 +976,10 @@ async function getRecommendations(id, type) {
     if (String(id).startsWith('custom_')) return [];
     const cacheKey = `recs_${type}_${id}`;
     const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
-    let data = await fetchFromTMDB(`/${type}/${id}/recommendations`, {page: 1});
+    let data = await fetchFromTMDB(`/${type}/${id}/recommendations`, { page: 1 });
     let results = data?.results ? data.results.filter(i => i.poster_path) : [];
     if (results.length === 0) {
-        data = await fetchFromTMDB(`/${type}/${id}/similar`, {page: 1});
+        data = await fetchFromTMDB(`/${type}/${id}/similar`, { page: 1 });
         results = data?.results ? data.results.filter(i => i.poster_path) : [];
     }
     const finalRes = results.slice(0, 15);
@@ -1008,7 +990,7 @@ async function getSeasonDetails(seriesId, seasonNumber) {
     const cacheKey = `season_${seriesId}_${seasonNumber}`;
     const cached = await db.getCache(cacheKey, 2); if (cached) return cached;
     const data = await fetchFromTMDB(`/tv/${seriesId}/season/${seasonNumber}`);
-    if(!data) return null;
+    if (!data) return null;
     await db.setCache(cacheKey, data); return data;
 }
 
@@ -1017,7 +999,7 @@ async function getActorDetails(actorId) {
     const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
     let dt = await fetchFromTMDB(`/person/${actorId}`);
     if (!dt) return null;
-    if (!dt.biography) { const en = await fetchFromTMDB(`/person/${actorId}`, {language: 'en-US'}); if(en) dt.biography = en.biography; }
+    if (!dt.biography) { const en = await fetchFromTMDB(`/person/${actorId}`, { language: 'en-US' }); if (en) dt.biography = en.biography; }
     const cr = await fetchFromTMDB(`/person/${actorId}/combined_credits`);
     if (!cr) return null;
     const uC = cr.cast.filter((i, idx, s) => idx === s.findIndex(t => t.id === i.id));
@@ -1041,14 +1023,12 @@ async function getReviews(id, type) {
     if (String(id).startsWith('custom_')) return [];
     const cacheKey = `reviews_full_${type}_${id}`;
     const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
-    
     let data = await fetchFromTMDB(`/${type}/${id}/reviews`, { page: 1, language: 'pl-PL' });
     if (!data || !data.results || data.results.length === 0) {
         data = await fetchFromTMDB(`/${type}/${id}/reviews`, { page: 1, language: 'en-US' });
     }
-    const finalRes = data?.results ? data.results : []; // Pobieramy wszystkie, nie tylko pierwsze 5!
-    await db.setCache(cacheKey, finalRes); 
-    return finalRes;
+    const finalRes = data?.results ? data.results : [];
+    await db.setCache(cacheKey, finalRes); return finalRes;
 }
 
 // ==========================================
@@ -1057,27 +1037,24 @@ async function getReviews(id, type) {
 function isSeriesFinished(item) { if (item.type !== 'tv') return true; return item.status === 'Ended' || item.status === 'Canceled'; }
 function getAllUniqueTags() { const allItems = [...data.moviesToWatch, ...data.moviesWatched, ...data.seriesToWatch, ...data.seriesWatched]; return [...new Set(allItems.flatMap(item => item.customTags || []))].sort(); }
 function renderCollapsibleText(text) { if (!text) return 'Brak informacji dla tego wpisu.'; const safeText = escapeHTML(text).replace(/\n/g, '<br>'); if (safeText.length > 280) { return `<div class="collapsible-text-container"><div class="overview-text collapsible-text">${safeText}</div><button type="button" class="read-more-btn" onclick="this.previousElementSibling.classList.toggle('expanded'); this.textContent = this.previousElementSibling.classList.contains('expanded') ? 'Zwiń' : 'Rozwiń';">Rozwiń</button></div>`; } return `<div class="overview-text">${safeText}</div>`; }
-function getNextEpisodeInfo(item) { if (!item.seasons || item.seasons.length === 0) return null; if (!item.progress) item.progress = {}; const sortedSeasons = [...item.seasons].sort((a, b) => a.season_number - b.season_number); const today = new Date(); today.setHours(0,0,0,0); for (let s of sortedSeasons) { const sNum = s.season_number; if (sNum === 0) continue; const watched = item.progress[sNum] || []; let maxAvailableEp = s.episode_count; if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) { const airDate = new Date(item.nextEpisodeToAir.date); if (airDate > today) maxAvailableEp = item.nextEpisodeToAir.episode - 1; } if (watched.length < maxAvailableEp) { for (let i = 1; i <= maxAvailableEp; i++) { if (!watched.includes(i)) return { season: sNum, episode: i, string: `S${String(sNum).padStart(2, '0')}E${String(i).padStart(2, '0')}` }; } } } return null; }
+function getNextEpisodeInfo(item) { if (!item.seasons || item.seasons.length === 0) return null; if (!item.progress) item.progress = {}; const sortedSeasons = [...item.seasons].sort((a, b) => a.season_number - b.season_number); const today = new Date(); today.setHours(0, 0, 0, 0); for (let s of sortedSeasons) { const sNum = s.season_number; if (sNum === 0) continue; const watched = item.progress[sNum] || []; let maxAvailableEp = s.episode_count; if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) { const airDate = new Date(item.nextEpisodeToAir.date); if (airDate > today) maxAvailableEp = item.nextEpisodeToAir.episode - 1; } if (watched.length < maxAvailableEp) { for (let i = 1; i <= maxAvailableEp; i++) { if (!watched.includes(i)) return { season: sNum, episode: i, string: `S${String(sNum).padStart(2, '0')}E${String(i).padStart(2, '0')}` }; } } } return null; }
 function getNextEpisodeStr(item) { const info = getNextEpisodeInfo(item); return info ? info.string : null; }
-function getStatusBadge(status) { 
-    if (!status) return ''; 
-    switch(status) { 
-        case 'Returning Series': 
-            return '<span class="status-badge status-returning"><span class="status-dot"></span>W produkcji</span>'; 
-        case 'Ended': 
-            return '<span class="status-badge status-ended"><span class="status-dot"></span>Zakończony</span>'; 
-        case 'Canceled': 
-            return '<span class="status-badge status-canceled"><span class="status-dot"></span>Anulowany</span>'; 
-        case 'In Production': 
-            return '<span class="status-badge status-in-production"><span class="status-dot"></span>Tworzenie</span>'; 
-        default: 
-            return `<span class="status-badge" style="background:var(--card-color); color: var(--text-secondary); border: 1px solid var(--border-color);"><span class="status-dot" style="background:var(--text-secondary);"></span>${escapeHTML(status)}</span>`; 
-    } 
+
+function getStatusBadge(status) {
+    if (!status) return '';
+    switch (status) {
+        case 'Returning Series': return '<span class="status-badge status-returning"><span class="status-dot"></span>W produkcji</span>';
+        case 'Ended': return '<span class="status-badge status-ended"><span class="status-dot"></span>Zakończony</span>';
+        case 'Canceled': return '<span class="status-badge status-canceled"><span class="status-dot"></span>Anulowany</span>';
+        case 'In Production': return '<span class="status-badge status-in-production"><span class="status-dot"></span>Tworzenie</span>';
+        default: return `<span class="status-badge" style="background:var(--card-color); color: var(--text-secondary); border: 1px solid var(--border-color);"><span class="status-dot" style="background:var(--text-secondary);"></span>${escapeHTML(status)}</span>`;
+    }
 }
-function getNextAirDateString(nextEpData) { if (!nextEpData || !nextEpData.date) return null; const airDate = new Date(nextEpData.date); const today = new Date(); today.setHours(0,0,0,0); const diffDays = Math.ceil((airDate - today) / (1000 * 60 * 60 * 24)); const epString = `S${String(nextEpData.season).padStart(2,'0')}E${String(nextEpData.episode).padStart(2,'0')}`; const dateString = airDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); if (diffDays < 0) return null; if (diffDays === 0) return `${epString} dzisiaj!`; if (diffDays === 1) return `${epString} jutro!`; if (diffDays > 1 && diffDays <= 7) return `${epString} za ${diffDays} dni`; return `${epString}: ${dateString}`; }
+
+function getNextAirDateString(nextEpData) { if (!nextEpData || !nextEpData.date) return null; const airDate = new Date(nextEpData.date); const today = new Date(); today.setHours(0, 0, 0, 0); const diffDays = Math.ceil((airDate - today) / (1000 * 60 * 60 * 24)); const epString = `S${String(nextEpData.season).padStart(2, '0')}E${String(nextEpData.episode).padStart(2, '0')}`; const dateString = airDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); if (diffDays < 0) return null; if (diffDays === 0) return `${epString} dzisiaj!`; if (diffDays === 1) return `${epString} jutro!`; if (diffDays > 1 && diffDays <= 7) return `${epString} za ${diffDays} dni`; return `${epString}: ${dateString}`; }
 const formatRuntime = (minutes) => { if (!minutes || minutes <= 0) return ''; const hours = Math.floor(minutes / 60); const remainingMinutes = minutes % 60; let formatted = []; if (hours > 0) formatted.push(`${hours}h`); if (remainingMinutes > 0) formatted.push(`${remainingMinutes}min`); return formatted.join(' '); };
 const generateStarRatingDisplay = (rating) => { let starsHTML = ''; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for (let i = 1; i <= 5; i++) { if (rating >= i) { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--warning-color)"><path d="${starPath}"/></svg>`; } else if (rating >= i - 0.5) { starsHTML += `<svg viewBox="0 0 24 24"><defs><linearGradient id="half_grad_${i}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="50%" stop-color="var(--warning-color)"/><stop offset="50%" stop-color="var(--border-color)"/></linearGradient></defs><path d="${starPath}" fill="url(#half_grad_${i})"/></svg>`; } else { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--border-color)"><path d="${starPath}"/></svg>`; } } return `<div class="star-rating-display">${starsHTML}</div>`; };
-const getListAndItem = (id, type) => { for (const listName in data) { if(Array.isArray(data[listName])) { const item = data[listName].find(i => String(i.id) === String(id) && i.type === type); if (item) return { listName, item }; } } return { listName: null, item: null }; };
+const getListAndItem = (id, type) => { for (const listName in data) { if (Array.isArray(data[listName])) { const item = data[listName].find(i => String(i.id) === String(id) && i.type === type); if (item) return { listName, item }; } } return { listName: null, item: null }; };
 const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'flex'; };
 
 function setupSwipeToClose(modalElement, closeCallback) {
@@ -1108,7 +1085,7 @@ async function openSortModal() {
     const optsHTML = opts.map(o => `<label class="modern-radio-row"><input type="radio" name="sort" value="${o.value}" ${state.sortBy === o.value ? 'checked' : ''}><svg class="icon" viewBox="0 0 24 24">${o.icon}</svg><span class="label-text">${o.label}</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>`).join('');
     const modal = document.getElementById('detailsModalContainer');
     modal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Sortuj</h3><div class="control-modal-options">${optsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Domyślne</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
-    
+
     const close = () => { modal.innerHTML = ''; toggleAppDepthEffect(false); };
     setupSwipeToClose(modal.querySelector('.modal-overlay'), close);
     modal.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) close(); };
@@ -1119,7 +1096,7 @@ async function openSortModal() {
 function openBackupSettingsModal() {
     toggleAppDepthEffect(true);
     const currentFreq = localStorage.getItem('smartBackupFreq') || '30';
-    
+
     const opts = [
         { value: '0', label: 'Wyłączone' },
         { value: '7', label: 'Przypominaj co 7 dni' },
@@ -1128,21 +1105,18 @@ function openBackupSettingsModal() {
     ];
 
     const optsHTML = opts.map(o => `<label class="modern-radio-row"><input type="radio" name="backup-freq" value="${o.value}" ${currentFreq === o.value ? 'checked' : ''}><span class="label-text">${o.label}</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>`).join('');
-    
+
     const modal = document.getElementById('detailsModalContainer');
     modal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3 style="margin-bottom:8px;">Planowany Backup</h3><p style="font-size:0.85rem; color:var(--text-secondary); text-align:center; margin-bottom:16px;">Przypomni o kopii zapasowej, jeśli wprowadzono zmiany w kolekcji.</p><div class="control-modal-options">${optsHTML}</div><div class="control-modal-footer"><button class="apply-btn" style="width:100%;">Zapisz</button></div></div></div>`;
-    
+
     const close = () => { modal.innerHTML = ''; toggleAppDepthEffect(false); };
     setupSwipeToClose(modal.querySelector('.modal-overlay'), close);
     modal.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) close(); };
-    
-    modal.querySelector('.apply-btn').onclick = () => { 
-        const sel = document.querySelector('input[name="backup-freq"]:checked'); 
-        if (sel) {
-            localStorage.setItem('smartBackupFreq', sel.value);
-            showCustomAlert('Zapisano', 'Ustawienia przypomnień zaktualizowane.', 'success');
-        }
-        close(); 
+
+    modal.querySelector('.apply-btn').onclick = () => {
+        const sel = document.querySelector('input[name="backup-freq"]:checked');
+        if (sel) { localStorage.setItem('smartBackupFreq', sel.value); showCustomAlert('Zapisano', 'Ustawienia przypomnień zaktualizowane.', 'success'); }
+        close();
     };
 }
 
@@ -1160,7 +1134,7 @@ async function openFilterModal() {
     filterOptionsHTML += `</div><div style="font-size:0.75rem; color:var(--text-secondary); margin-top:-8px; margin-bottom:12px;">*Aby filtr zadziałał dla starych wpisów, otwórz najpierw ich szczegóły.</div><div class="filter-section-title">Gatunek</div><div class="modern-chip-group"><label class="modern-chip"><input type="radio" name="genre-filter" value="all" ${state.filterByGenre === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
     if (uniqueGenres.length > 0) filterOptionsHTML += uniqueGenres.map(g => `<label class="modern-chip"><input type="radio" name="genre-filter" value="${escapeHTML(g)}" ${state.filterByGenre === g ? 'checked' : ''}><span>${escapeHTML(g)}</span></label>`).join('');
     filterOptionsHTML += `</div>`;
-    
+
     if (uniqueTags.length > 0) {
         filterOptionsHTML += `<div class="filter-section-title">Twój Tag</div><div class="modern-chip-group"><label class="modern-chip"><input type="radio" name="tag-filter" value="all" ${state.filterByCustomTag === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
         filterOptionsHTML += uniqueTags.map(t => `<label class="modern-chip"><input type="radio" name="tag-filter" value="${escapeHTML(t)}" ${state.filterByCustomTag === t ? 'checked' : ''}><span>${escapeHTML(t)}</span></label>`).join('');
@@ -1169,7 +1143,7 @@ async function openFilterModal() {
 
     const modalContainer = document.getElementById('detailsModalContainer');
     modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Filtruj</h3><div class="control-modal-options">${filterOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Wyczyść</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
-    
+
     const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
     modalContainer.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) close(); };
     setupSwipeToClose(modalContainer.querySelector('.modal-overlay'), close);
@@ -1177,8 +1151,8 @@ async function openFilterModal() {
     modalContainer.querySelector('.apply-btn').onclick = async () => {
         state.filterFavoritesOnly = document.getElementById('filter-favorites-checkbox').checked;
         const selGenre = document.querySelector('input[name="genre-filter"]:checked'); if (selGenre) state.filterByGenre = selGenre.value;
-        const selTag = document.querySelector('input[name="tag-filter"]:checked'); if(selTag) state.filterByCustomTag = selTag.value;
-        const selVod = document.querySelector('input[name="vod-filter"]:checked'); if(selVod) state.filterByVod = selVod.value;
+        const selTag = document.querySelector('input[name="tag-filter"]:checked'); if (selTag) state.filterByCustomTag = selTag.value;
+        const selVod = document.querySelector('input[name="vod-filter"]:checked'); if (selVod) state.filterByVod = selVod.value;
         await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close();
     };
     modalContainer.querySelector('.reset-btn').onclick = async () => {
@@ -1188,10 +1162,10 @@ async function openFilterModal() {
 }
 
 const deleteTagGlobally = async (tagToDelete, item, onUpdate) => {
-    if(await showCustomConfirm('Usuń tag', `Czy na pewno chcesz trwale usunąć tag "${tagToDelete}" z CAŁEGO konta?`)) {
+    if (await showCustomConfirm('Usuń tag', `Czy na pewno chcesz trwale usunąć tag "${tagToDelete}" z CAŁEGO konta?`)) {
         ['moviesToWatch', 'moviesWatched', 'seriesToWatch', 'seriesWatched'].forEach(listName => { data[listName].forEach(i => { if (i.customTags) i.customTags = i.customTags.filter(t => t !== tagToDelete); }); });
         await saveData(); if (item && item.customTags) item.customTags = item.customTags.filter(t => t !== tagToDelete);
-        onUpdate(); const activeList = getActiveListId(); if(activeList) renderList(data[activeList], activeList, true);
+        onUpdate(); const activeList = getActiveListId(); if (activeList) renderList(data[activeList], activeList, true);
     }
 };
 
@@ -1204,10 +1178,10 @@ function openManageTagsModal(item, onUpdate) {
         const overlay = c.querySelector('#tagsModalOverlay'); const closeBtn = c.querySelector('#close-tags-btn'); const addBtn = c.querySelector('#add-tag-btn'); const input = c.querySelector('#new-tag-input');
         setTimeout(() => input.focus(), 100);
         const close = () => { overlay.style.opacity = '0'; setTimeout(() => { c.innerHTML = ''; onUpdate(); }, 200); };
-        closeBtn.onclick = close; overlay.onclick = (e) => { if(e.target === overlay) close(); };
-        const addNewTag = async () => { const val = input.value.trim(); if(val && !(item.customTags || []).includes(val)) { if(!item.customTags) item.customTags = []; item.customTags.push(val); await saveData(); close(); } };
-        addBtn.onclick = addNewTag; input.addEventListener('keyup', (e) => { if(e.key === 'Enter') addNewTag(); });
-        c.querySelectorAll('.existing-tag-btn').forEach(btn => { btn.onclick = async (e) => { const t = e.currentTarget.dataset.addtag; if(!item.customTags) item.customTags = []; item.customTags.push(t); await saveData(); close(); }; });
+        closeBtn.onclick = close; overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        const addNewTag = async () => { const val = input.value.trim(); if (val && !(item.customTags || []).includes(val)) { if (!item.customTags) item.customTags = []; item.customTags.push(val); await saveData(); close(); } };
+        addBtn.onclick = addNewTag; input.addEventListener('keyup', (e) => { if (e.key === 'Enter') addNewTag(); });
+        c.querySelectorAll('.existing-tag-btn').forEach(btn => { btn.onclick = async (e) => { const t = e.currentTarget.dataset.addtag; if (!item.customTags) item.customTags = []; item.customTags.push(t); await saveData(); close(); }; });
         c.querySelectorAll('.delete-global-tag-btn').forEach(btn => { btn.onclick = (e) => { const t = e.currentTarget.dataset.deltag; deleteTagGlobally(t, item, renderContent); }; });
     };
     renderContent();
@@ -1216,76 +1190,13 @@ function openManageTagsModal(item, onUpdate) {
 function showInfoModal() {
     toggleAppDepthEffect(true);
     const checkIcon = `<svg class="info-feature-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-    
-    // Nowe, stylowe kafelki opisujące mocne strony aplikacji
-    const strengthsHTML = `
-        <h3 style="text-align: left; margin-top: 24px; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Mocne strony aplikacji</h3>
-        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
-            <div style="background: color-mix(in srgb, var(--success-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--success-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;">
-                <svg style="width:24px; height:24px; fill:none; stroke:var(--success-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                <div>
-                    <strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">100% Prywatności</strong>
-                    <span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Brak kont, logowania i śledzenia. Twoje dane są przypisane tylko do Twojego urządzenia i nie trafiają na żadne zewnętrzne serwery.</span>
-                </div>
-            </div>
-            <div style="background: color-mix(in srgb, var(--info-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;">
-                <svg style="width:24px; height:24px; fill:none; stroke:var(--info-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-                <div>
-                    <strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Szybkość i niezależność</strong>
-                    <span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Działa jako PWA (możesz dodać do ekranu głównego). Ładuje się błyskawicznie i nie zużywa niepotrzebnie baterii w tle.</span>
-                </div>
-            </div>
-            <div style="background: color-mix(in srgb, var(--primary-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;">
-                <svg style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
-                <div>
-                    <strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Czysty interfejs</strong>
-                    <span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Bez reklam, bez abonamentu. Stworzone z myślą o prostocie.</span>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Reszta modala ułożona w czytelny sposób (za pomocą backticks ` `)
-    const infoHTML = `
-    <div class="modal-overlay">
-        <div class="modern-modal-wrapper">
-            <div class="modal-drag-handle"></div>
-            <button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button>
-            <div class="modern-modal-scroll" style="padding: 32px 24px;">
-                <h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;">
-                    <svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg>
-                    <span>PenguinFlix</span>
-                </h2>
-                <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik filmów i seriali.</p>
-                
-                <h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3>
-                <ul class="info-feature-list">
-                    <li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie tagów i ręcznych wpisów.</span></li>
-                    <li class="info-feature-item">${checkIcon} <span>Śledzenie odcinków (z kalendarzem premier).</span></li>
-                    <li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li>
-                    <li class="info-feature-item">${checkIcon} <span>Zaawansowane filtry VOD (Netflix, HBO itp.).</span></li>
-                </ul>
-
-                ${strengthsHTML}
-
-                <div class="important-note">
-                    <strong>Ważne:</strong> Z racji pełnej prywatności i braku chmury, aby uniknąć utraty danych (np. przy zmianie telefonu), <strong>regularnie twórz kopię zapasową</strong> w zakładce Profil!
-                </div>
-                <p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z API The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p>
-            </div>
-        </div>
-    </div>`;
-    
-    const c = document.getElementById('customAlertContainer'); 
-    c.innerHTML = infoHTML;
-    
-    const modal = c.querySelector('.modal-overlay'); 
-    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
-    
-    modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
-    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
-    setupSwipeToClose(modal, close);
+    const strengthsHTML = `<h3 style="text-align: left; margin-top: 24px; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Mocne strony aplikacji</h3><div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;"><div style="background: color-mix(in srgb, var(--success-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--success-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;"><svg style="width:24px; height:24px; fill:none; stroke:var(--success-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><div><strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">100% Prywatności</strong><span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Brak kont, logowania i śledzenia. Twoje dane są przypisane tylko do Twojego urządzenia.</span></div></div><div style="background: color-mix(in srgb, var(--info-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;"><svg style="width:24px; height:24px; fill:none; stroke:var(--info-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg><div><strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Szybkość i niezależność</strong><span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Działa jako PWA. Ładuje się błyskawicznie i nie zużywa niepotrzebnie baterii w tle.</span></div></div><div style="background: color-mix(in srgb, var(--primary-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;"><svg style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg><div><strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Czysty interfejs</strong><span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Bez reklam, bez abonamentu. Stworzone z myślą o prostocie.</span></div></div></div>`;
+    const infoHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 32px 24px;"><h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;"><svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg><span>PenguinFlix</span></h2><p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik filmów i seriali.</p><h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3><ul class="info-feature-list"><li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie tagów i ręcznych wpisów.</span></li><li class="info-feature-item">${checkIcon} <span>Śledzenie odcinków (z kalendarzem premier).</span></li><li class="info-feature-item">${checkIcon} <span>Panel powiadomień.</span></li><li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li><li class="info-feature-item">${checkIcon} <span>Zaawansowane filtry VOD (Netflix, HBO itp.).</span></li></ul>${strengthsHTML}<div class="important-note"><strong>Ważne:</strong> Z racji pełnej prywatności i braku chmury, aby uniknąć utraty danych, <strong>regularnie twórz kopię zapasową</strong> w zakładce Profil!</div><p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z API The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p></div></div></div>`;
+    const c = document.getElementById('customAlertContainer'); c.innerHTML = infoHTML;
+    const modal = c.querySelector('.modal-overlay'); const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
 }
+
 function showConfig() {
     document.getElementById('mainContent').style.display = 'none';
     const c = document.getElementById('configSection'); c.style.display = 'block';
@@ -1301,9 +1212,9 @@ function showCustomAlert(title, message, type = 'info') {
     if (type === 'success') triggerHaptic('success'); else if (type === 'error') triggerHaptic('error'); else triggerHaptic('medium');
     const toastContainer = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = `modern-toast ${type}`;
     const icons = { success: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`, error: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`, info: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>` };
-    toast.innerHTML = `<div class="toast-icon-wrap ${type}">${icons[type] || icons.info}</div><div class="toast-content"><span class="toast-title">${title}</span><span class="toast-msg">${message}</span></div><div class="toast-progress" style="color: ${type==='success'?'var(--success-color)':type==='error'?'var(--primary-color)':'#3b82f6'}"></div>`;
+    toast.innerHTML = `<div class="toast-icon-wrap ${type}">${icons[type] || icons.info}</div><div class="toast-content"><span class="toast-title">${title}</span><span class="toast-msg">${message}</span></div><div class="toast-progress" style="color: ${type === 'success' ? 'var(--success-color)' : type === 'error' ? 'var(--primary-color)' : '#3b82f6'}"></div>`;
     toastContainer.appendChild(toast);
-    const hideTimeout = setTimeout(() => { if(!toast.classList.contains('hiding')) { toast.classList.add('hiding'); toast.addEventListener('animationend', () => toast.remove()); } }, 3500);
+    const hideTimeout = setTimeout(() => { if (!toast.classList.contains('hiding')) { toast.classList.add('hiding'); toast.addEventListener('animationend', () => toast.remove()); } }, 3500);
     toast.addEventListener('click', () => { clearTimeout(hideTimeout); toast.classList.add('hiding'); toast.addEventListener('animationend', () => toast.remove()); });
 }
 
@@ -1315,7 +1226,7 @@ function showCustomConfirm(title, message) {
         const cleanup = (res) => { o.style.opacity = '0'; setTimeout(() => { c.innerHTML = ''; resolve(res); }, 200); };
         c.querySelector('.alert-button-confirm').onclick = () => cleanup(true);
         c.querySelector('.alert-button-cancel').onclick = () => cleanup(false);
-        o.onclick = (e) => { if(e.target === o) cleanup(false); };
+        o.onclick = (e) => { if (e.target === o) cleanup(false); };
     });
 }
 
@@ -1327,9 +1238,9 @@ function displaySearchResults(results) {
         const safeTitle = escapeHTML(item.title || item.name);
         const div = document.createElement('div'); div.className = 'search-item'; div.dataset.id = item.id; div.dataset.type = item.media_type;
         const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
-        let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0,0,0,0); isReleased = rd <= td; }
+        let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
         const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
-        div.innerHTML = `<img src="${posterSrc}" alt="Okładka" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date||item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div>`;
+        div.innerHTML = `<img src="${posterSrc}" alt="Okładka" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div>`;
         container.appendChild(div);
     });
     if (filtered.length > 5) { const showAll = document.createElement('div'); showAll.className = 'search-item show-all-results-btn'; showAll.innerHTML = `<span>Pokaż wszystkie ${filtered.length} wyników</span>`; showAll.style.justifyContent = 'center'; showAll.style.fontWeight = '600'; container.appendChild(showAll); showAll.addEventListener('click', showAllResultsModal); }
@@ -1341,23 +1252,18 @@ function showAllResultsModal() {
     const filtered = fullSearchResults.filter(item => (item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path);
     const rHTML = filtered.map(item => {
         const safeTitle = escapeHTML(item.title || item.name); const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
-        let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0,0,0,0); isReleased = rd <= td; }
+        let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
         const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
-        return `<div class="search-item" data-id="${item.id}" data-type="${item.media_type}"><img class="fade-image" src="${posterSrc}" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date||item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div></div>`;
+        return `<div class="search-item" data-id="${item.id}" data-type="${item.media_type}"><img class="fade-image" src="${posterSrc}" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div></div>`;
     }).join('');
     modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="max-width: 700px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border-color); text-align: center;"><h2 style="margin: 0; font-size: 1.2rem;">Wyniki dla: "${query}"</h2></div><div class="modern-modal-scroll" style="padding: 0;"><div class="all-results-list">${rHTML}</div></div></div></div>`;
     document.getElementById('searchResults').style.display = 'none';
-    
-    const modal = modalContainer.querySelector('.modal-overlay'); 
-    const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
-    
-    modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
-    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
-    setupSwipeToClose(modal, close);
-        modal.querySelector('.all-results-list').addEventListener('click', (e) => { 
-        const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item'); 
-        if (addBtn) { e.stopPropagation(); handleQuickAddItem(addBtn); close(); } 
-        else if (item) { if (item.dataset.id) { openPreviewModal(item.dataset.id, item.dataset.type); close(); } } 
+
+    const modal = modalContainer.querySelector('.modal-overlay'); const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
+    modal.querySelector('.all-results-list').addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
+        if (addBtn) { e.stopPropagation(); handleQuickAddItem(addBtn); close(); } else if (item) { if (item.dataset.id) { openPreviewModal(item.dataset.id, item.dataset.type); close(); } }
     });
 }
 
@@ -1389,9 +1295,10 @@ function getModalHeaderHTML(item, isAdded) {
         </div>
     </div>`;
 }
+
 function renderProvidersHTML(providers) {
     if (!providers || providers.length === 0) return '';
-    const lHTML = providers.map(p => `<img class="provider-logo" src="${IMAGE_BASE_URL.replace('w500','w92')}${p.logo_path}" alt="${escapeHTML(p.provider_name)}" title="${escapeHTML(p.provider_name)}">`).join('');
+    const lHTML = providers.map(p => `<img class="provider-logo" src="${IMAGE_BASE_URL.replace('w500', 'w92')}${p.logo_path}" alt="${escapeHTML(p.provider_name)}" title="${escapeHTML(p.provider_name)}">`).join('');
     return `<div class="providers-section"><h3>Gdzie obejrzeć?</h3><div class="providers-list">${lHTML}</div><span style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-top:8px;">Dane o platformach dostarcza JustWatch</span></div>`;
 }
 
@@ -1403,70 +1310,37 @@ function renderRecommendationsHTML(recs, type) {
 
 function renderReviewsHTML(reviews, id, type) {
     if (!reviews || reviews.length === 0) return '';
-    
-    // Bierzemy maksymalnie 4 opinie do "podglądu" na suwaku
     const previewReviews = reviews.slice(0, 4);
-    
     const cards = previewReviews.map(r => {
         const ratingBadge = r.author_details?.rating ? `<span class="public-review-rating">★ ${r.author_details.rating}</span>` : '';
         const cleanContent = escapeHTML(r.content).replace(/\n/g, '<br>');
         return `<div class="public-review-card" onclick="openFullReviewsModal('${id}', '${type}')" style="cursor:pointer; transition:transform 0.2s;"><div class="public-review-header"><div class="public-review-author">${escapeHTML(r.author)}</div>${ratingBadge}</div><div class="public-review-content">${cleanContent}</div></div>`;
     }).join('');
 
-    // Tworzymy elegancki nagłówek z przyciskiem po prawej stronie
-    return `
-    <div class="reviews-section">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h3 style="margin: 0;">Opinie społeczności</h3>
-            <button class="reviews-header-btn" onclick="openFullReviewsModal('${id}', '${type}')">
-                Wszystkie (${reviews.length}) 
-                <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
-        </div>
-        <div class="reviews-scroller">${cards}</div>
-    </div>`;
+    return `<div class="reviews-section"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;"><h3 style="margin: 0;">Opinie społeczności</h3><button class="reviews-header-btn" onclick="openFullReviewsModal('${id}', '${type}')">Wszystkie (${reviews.length}) <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></button></div><div class="reviews-scroller">${cards}</div></div>`;
 }
 
-// Nowa funkcja 3: Tworzy duży modal z pełnymi tekstami
 async function openFullReviewsModal(id, type) {
-    const c = document.getElementById('actorModalContainer'); // Wykorzystujemy kontener aktorów, by nałożył się na wierzch!
+    const c = document.getElementById('actorModalContainer');
     c.innerHTML = `<div class="modal-overlay" style="z-index: 3000;"><div class="modern-modal-wrapper"><div class="modern-modal-scroll" style="padding: 40px; text-align:center; color:var(--text-secondary);">Ładowanie opinii...</div></div></div>`;
-
     const reviews = await getReviews(id, type);
     if (!reviews || reviews.length === 0) { c.innerHTML = ''; return; }
 
     const listHTML = reviews.map(r => {
         const ratingBadge = r.author_details?.rating ? `<span class="public-review-rating">★ ${r.author_details.rating}</span>` : '';
         const cleanContent = escapeHTML(r.content).replace(/\n/g, '<br>');
-        return `<div style="background:var(--card-color); border:1px solid var(--border-color); padding:20px; border-radius:var(--radius-md); margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-            <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
-                <strong style="font-size:1.1rem;">${escapeHTML(r.author)}</strong>${ratingBadge}
-            </div>
-            <div style="font-size:0.95rem; color:var(--text-secondary); line-height:1.6;">${cleanContent}</div>
-        </div>`;
+        return `<div style="background:var(--card-color); border:1px solid var(--border-color); padding:20px; border-radius:var(--radius-md); margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.1);"><div style="display:flex; justify-content:space-between; margin-bottom:16px;"><strong style="font-size:1.1rem;">${escapeHTML(r.author)}</strong>${ratingBadge}</div><div style="font-size:0.95rem; color:var(--text-secondary); line-height:1.6;">${cleanContent}</div></div>`;
     }).join('');
 
-    c.innerHTML = `
-    <div class="modal-overlay actor-modal-overlay" id="fullReviewsOverlay">
-        <div class="modern-modal-wrapper" style="padding:0;">
-            <div class="modal-drag-handle"></div>
-            <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; background:var(--bg-color); z-index:10;">
-                <h3 style="margin:0; font-size:1.2rem;">Opinie (${reviews.length})</h3>
-                <button class="icon-button close-reviews-btn" style="background:var(--card-color);">${ICONS.close}</button>
-            </div>
-            <div class="modern-modal-scroll" style="padding: 24px;">
-                ${listHTML}
-            </div>
-        </div>
-    </div>`;
+    c.innerHTML = `<div class="modal-overlay actor-modal-overlay" id="fullReviewsOverlay"><div class="modern-modal-wrapper" style="padding:0;"><div class="modal-drag-handle"></div><div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; background:var(--bg-color); z-index:10;"><h3 style="margin:0; font-size:1.2rem;">Opinie (${reviews.length})</h3><button class="icon-button close-reviews-btn" style="background:var(--card-color);">${ICONS.close}</button></div><div class="modern-modal-scroll" style="padding: 24px;">${listHTML}</div></div></div>`;
 
     const overlay = c.querySelector('#fullReviewsOverlay');
-    const close = () => { c.innerHTML = ''; }; // Zamyka tylko recenzje, nie rusza tła!
-    
-    overlay.addEventListener('click', e => { if(e.target === overlay) close(); });
+    const close = () => { c.innerHTML = ''; };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
     c.querySelector('.close-reviews-btn').addEventListener('click', close);
     setupSwipeToClose(overlay, close);
 }
+
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
@@ -1483,35 +1357,31 @@ async function openPreviewModal(id, type) {
 
     let canWatch = true;
     if (item.type === 'tv' && !isSeriesFinished(item)) canWatch = false;
-    else if (item.type === 'movie') { if (!item.releaseDate) canWatch = false; else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); if (rd > t) canWatch = false; } }
+    else if (item.type === 'movie') { if (!item.releaseDate) canWatch = false; else { const t = new Date(); t.setHours(0, 0, 0, 0); const rd = new Date(item.releaseDate); rd.setHours(0, 0, 0, 0); if (rd > t) canWatch = false; } }
 
     let fHTML = isAlreadyAdded ? `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>` : canWatch ? `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>` : `<div class="modal-sticky-footer"><button id="previewAddToWatchBtn" class="modal-btn primary" style="width: 100%;">Dodaj do Obejrzenia</button></div>`;
     const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
 
-    // --- PASEK AKCJI (OCENA I PRZYCISKI) ---
     let addTagBtnHTML = isAlreadyAdded ? `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>` : '';
-    
-    // ZAAWANSOWANA PINEZKA (Dynamiczny wygląd)
     let pinBtnHTML = isAlreadyAdded ? `<button id="modal-pin-btn" style="background:${localItem && localItem.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${localItem && localItem.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${localItem && localItem.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>` : '';
-    
-// NOWOŚĆ: Przycisk Share spójny z Tagami i Pinezką!
-let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
+    let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
+
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
-    const modal = dModal.querySelector('.modal-overlay'); 
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); if(history.state && history.state.modalOpen) history.back(); };
-    
+    const modal = dModal.querySelector('.modal-overlay');
+    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); if (history.state && history.state.modalOpen) history.back(); };
+
     modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-        const rec = e.target.closest('.recommendation-item'); 
-        if (rec) { 
+        const rec = e.target.closest('.recommendation-item');
+        if (rec) {
             const rId = rec.dataset.id; const rType = rec.dataset.type;
             if (Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType)) openDetailsModal(rId, rType); else openPreviewModal(rId, rType);
-            return; 
+            return;
         }
         const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) {
@@ -1522,7 +1392,7 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
     modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
 
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
-    if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openPreviewModal(id, type)));
+    if (mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openPreviewModal(id, type)));
 
     const pinBtn = modal.querySelector('#modal-pin-btn');
     if (pinBtn && localItem) {
@@ -1539,7 +1409,7 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
     }
 
     const shareBtn = modal.querySelector('#modal-share-btn');
-    if(shareBtn) {
+    if (shareBtn) {
         shareBtn.addEventListener('click', (e) => {
             const btn = e.currentTarget;
             handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
@@ -1550,7 +1420,8 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
     getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
-if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
+    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
+
     if (!isAlreadyAdded) {
         const wBtn = document.getElementById('previewAddToWatchBtn'); const wdBtn = document.getElementById('previewAddToWatchedBtn');
         if (wBtn) wBtn.onclick = async () => { if (await addItemToList(id, type, 'toWatch')) close(); };
@@ -1562,7 +1433,7 @@ async function openDetailsModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
 
-    const { listName, item } = getListAndItem(id, type); 
+    const { listName, item } = getListAndItem(id, type);
     if (!item) { toggleAppDepthEffect(false); return; }
 
     const dModal = document.getElementById('detailsModalContainer');
@@ -1572,14 +1443,14 @@ async function openDetailsModal(id, type) {
         const fd = await getItemDetails(id, type);
         if (fd) {
             item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate; item.vod = fd.vod || [];
-            item.tmdbRating = fd.tmdbRating || item.tmdbRating; 
+            item.tmdbRating = fd.tmdbRating || item.tmdbRating;
             if (type === 'tv') { item.status = fd.status !== undefined ? fd.status : item.status; item.nextEpisodeToAir = fd.nextEpisodeToAir !== undefined ? fd.nextEpisodeToAir : item.nextEpisodeToAir; item.seasons = fd.seasons || item.seasons; item.numberOfSeasons = fd.numberOfSeasons || item.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes || item.numberOfEpisodes; if (!item.progress) item.progress = {}; } else if (type === 'movie') { item.runtime = fd.runtime || item.runtime; }
             await saveData();
         }
     }
 
     const isToWatch = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
-    
+
     let fHTML = '';
     if (isWatched) { fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; }
     else {
@@ -1587,7 +1458,7 @@ async function openDetailsModal(id, type) {
         if (item.type === 'tv' && !isSeriesFinished(item)) { cw = false; wMsg = 'Zakończ serial, aby przenieść do obejrzanych.'; }
         else if (item.type === 'movie') {
             if (!item.releaseDate) { cw = false; wMsg = `Brak daty premiery.`; }
-            else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } }
+            else { const t = new Date(); t.setHours(0, 0, 0, 0); const rd = new Date(item.releaseDate); rd.setHours(0, 0, 0, 0); if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } }
         }
         if (!cw) fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;"><span style="color: var(--info-color); font-size: 0.85rem; font-weight: 600; display:flex; align-items:center; gap:6px; flex-direction:column;"><svg viewBox="0 0 24 24" style="width:22px; height:22px; fill:currentColor;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> <span>${wMsg}</span></span></div>`;
         else fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
@@ -1599,7 +1470,7 @@ async function openDetailsModal(id, type) {
         if (nextEp) nxBanner = `<div style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--primary-color)"><path d="M8 5v14l11-7z"/></svg> Następny do obejrzenia: <span style="color:var(--primary-color)">${nextEp}</span></div>`;
         else if (!isSeriesFinished(item)) {
             const aStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
-            if(aStr) nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></div>`;
+            if (aStr) nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></div>`;
             else nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">⏳ Jesteś na bieżąco! Nieznana data premiery.</div>`;
         }
     }
@@ -1617,22 +1488,18 @@ async function openDetailsModal(id, type) {
     }
 
     let addTagBtnHTML = `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>`;
-    
-    // ZAAWANSOWANA PINEZKA (Dynamiczny wygląd)
     let pinBtnHTML = `<button id="modal-pin-btn" style="background:${item.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${item.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${item.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
-    
-// NOWOŚĆ: Przycisk Share spójny z Tagami i Pinezką!
-let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
+    let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
+
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
-    
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
-    
+
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
-    if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
+    if (mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
 
     const pinBtn = modal.querySelector('#modal-pin-btn');
     if (pinBtn) {
@@ -1648,7 +1515,7 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
     }
 
     const shareBtn = modal.querySelector('#modal-share-btn');
-    if(shareBtn) {
+    if (shareBtn) {
         shareBtn.addEventListener('click', (e) => {
             const btn = e.currentTarget;
             handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
@@ -1662,17 +1529,17 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
         fC.querySelector('#modal-favorite-btn').addEventListener('click', async (e) => { item.isFavorite = !item.isFavorite; e.currentTarget.classList.toggle('active', item.isFavorite); await saveData(); renderList(data[listName], listName, true); });
     }
 
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if(history.state && history.state.modalOpen) history.back(); };
-    
+    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if (history.state && history.state.modalOpen) history.back(); };
+
     modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
         const rewatchHeader = e.target.closest('.rewatch-accordion-header'); if (rewatchHeader) { triggerHaptic('light'); rewatchHeader.parentElement.classList.toggle('expanded'); return; }
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-        const rec = e.target.closest('.recommendation-item'); 
-        if (rec) { 
+        const rec = e.target.closest('.recommendation-item');
+        if (rec) {
             const rId = rec.dataset.id; const rType = rec.dataset.type;
             if (Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType)) openDetailsModal(rId, rType); else openPreviewModal(rId, rType);
-            return; 
+            return;
         }
         const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) { item.customTags = item.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); openDetailsModal(id, type); return; }
@@ -1692,7 +1559,7 @@ let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-co
         getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     }
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
-if(typeof getReviews === 'function') getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
+    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
     if (isToWatch) populateAndRenderSeriesSections(item, document.getElementById('seasons-container'));
 
     if (isWatched) {
@@ -1748,15 +1615,15 @@ function renderSeasonsProgress(item, container) {
 
 function renderEpisodes(item, seasonData, container) {
     const sNum = seasonData.season_number; if (!item.progress[sNum]) item.progress[sNum] = [];
-    const td = new Date(); td.setHours(0,0,0,0);
+    const td = new Date(); td.setHours(0, 0, 0, 0);
     let blockFrom = 9999; if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) { const ad = new Date(item.nextEpisodeToAir.date); if (ad > td) blockFrom = item.nextEpisodeToAir.episode; }
 
     const epHTML = seasonData.episodes.map(ep => {
         const isC = item.progress[sNum].includes(ep.episode_number); const uId = `s${sNum}-ep${ep.episode_number}`;
         const rt = ep.runtime ? `<span class="episode-runtime">${ep.runtime} min</span>` : '';
         let isFut = false; let fw = '';
-        if (ep.episode_number >= blockFrom) { isFut = true; const ed = new Date(ep.air_date); fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${ed > td ? ed.toLocaleDateString('pl-PL', {day:'numeric',month:'short'}) : 'wkrótce'}</div>`; }
-        else if (ep.air_date) { const ed = new Date(ep.air_date); if(ed > td) { isFut = true; fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${ed.toLocaleDateString('pl-PL', {day:'numeric',month:'short'})}</div>`; } }
+        if (ep.episode_number >= blockFrom) { isFut = true; const ed = new Date(ep.air_date); fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${ed > td ? ed.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) : 'wkrótce'}</div>`; }
+        else if (ep.air_date) { const ed = new Date(ep.air_date); if (ed > td) { isFut = true; fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${ed.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</div>`; } }
         return `<div class="episode-item" style="${isFut ? 'opacity: 0.6; pointer-events: none;' : ''}"><div class="episode-info"><div class="episode-title-line"><div class="episode-title-group"><span class="episode-number">${ep.episode_number}.</span><span class="episode-title">${escapeHTML(ep.name)}</span></div>${rt}</div>${renderCollapsibleText(ep.overview)}${fw}</div><label class="episode-status-toggle" for="${uId}"><input type="checkbox" id="${uId}" data-episode-number="${ep.episode_number}" ${isC ? 'checked' : ''} ${isFut ? 'disabled' : ''}><svg class="icon icon-watched" viewBox="0 0 24 24"><path d="M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27-3.11 11-7.5C21.27,7.61 17,4.5 12,4.5M12,17a5,5 0 1,1 0-10,5 5 0 0,1 0,10m0-8a3,3 0 1,0 0,6,3 3 0 0,0 0-6Z"/></svg><svg class="icon icon-unwatched" viewBox="0 0 24 24"><path d="M11.83,9.17C12.2,9.06 12.59,9 13,9a4,4 0 0,1 4,4c0,0.41-0.06,0.8-0.17,1.17L19.83,17.17C21.5,15.82 22.8,14 23.5,12C21.83,8.44 17.75,6 13,6c-1.55,0-3.04,0.33-4.38,0.9L11.83,9.17M13,4.5C18,4.5 22.27,7.61 24,12c-0.69,1.66-1.7,3.16-2.92,4.33L18.6,13.87C18.85,13.29 19,12.66 19,12a4,4 0 0,0-4-4c-0.66,0-1.29,0.15-1.87,0.4L10.6,5.92C11.39,4.72 12.56,4.5 13,4.5M3.27,4.27l1.59,1.59C3.15,7.45 1.83,9.53 1,12c1.83,3.56 5.75,6 10.5,6c1.76,0 3.44-0.44 5-1.18l2.18,2.18l1.41-1.41L4.68,2.86L3.27,4.27M7.53,9.8l1.55,1.55c-0.05,0.21-0.08,0.42-0.08,0.65a2.5,2.5 0 0,0 2.5,2.5c0.23,0 0.44-0.03 0.65-0.08l1.55,1.55C11.7,16.84 10.9,17 10,17a4.5,4.5 0 0,1-4.5-4.5c0-0.9,0.16-1.7,0.47-2.47Z"/></svg></label></div>`;
     }).join('');
 
@@ -1769,18 +1636,18 @@ function renderEpisodes(item, seasonData, container) {
         if (e.target.type === 'checkbox') {
             const epNum = parseInt(e.target.dataset.episodeNumber);
             if (e.target.checked) {
-                let hasUnch = false; for(let i=1; i<epNum; i++) { if(!item.progress[sNum].includes(i)) hasUnch = true; }
-                if(hasUnch) {
-                    if(await showCustomConfirm('Zaznaczyć poprzednie?', 'Zaznaczyć też wszystkie poprzednie odcinki z tego sezonu?')) {
-                        for(let i=1; i<=epNum; i++) if (!item.progress[sNum].includes(i)) item.progress[sNum].push(i);
-                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => { if(parseInt(cb.dataset.episodeNumber) <= epNum && !cb.disabled) cb.checked = true; });
+                let hasUnch = false; for (let i = 1; i < epNum; i++) { if (!item.progress[sNum].includes(i)) hasUnch = true; }
+                if (hasUnch) {
+                    if (await showCustomConfirm('Zaznaczyć poprzednie?', 'Zaznaczyć też wszystkie poprzednie odcinki z tego sezonu?')) {
+                        for (let i = 1; i <= epNum; i++) if (!item.progress[sNum].includes(i)) item.progress[sNum].push(i);
+                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => { if (parseInt(cb.dataset.episodeNumber) <= epNum && !cb.disabled) cb.checked = true; });
                     } else if (!item.progress[sNum].includes(epNum)) item.progress[sNum].push(epNum);
                 } else if (!item.progress[sNum].includes(epNum)) item.progress[sNum].push(epNum);
             } else item.progress[sNum] = item.progress[sNum].filter(ep => ep !== epNum);
 
             await saveData(); updateSeasonProgressUI(item, sNum); renderList(data['seriesToWatch'], 'seriesToWatch', true);
             const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
-            if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if(await showCustomConfirm('Gratulacje! 🎉', 'Obejrzałeś cały serial. Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); }
+            if (totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if (await showCustomConfirm('Gratulacje! 🎉', 'Obejrzałeś cały serial. Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); }
         }
     });
 
@@ -1788,7 +1655,7 @@ function renderEpisodes(item, seasonData, container) {
         if (allW) { item.progress[sNum] = []; container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); }
         else { item.progress[sNum] = avEps.map(ep => ep.episode_number); container.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true); }
         await saveData(); updateSeasonProgressUI(item, sNum); e.target.textContent = allW ? 'Zaznacz wydane' : 'Odznacz obejrzane'; renderList(data['seriesToWatch'], 'seriesToWatch', true);
-        if(!allW) { const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0); if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if(await showCustomConfirm('Ukończono! 🎉', 'Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); } }
+        if (!allW) { const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0); if (totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if (await showCustomConfirm('Ukończono! 🎉', 'Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); } }
     });
 }
 
@@ -1818,7 +1685,7 @@ async function openActorDetailsModal(actorId) {
     toggleAppDepthEffect(true);
     const c = document.getElementById('actorModalContainer');
     c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
-    
+
     const ad = await getActorDetails(actorId);
     if (!ad) { c.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych o aktorze.', 'error'); return; }
 
@@ -1834,43 +1701,37 @@ async function openActorDetailsModal(actorId) {
             if (fc.style.display === 'block') { fc.style.display = 'none'; fgBtn.textContent = 'Pokaż pełną filmografię'; }
             else {
                 if (fc.innerHTML === '') {
-                     fc.innerHTML = ad.full_filmography.map(i => {
+                    fc.innerHTML = ad.full_filmography.map(i => {
                         const yr = (i.release_date || i.first_air_date || '----').substring(0, 4); const pst = i.poster_path ? IMAGE_BASE_URL.replace('w500', 'w92') + i.poster_path : POSTER_PLACEHOLDER;
                         const isAdded = Object.values(data).flat().some(it => String(it.id) === String(i.id)); const t = escapeHTML(i.title || i.name);
                         const act = isAdded ? `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Już na liście</span>` : `<button class="add-filmography-item-btn" data-id="${i.id}" data-type="${i.media_type}">Dodaj do obejrzenia</button>`;
                         return `<div class="filmography-item"><div class="filmography-item-header"><img src="${pst}" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="filmography-item-info"><strong>${t}</strong><span>${yr}</span><span class="character">jako: ${escapeHTML(i.character) || 'Brak informacji'}</span></div></div><div class="filmography-item-details">${renderCollapsibleText(i.overview)}<div class="filmography-actions" style="margin-top:10px;">${act}</div></div></div>`;
-                     }).join('');
+                    }).join('');
                 }
                 fc.style.display = 'block'; fgBtn.textContent = 'Ukryj filmografię';
             }
         });
     }
 
-    const modal = c.querySelector('.modal-overlay'); 
-    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); if(history.state && history.state.modalOpen) history.back(); };
+    const modal = c.querySelector('.modal-overlay');
+    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); if (history.state && history.state.modalOpen) history.back(); };
     setupSwipeToClose(modal, close);
-    
+
     modal.addEventListener('click', e => {
         if (e.target === modal) close();
-                const kfItem = e.target.closest('.known-for-item'); 
-        if (kfItem && kfItem.dataset.id && kfItem.dataset.type) { 
-            const rId = kfItem.dataset.id; 
-            const rType = kfItem.dataset.type;
-            
-            // 1. Zamykamy modala aktora (odpala się też cofnięcie historii)
-            close(); 
-            
-            // 2. Po krótkiej pauzie otwieramy nowy film
+        const kfItem = e.target.closest('.known-for-item');
+        if (kfItem && kfItem.dataset.id && kfItem.dataset.type) {
+            const rId = kfItem.dataset.id; const rType = kfItem.dataset.type;
+            close();
             setTimeout(() => {
                 const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType);
-                if (isInLibrary) openDetailsModal(rId, rType); 
+                if (isInLibrary) openDetailsModal(rId, rType);
                 else openPreviewModal(rId, rType);
             }, 50);
-            
-            return; 
+            return;
         }
-        const h = e.target.closest('.filmography-item-header'); if(h) { const d = h.nextElementSibling; if(d && d.classList.contains('filmography-item-details')) { d.style.display = d.style.display === 'block' ? 'none' : 'block'; } }
-        const add = e.target.closest('.add-filmography-item-btn'); if(add) addItemFromFilmography(add);
+        const h = e.target.closest('.filmography-item-header'); if (h) { const d = h.nextElementSibling; if (d && d.classList.contains('filmography-item-details')) { d.style.display = d.style.display === 'block' ? 'none' : 'block'; } }
+        const add = e.target.closest('.add-filmography-item-btn'); if (add) addItemFromFilmography(add);
     });
     modal.querySelector('.modal-top-close-btn').addEventListener('click', close);
 }
@@ -1888,10 +1749,10 @@ async function addItemFromFilmography(btn) {
 }
 
 function setupInteractiveStars(item) {
-    const container = document.querySelector('.star-rating-interactive'); if(!container) return;
+    const container = document.querySelector('.star-rating-interactive'); if (!container) return;
     const rd = document.getElementById('rating-display'); const decBtn = document.getElementById('rating-decrement'); const incBtn = document.getElementById('rating-increment');
     let cr = item.rating || 0; const sP = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z";
-    for(let i=1; i<=5; i++){ const s = document.createElement('div'); s.className = 'star'; s.innerHTML = `<svg class="star-background" viewBox="0 0 24 24"><path d="${sP}"/></svg><svg class="star-foreground" viewBox="0 0 24 24"><path d="${sP}"/></svg>`; container.appendChild(s); }
+    for (let i = 1; i <= 5; i++) { const s = document.createElement('div'); s.className = 'star'; s.innerHTML = `<svg class="star-background" viewBox="0 0 24 24"><path d="${sP}"/></svg><svg class="star-foreground" viewBox="0 0 24 24"><path d="${sP}"/></svg>`; container.appendChild(s); }
     const updUI = (rat) => { cr = rat; container.dataset.rating = cr; container.querySelectorAll('.star-foreground').forEach((st, idx) => { const sc = cr - idx; if (sc >= 1) st.style.clipPath = 'inset(0 0 0 0)'; else if (sc > 0) st.style.clipPath = `inset(0 ${100 - sc * 100}% 0 0)`; else st.style.clipPath = 'inset(0 100% 0 0)'; }); rd.textContent = `${cr.toFixed(1)} / 5.0`; decBtn.disabled = cr <= 0; incBtn.disabled = cr >= 5; };
     const calcEvt = (e) => { const r = container.getBoundingClientRect(); const mx = e.clientX - r.left; const rw = (mx / r.width) * 5; return Math.max(0, Math.min(5, Math.round(rw * 2) / 2)); };
     container.addEventListener('mousemove', e => updUI(calcEvt(e))); container.addEventListener('mouseleave', () => updUI(parseFloat(container.dataset.rating))); container.addEventListener('click', e => updUI(calcEvt(e)));
@@ -1899,7 +1760,6 @@ function setupInteractiveStars(item) {
     updUI(cr);
 }
 
-// --- NATYWNE UDOSTĘPNIANIE (GENERATOR INFOGRAFIKI PREMIUM) ---
 async function handleNativeShare(title, posterUrl, year, rating, overview) {
     triggerHaptic('medium');
     showCustomAlert('Generowanie...', 'Tworzę infografikę...', 'info');
@@ -1908,7 +1768,7 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const canvasWidth = 1080;
-        
+
         const wrapText = (context, text, maxWidth) => {
             const words = String(text).split(' '); let lines = []; let currentLine = words[0] || '';
             for (let i = 1; i < words.length; i++) {
@@ -1927,7 +1787,7 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
         ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         const safeTitle = title ? String(title) : "Tytuł nieznany";
         const titleLines = wrapText(ctx, safeTitle, maxTextWidth); const titleHeight = titleLines.length * 76;
-        
+
         ctx.font = '28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         const cleanOverview = (!overview || overview === "null" || overview === "") ? "Brak opisu dla tego tytułu." : String(overview);
         const overviewLines = wrapText(ctx, cleanOverview, maxTextWidth); const overviewHeight = overviewLines.length * 40;
@@ -1939,7 +1799,7 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
         let hasImage = false; const img = new Image();
         if (posterUrl && posterUrl !== POSTER_PLACEHOLDER) {
             img.crossOrigin = "anonymous";
-            img.src = posterUrl.replace('w500', 'w780') + '?t=' + new Date().getTime(); 
+            img.src = posterUrl.replace('w500', 'w780') + '?t=' + new Date().getTime();
             await new Promise((resolve) => { img.onload = () => { hasImage = true; resolve(); }; img.onerror = () => { resolve(); }; });
         }
 
@@ -1948,7 +1808,7 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
             const scale = Math.max(canvasWidth / img.width, canvasHeight / img.height);
             const x = (canvasWidth / 2) - (img.width / 2) * scale; const y = (canvasHeight / 2) - (img.height / 2) * scale;
             ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-            ctx.filter = 'none'; 
+            ctx.filter = 'none';
             const grd = ctx.createLinearGradient(0, 0, 0, canvasHeight);
             grd.addColorStop(0, 'rgba(16, 17, 20, 0.75)'); grd.addColorStop(1, 'rgba(16, 17, 20, 0.95)');
             ctx.fillStyle = grd; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -1969,7 +1829,7 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
         const drawBadge = (text, startX, startY, bgColor, textColor) => {
             ctx.font = 'bold 22px -apple-system, sans-serif'; const textWidth = ctx.measureText(text).width;
             ctx.fillStyle = bgColor; roundRect(ctx, startX, startY, textWidth + 30, 44, 22); ctx.fill();
-            ctx.fillStyle = textColor; ctx.fillText(text, startX + 15, startY + 31); return startX + textWidth + 45; 
+            ctx.fillStyle = textColor; ctx.fillText(text, startX + 15, startY + 31); return startX + textWidth + 45;
         };
 
         let badgeX = textX;
@@ -1983,7 +1843,7 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
         canvas.toBlob(async (blob) => {
             const file = new File([blob], `${safeTitle.replace(/[^a-z0-9]/gi, '_')}.jpg`, { type: 'image/jpeg' });
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try { await navigator.share({ files: [file], title: safeTitle, text: `Sprawdź to! 🍿` }); } 
+                try { await navigator.share({ files: [file], title: safeTitle, text: `Sprawdź to! 🍿` }); }
                 catch (e) { if (e.name !== 'AbortError') showCustomAlert('Błąd', 'Udostępnianie anulowane.', 'error'); }
             } else {
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
@@ -1991,22 +1851,22 @@ async function handleNativeShare(title, posterUrl, year, rating, overview) {
             }
         }, 'image/jpeg', 0.82);
 
-    } catch (err) { 
-        console.error(err); 
-        showCustomAlert('Błąd', 'Wystąpił problem przy generowaniu karty.', 'error'); 
+    } catch (err) {
+        console.error(err);
+        showCustomAlert('Błąd', 'Wystąpił problem przy generowaniu karty.', 'error');
     }
 }
+
 // ==========================================
 // 12. ZARZĄDZANIE DANYMI I SYNCHRONIZACJA
 // ==========================================
-async function saveData() { 
-    try { 
-        await db.set('mainState', { data, viewState }); 
-        // Zapisujemy datę ostatniej zmiany w bazie (żeby Strażnik wiedział, że coś dodano)
+async function saveData() {
+    try {
+        await db.set('mainState', { data, viewState });
         localStorage.setItem('lastDataChangeDate', Date.now());
-    } catch { 
-        showCustomAlert('Błąd Krytyczny', 'Nie można zapisać danych.', 'error'); 
-    } 
+    } catch {
+        showCustomAlert('Błąd Krytyczny', 'Nie można zapisać danych.', 'error');
+    }
 }
 
 async function loadData() {
@@ -2014,16 +1874,16 @@ async function loadData() {
     if (saved) { data = saved.data || data; viewState = saved.viewState || viewState; }
     else {
         const old = localStorage.getItem('penguinFlixData_v2') || localStorage.getItem('penguinFlixData_v1') || localStorage.getItem('cineLogData_v12');
-        if (old) { try { const p = JSON.parse(old); data = p.data || p || data; viewState = p.viewState || viewState; await saveData(); localStorage.removeItem('penguinFlixData_v2'); } catch {} }
+        if (old) { try { const p = JSON.parse(old); data = p.data || p || data; viewState = p.viewState || viewState; await saveData(); localStorage.removeItem('penguinFlixData_v2'); } catch { } }
     }
     migrateData(data);
 }
 
 function migrateData(dt) {
     Object.keys(dt).forEach(k => {
-        if(Array.isArray(dt[k])) {
+        if (Array.isArray(dt[k])) {
             dt[k].forEach(i => {
-                if (i.dateAdded === undefined) i.dateAdded = Date.now() - Math.floor(Math.random()*100000);
+                if (i.dateAdded === undefined) i.dateAdded = Date.now() - Math.floor(Math.random() * 100000);
                 if (i.isFavorite === undefined) i.isFavorite = false;
                 if (!i.customTags) i.customTags = [];
                 if (i.poster && i.poster.startsWith('/')) i.poster = IMAGE_BASE_URL + i.poster;
@@ -2053,9 +1913,7 @@ function backupData() {
     if (isDataEmpty()) { showCustomAlert('Uwaga', 'Brak danych do eksportu.', 'info'); return; }
     const str = JSON.stringify({ data, viewState }, null, 2); const b = new Blob([str], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `penguinflix_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click(); URL.revokeObjectURL(a.href); 
-    
-    // Resetujemy czas dla Strażnika
+    a.click(); URL.revokeObjectURL(a.href);
     localStorage.setItem('lastBackupDate', Date.now());
     showCustomAlert('Sukces', 'Pobrano kopie zapasową.', 'success');
 }
@@ -2073,15 +1931,24 @@ async function restoreData(e) {
                 viewState.activeMainTab = 'movies'; viewState.moviesSubTab = 'toWatch';
                 migrateData(res.data); data = res.data; await saveData();
                 switchMainTab('movies'); switchSubTab('toWatch');
+
+                // --- POCZĄTEK ZMIANY: Czyszczenie i restart powiadomień ---
+                localStorage.removeItem('penguinNotifs'); // Kasujemy stare powiadomienia
+                document.getElementById('notification-badge').style.display = 'none'; // Chowamy kropkę
+                if (typeof NotificationManager !== 'undefined') {
+                    // Natychmiast odpalamy silnik na NOWYCH danych z pliku
+                    NotificationManager.runEngine();
+                }
+                // --- KONIEC ZMIANY ---
+
                 showCustomAlert('Sukces!', `Przywrócono dane z pliku "${f.name}".`, 'success');
             } else throw new Error();
         } catch { showCustomAlert('Błąd', 'Zły format pliku.', 'error'); }
     };
     r.readAsText(f); e.target.value = '';
 }
-
 async function refreshStaleSeries() {
-    const today = new Date(); today.setHours(0,0,0,0); let needsSave = false;
+    const today = new Date(); today.setHours(0, 0, 0, 0); let needsSave = false;
     const checkAndRefreshList = async (listName) => {
         if (!data[listName]) return;
         for (let i = 0; i < data[listName].length; i++) {
@@ -2094,7 +1961,7 @@ async function refreshStaleSeries() {
                 try {
                     const fd = await getItemDetails(item.id, 'tv');
                     if (fd) { item.status = fd.status; item.nextEpisodeToAir = fd.nextEpisodeToAir; item.seasons = fd.seasons; item.numberOfSeasons = fd.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes; needsSave = true; }
-                } catch(e) {}
+                } catch (e) { }
                 await new Promise(r => setTimeout(r, 400));
             }
         }
@@ -2102,8 +1969,6 @@ async function refreshStaleSeries() {
     await checkAndRefreshList('seriesToWatch');
     if (needsSave) { await saveData(); const activeList = getActiveListId(); if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true); }
 }
-// --- NATYWNE UDOSTĘPNIANIE (GENERATOR OBRAZKÓW CANVAS) ---
-
 
 // ==========================================
 // 13. PWA (Service Worker) z AUTO-UPDATE
@@ -2124,3 +1989,328 @@ if ('serviceWorker' in navigator) {
         }).catch(e => console.log('SW błąd', e));
     });
 }
+
+// ==========================================
+// 14. INTELIGENTNE CENTRUM POWIADOMIEŃ
+// ==========================================
+let smartNotificationsEnabled = localStorage.getItem('smartNotificationsEnabled') !== 'false';
+
+const NotificationManager = {
+    key: 'penguinNotifs',
+    lastRecKey: 'penguinLastRecDate',
+
+    // ZMIANA 1: Auto-kasowanie starszych niż 7 dni
+    get() {
+        const rawNotifs = JSON.parse(localStorage.getItem(this.key) || '[]');
+        const now = Date.now();
+        // Zostawiamy TYLKO te powiadomienia, które są młodsze niż 7 dni (7 dni * 24h * 60m * 60s * 1000ms)
+        const freshNotifs = rawNotifs.filter(n => (now - n.timestamp) < 7 * 24 * 60 * 60 * 1000);
+
+        if (freshNotifs.length !== rawNotifs.length) {
+            localStorage.setItem(this.key, JSON.stringify(freshNotifs));
+        }
+        return freshNotifs;
+    },
+
+    save(notifs) { localStorage.setItem(this.key, JSON.stringify(notifs)); this.updateBadge(); },
+
+    add(notif) {
+        const notifs = this.get();
+        const existingIndex = notifs.findIndex(n => n.id === notif.id);
+
+        if (existingIndex === -1) {
+            // Całkowicie nowe powiadomienie - dodajemy i zapalamy kropkę
+            notifs.unshift({ ...notif, timestamp: Date.now(), read: false });
+            this.save(notifs.slice(0, 20));
+        } else {
+            // Powiadomienie istnieje. Sprawdzamy, czy zmienił się tekst (minął dzień)
+            if (notifs[existingIndex].title !== notif.title) {
+                notifs[existingIndex].title = notif.title;
+                notifs[existingIndex].desc = notif.desc;
+                notifs[existingIndex].read = false; // Oznaczamy jako NIEPRZECZYTANE
+                this.save(notifs); // Zapisuje i ZAPALA kropkę!
+            }
+        }
+    },
+
+    // ZMIANA 2: Funkcja do ręcznego usuwania konkretnego powiadomienia
+    remove(id) {
+        const notifs = this.get();
+        const filtered = notifs.filter(n => n.id !== id);
+        this.save(filtered);
+    },
+
+    markAllRead() {
+        const notifs = this.get();
+        let changed = false;
+        notifs.forEach(n => { if (!n.read) { n.read = true; changed = true; } });
+        if (changed) this.save(notifs);
+    },
+
+    updateBadge() {
+        const badge = document.getElementById('notification-badge');
+        if (badge) {
+            const unreadCount = this.get().filter(n => !n.read).length;
+            badge.style.display = (smartNotificationsEnabled && unreadCount > 0) ? 'block' : 'none';
+        }
+    },
+
+    async runEngine() {
+        if (!smartNotificationsEnabled) { this.updateBadge(); return; }
+        this.checkPremieres();
+        await this.generateRecommendations();
+        this.updateBadge();
+    },
+
+    checkPremieres() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayTime = today.getTime();
+
+        const getDaysToPremiere = (dateString) => {
+            if (!dateString || dateString === "") return -1;
+            const rDate = new Date(dateString);
+            if (isNaN(rDate.getTime())) return -1;
+
+            rDate.setHours(0, 0, 0, 0);
+            const rTime = rDate.getTime();
+
+            const diffTime = rTime - todayTime;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays >= 0 && diffDays <= 4) return diffDays;
+            return -1;
+        };
+
+        const getTitlePrefix = (days) => {
+            if (days === 0) return 'Premiera Dzisiaj! 🍿';
+            if (days === 1) return 'Premiera Jutro! ⏳';
+            return `Premiera za ${days} dni 📅`;
+        };
+
+        (data.moviesToWatch || []).forEach(m => {
+            const days = getDaysToPremiere(m.releaseDate);
+            if (days !== -1) {
+                this.add({ id: `prem_m_${m.id}_${m.releaseDate}`, title: getTitlePrefix(days), desc: `Film "${m.title}" wchodzi na ekrany.`, image: m.poster, targetId: m.id, targetType: 'movie' });
+            }
+        });
+
+        (data.seriesToWatch || []).forEach(s => {
+            if (s.nextEpisodeToAir) {
+                const days = getDaysToPremiere(s.nextEpisodeToAir.date);
+                if (days !== -1) {
+                    const epStr = `S${String(s.nextEpisodeToAir.season).padStart(2, '0')}E${String(s.nextEpisodeToAir.episode).padStart(2, '0')}`;
+                    this.add({ id: `prem_s_${s.id}_${s.nextEpisodeToAir.date}`, title: days === 0 ? 'Nowy odcinek! 📺' : `Odcinek za ${days} dni 📺`, desc: `Wychodzi ${epStr} serialu "${s.title}".`, image: s.poster, targetId: s.id, targetType: 'tv' });
+                }
+            }
+        });
+    },
+
+    async generateRecommendations() {
+        const lastRec = parseInt(localStorage.getItem(this.lastRecKey) || '0');
+        const now = Date.now();
+        if (now - lastRec < 5 * 24 * 60 * 60 * 1000) return;
+
+        const topMovies = (data.moviesWatched || []).filter(m => m.rating >= 4);
+        if (topMovies.length === 0) return;
+
+        const seed = topMovies[Math.floor(Math.random() * topMovies.length)];
+        const currentYear = new Date().getFullYear();
+
+        try {
+            const recs = await getRecommendations(seed.id, 'movie');
+            if (recs && recs.length > 0) {
+                const allIds = Object.values(data).flat().map(i => String(i.id));
+                const newRecs = recs.filter(r => {
+                    if (allIds.includes(String(r.id))) return false;
+                    if (!r.release_date) return false;
+                    return parseInt(r.release_date.substring(0, 4)) === currentYear;
+                });
+
+                if (newRecs.length > 0) {
+                    const rec = newRecs[0];
+                    this.add({
+                        id: `rec_${rec.id}_${now}`,
+                        title: '✨ Nowość dla Ciebie',
+                        desc: `W tegorocznych nowościach znaleźliśmy "${escapeHTML(rec.title || rec.name)}". Może Ci się spodobać!`,
+                        image: rec.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + rec.poster_path : POSTER_PLACEHOLDER,
+                        targetId: rec.id, targetType: 'movie'
+                    });
+                    localStorage.setItem(this.lastRecKey, now);
+                }
+            }
+        } catch (e) { console.error('Błąd silnika rekomendacji', e); }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const notifCb = document.getElementById('smart-notifications-checkbox');
+    if (notifCb) {
+        notifCb.checked = smartNotificationsEnabled;
+        notifCb.addEventListener('change', (e) => {
+            smartNotificationsEnabled = e.target.checked;
+            localStorage.setItem('smartNotificationsEnabled', smartNotificationsEnabled);
+
+            if (!smartNotificationsEnabled) {
+                localStorage.removeItem('penguinNotifs'); // Czyszczenie
+                document.getElementById('notification-badge').style.display = 'none';
+                showCustomAlert('Powiadomienia są nieaktywne.', '', 'info');
+            } else {
+                showCustomAlert('Powiadomienia są aktywne.', '', 'success');
+                NotificationManager.runEngine();
+            }
+        });
+    }
+
+    const bellBtn = document.getElementById('notification-bell-btn');
+    const panelContainer = document.getElementById('notificationPanelContainer');
+
+    if (bellBtn && panelContainer) {
+        bellBtn.addEventListener('click', () => {
+            triggerHaptic('light');
+
+            const notifs = NotificationManager.get();
+            let listHTML = '';
+
+            if (!smartNotificationsEnabled) {
+                listHTML = `<div style="text-align:center; padding: 40px 20px; color: var(--text-secondary);">Inteligentne podpowiedzi są wyłączone w Ustawieniach.</div>`;
+            } else if (notifs.length === 0) {
+                listHTML = `<div style="text-align:center; padding: 40px 20px; color: var(--text-secondary);"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:none;stroke:currentColor;stroke-width:1;margin-bottom:12px;opacity:0.5;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><br>Brak nowych powiadomień.</div>`;
+            } else {
+                const timeFormatter = new Intl.RelativeTimeFormat('pl', { numeric: 'auto' });
+
+                const renderCard = (n) => {
+                    const daysAgo = Math.round((n.timestamp - Date.now()) / (1000 * 60 * 60 * 24));
+                    const timeStr = daysAgo === 0 ? 'Dzisiaj' : timeFormatter.format(daysAgo, 'day');
+
+                    // ZMIANA 3: Dodanie przycisku krzyżyka (X) do karty i marginesu
+                    return `
+                    <div class="notif-card ${n.read ? '' : 'unread'}" data-target-id="${n.targetId}" data-target-type="${n.targetType}" style="cursor:pointer; padding-right: 44px;">
+                        <img src="${n.image}" alt="Poster" onerror="this.src='${POSTER_PLACEHOLDER}';">
+                        <div class="notif-content">
+                            <span class="notif-title">${escapeHTML(n.title)}</span>
+                            <span class="notif-desc">${escapeHTML(n.desc)}</span>
+                            <span class="notif-time">${timeStr}</span>
+                        </div>
+                        <button class="notif-delete-btn" data-id="${n.id}" title="Usuń powiadomienie">
+                            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        </button>
+                    </div>`;
+                };
+
+                const movieNotifs = notifs.filter(n => String(n.id).startsWith('prem_m_'));
+                const seriesNotifs = notifs.filter(n => String(n.id).startsWith('prem_s_'));
+                const recNotifs = notifs.filter(n => String(n.id).startsWith('rec_'));
+
+                if (movieNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🎬 Premiery Filmowe</div>${movieNotifs.map(renderCard).join('')}</div>`;
+                if (seriesNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">📺 Nowe Odcinki</div>${seriesNotifs.map(renderCard).join('')}</div>`;
+                if (recNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">✨ Polecane Nowości</div>${recNotifs.map(renderCard).join('')}</div>`;
+            }
+
+            // Zbudowany kod HTML panelu
+            panelContainer.innerHTML = `
+                <div class="modal-overlay" id="notifOverlay" style="background: rgba(0,0,0,0.4); justify-content: flex-end;">
+                    <div class="notification-drawer open" id="notifDrawer" onclick="event.stopPropagation()">
+                        <!-- DODANY UCHWYT GESTU -->
+                        <div class="drawer-swipe-handle"></div>
+                        
+                        <div class="notification-header">
+                            <h2 style="display:flex; align-items:center; gap:8px;">
+                                Powiadomienia 
+                                ${notifs.length > 0 ? `<button class="clear-all-notifs-btn">Wyczyść</button>` : ''}
+                            </h2>
+                            <button class="icon-button close-notif-btn">${ICONS.close}</button>
+                        </div>
+                        <div class="notification-list" id="notificationListWrap">${listHTML}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('notification-badge').style.display = 'none';
+
+            const overlay = document.getElementById('notifOverlay');
+            const drawer = document.getElementById('notifDrawer');
+
+            const closePanel = () => {
+                drawer.style.transform = 'translateX(100%)';
+                setTimeout(() => { panelContainer.innerHTML = ''; NotificationManager.markAllRead(); }, 300);
+            };
+
+            overlay.addEventListener('click', closePanel);
+            overlay.querySelector('.close-notif-btn').addEventListener('click', closePanel);
+            // NOWE: Obsługa przycisku "Wyczyść"
+            const clearBtn = overlay.querySelector('.clear-all-notifs-btn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    triggerHaptic('medium');
+                    NotificationManager.save([]); // Kasuje całą bazę powiadomień
+                    document.getElementById('notificationListWrap').innerHTML = `<div style="text-align:center; padding: 40px 20px; color: var(--text-secondary);"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:none;stroke:currentColor;stroke-width:1;margin-bottom:12px;opacity:0.5;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><br>Brak nowych powiadomień.</div>`;
+                    clearBtn.remove(); // Ukrywa przycisk "wyczyść" bo jest już pusto
+                });
+            }
+
+            // ZMIANA 4: Obsługa kliknięcia w krzyżyk (X) bez otwierania filmu
+            overlay.querySelectorAll('.notif-delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Blokuje otwarcie modala filmu!
+                    triggerHaptic('light');
+
+                    const notifId = btn.dataset.id;
+                    const card = btn.closest('.notif-card');
+
+                    // Usuwamy z bazy
+                    NotificationManager.remove(notifId);
+
+                    // Animacja usuwania z ekranu
+                    card.classList.add('removing');
+                    setTimeout(() => {
+                        const group = card.closest('.notif-group');
+                        card.remove();
+
+                        // Jeśli usunięto ostatnie z grupy (np. jedyny serial), usuwamy nagłówek "Nowe Odcinki"
+                        if (group && group.querySelectorAll('.notif-card').length === 0) group.remove();
+
+                        // Jeśli całkowicie pusto, pokazujemy info o braku powiadomień
+                        const listWrap = document.getElementById('notificationListWrap');
+                        if (listWrap && listWrap.querySelectorAll('.notif-card').length === 0) {
+                            listWrap.innerHTML = `<div style="text-align:center; padding: 40px 20px; color: var(--text-secondary);"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:none;stroke:currentColor;stroke-width:1;margin-bottom:12px;opacity:0.5;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><br>Brak nowych powiadomień.</div>`;
+                        }
+                    }, 300); // Czas trwania animacji z CSS
+                });
+            });
+
+            // Otwieranie szczegółów
+            overlay.querySelectorAll('.notif-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const tId = card.dataset.targetId; const tType = card.dataset.targetType;
+                    if (tId && tType) {
+                        closePanel();
+                        const inLibrary = Object.values(data).flat().some(i => String(i.id) === String(tId));
+                        setTimeout(() => { inLibrary ? openDetailsModal(tId, tType) : openPreviewModal(tId, tType); }, 300);
+                    }
+                });
+            });
+
+            let startX = 0; let currentX = 0; let isDragging = false;
+            drawer.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.notification-list') && drawer.scrollHeight > drawer.clientHeight) return;
+                startX = e.touches[0].clientX;
+                isDragging = true;
+                drawer.style.transition = 'none';
+            }, { passive: true });
+
+            drawer.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const deltaX = e.touches[0].clientX - startX;
+                if (deltaX > 0) { e.preventDefault(); currentX = deltaX; drawer.style.transform = `translateX(${currentX}px)`; }
+            }, { passive: false });
+
+            drawer.addEventListener('touchend', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                drawer.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                if (currentX > 100) closePanel(); else drawer.style.transform = `translateX(0)`;
+                currentX = 0;
+            });
+        });
+    }
+});
