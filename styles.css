@@ -4559,3 +4559,34 @@ body[data-active-tab="profile"] .scroll-to-top {
         opacity: 1;
     }
 }
+/* ==========================================
+   NOWOCZESNY SUWAK (Stoper w filtrach)
+========================================== */
+input[type=range] {
+    -webkit-appearance: none; 
+    width: 100%; 
+    background: transparent; 
+}
+input[type=range]:focus { outline: none; }
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%; 
+    height: 8px; 
+    cursor: pointer;
+    background: color-mix(in srgb, var(--border-color) 80%, transparent);
+    border-radius: 10px; 
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+input[type=range]::-webkit-slider-thumb {
+    height: 24px; 
+    width: 24px; 
+    border-radius: 50%;
+    background: var(--primary-color);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 40%, transparent);
+    cursor: pointer; 
+    -webkit-appearance: none; 
+    margin-top: -8px;
+    transition: transform 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:active {
+    transform: scale(1.15); /* Pływający efekt przy łapaniu za kropkę */
+}
