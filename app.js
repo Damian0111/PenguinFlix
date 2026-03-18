@@ -1000,8 +1000,13 @@ async function getItemDetails(id, type) {
         item.numberOfSeasons = realSeasons.length; 
         item.numberOfEpisodes = realSeasons.reduce((acc, s) => acc + s.episode_count, 0); 
         item.progress = {};
-    } else if (type === 'movie') { 
+      } else if (type === 'movie') { 
         item.runtime = d.runtime || null; 
+    }
+    
+    // NAPRAWA: TMDB chowa czas odcinka w innej szufladce, wyciągamy średnią (pierwszą liczbę z tablicy)
+    if (type === 'tv' && d.episode_run_time && d.episode_run_time.length > 0) {
+        item.runtime = d.episode_run_time[0]; // np. wyciągnie "45" (minut)
     }
     
     return item;
@@ -1140,6 +1145,35 @@ const getListAndItem = (id, type) => { for (const listName in data) { if (Array.
 
 const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'flex'; };
 
+// OBLICZANIE CZASU POZOSTAŁEGO DO ZAKOŃCZENIA SERIALU (BINGE CALCULATOR)
+function getRemainingSeriesRuntimeHTML(item) {
+    if (item.type !== 'tv' || !item.seasons || item.seasons.length === 0) return '';
+    
+    let totalAiredEpisodes = 0;
+    item.seasons.forEach(s => { if(s.season_number > 0) totalAiredEpisodes += s.episode_count; });
+    
+    let totalWatched = 0;
+    if (item.progress) {
+        totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
+    }
+    
+    const episodesLeft = totalAiredEpisodes - totalWatched;
+    if (episodesLeft <= 0) return ''; 
+
+    // NAPRAWA: Jeśli TMDB nie dało nam czasu odcinka, "w ciemno" zakładamy 45 minut, żeby licznik działał.
+    const avgRuntime = item.runtime && item.runtime > 0 ? item.runtime : 45; 
+    
+    const minutesLeft = episodesLeft * avgRuntime;
+    const h = Math.floor(minutesLeft / 60); 
+    const m = minutesLeft % 60;
+    const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+
+    if (episodesLeft === 1) {
+        return `<span style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); color: var(--primary-color); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 2px 8px; border-radius: 50px; font-weight: 800; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" style="width:12px; height:12px; fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> Finał: ${timeStr}</span>`;
+    }
+    
+    return `<span style="background: color-mix(in srgb, var(--info-color) 15%, transparent); color: var(--info-color); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); padding: 2px 8px; border-radius: 50px; font-weight: 700; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" style="width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2.5;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Zostało: ${timeStr}</span>`;
+}
 function setupSwipeToClose(modalElement, closeCallback) {
     const wrapper = modalElement.querySelector('.modern-modal-wrapper'); if (!wrapper) return;
     let startY = 0; let currentY = 0; let isDragging = false;
@@ -1422,6 +1456,8 @@ function getModalHeaderHTML(item, isAdded) {
     </div>`;
 }
 
+
+
 function renderProvidersHTML(providers) {
     if (!providers || providers.length === 0) return '';
     const lHTML = providers.map(p => `<img class="provider-logo" src="${IMAGE_BASE_URL.replace('w500', 'w92')}${p.logo_path}" alt="${escapeHTML(p.provider_name)}" title="${escapeHTML(p.provider_name)}">`).join('');
@@ -1559,7 +1595,7 @@ async function openDetailsModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
 
-    const { listName, item } = getListAndItem(id, type);
+    const { listName, item } = getListAndItem(id, type); 
     if (!item) { toggleAppDepthEffect(false); return; }
 
     const dModal = document.getElementById('detailsModalContainer');
@@ -1569,35 +1605,91 @@ async function openDetailsModal(id, type) {
         const fd = await getItemDetails(id, type);
         if (fd) {
             item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate; item.vod = fd.vod || [];
-            item.tmdbRating = fd.tmdbRating || item.tmdbRating;
+            item.tmdbRating = fd.tmdbRating || item.tmdbRating; 
             if (type === 'tv') { item.status = fd.status !== undefined ? fd.status : item.status; item.nextEpisodeToAir = fd.nextEpisodeToAir !== undefined ? fd.nextEpisodeToAir : item.nextEpisodeToAir; item.seasons = fd.seasons || item.seasons; item.numberOfSeasons = fd.numberOfSeasons || item.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes || item.numberOfEpisodes; if (!item.progress) item.progress = {}; } else if (type === 'movie') { item.runtime = fd.runtime || item.runtime; }
             await saveData();
         }
     }
 
     const isToWatch = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
-
+    
+    // --- OBLICZANIE DOLNEJ STOPKI (FHTML) Z ZEGARKIEM ---
     let fHTML = '';
-    if (isWatched) { fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; }
-    else {
-        let cw = true; let wMsg = '';
-        if (item.type === 'tv' && !isSeriesFinished(item)) { cw = false; wMsg = 'Zakończ serial, aby przenieść do obejrzanych.'; }
-        else if (item.type === 'movie') {
-            if (!item.releaseDate) { cw = false; wMsg = `Brak daty premiery.`; }
-            else { const t = new Date(); t.setHours(0, 0, 0, 0); const rd = new Date(item.releaseDate); rd.setHours(0, 0, 0, 0); if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } }
+    if (isWatched) { 
+        fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; 
+    } else {
+        let cw = true; 
+        let wMsg = '';
+        let isTimeCalc = false;
+
+        if (item.type === 'tv') {
+            let totalAiredEpisodes = 0;
+            if (item.seasons) item.seasons.forEach(s => { if(s.season_number > 0) totalAiredEpisodes += s.episode_count; });
+            
+            let totalWatched = 0;
+            if (item.progress) totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
+            
+            const episodesLeft = totalAiredEpisodes - totalWatched;
+            
+            if (episodesLeft > 0) {
+                cw = false;
+                isTimeCalc = true;
+                const avgRuntime = item.runtime && item.runtime > 0 ? item.runtime : 45;
+                const minutesLeft = episodesLeft * avgRuntime;
+                const h = Math.floor(minutesLeft / 60); 
+                const m = minutesLeft % 60;
+                wMsg = h > 0 ? `Zostało do obejrzenia: ${h}h ${m}m` : `Zostało do obejrzenia: ${m}m`;
+            } else if (!isSeriesFinished(item)) {
+                cw = false; 
+                wMsg = 'Czekasz na nowe odcinki...'; 
+            }
+        } else if (item.type === 'movie') {
+            if (!item.releaseDate) { 
+                cw = false; wMsg = `Brak daty premiery.`; 
+            } else { 
+                const t = new Date(); t.setHours(0,0,0,0); 
+                const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); 
+                if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } 
+            }
         }
-        if (!cw) fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;"><span style="color: var(--info-color); font-size: 0.85rem; font-weight: 600; display:flex; align-items:center; gap:6px; flex-direction:column;"><svg viewBox="0 0 24 24" style="width:22px; height:22px; fill:currentColor;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> <span>${wMsg}</span></span></div>`;
-        else fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
+
+        if (!cw) {
+            const iconSvg = isTimeCalc 
+                ? `<svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
+                : `<svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:currentColor;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`;
+                
+            fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;">
+                <span style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 600; display:flex; align-items:center; gap:8px;">
+                    ${iconSvg} <span>${wMsg}</span>
+                </span>
+            </div>`;
+        } else {
+            fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
+        }
     }
 
+    // --- CZERWONY BANER ODCINKA (BEZ LICZNIKA) ---
     let nxBanner = '';
     if (isToWatch) {
         const nextEp = getNextEpisodeStr(item);
-        if (nextEp) nxBanner = `<div style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--primary-color)"><path d="M8 5v14l11-7z"/></svg> Następny do obejrzenia: <span style="color:var(--primary-color)">${nextEp}</span></div>`;
+        if (nextEp) {
+            nxBanner = `<div style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">
+                <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--primary-color)"><path d="M8 5v14l11-7z"/></svg> 
+                <span>Następny odcinek: <span style="color:var(--primary-color)">${nextEp}</span></span>
+            </div>`;
+        }
         else if (!isSeriesFinished(item)) {
             const aStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
-            if (aStr) nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></div>`;
-            else nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); font-weight:bold; color: var(--text-color); display:flex; align-items:center; gap:8px;">⏳ Jesteś na bieżąco! Nieznana data premiery.</div>`;
+            if(aStr) {
+                nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> 
+                    <span>Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></span>
+                </div>`;
+            } else {
+                nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">
+                    ⏳ Jesteś na bieżąco! Nieznana data premiery.
+                </div>`;
+            }
         }
     }
 
@@ -1614,18 +1706,21 @@ async function openDetailsModal(id, type) {
     }
 
     let addTagBtnHTML = `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>`;
+    
     let pinBtnHTML = `<button id="modal-pin-btn" style="background:${item.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${item.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${item.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
-    let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
-
+    
+    let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
+    
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
+    
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
-
+    
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
-    if (mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
+    if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
 
     const pinBtn = modal.querySelector('#modal-pin-btn');
     if (pinBtn) {
@@ -1641,7 +1736,7 @@ async function openDetailsModal(id, type) {
     }
 
     const shareBtn = modal.querySelector('#modal-share-btn');
-    if (shareBtn) {
+    if(shareBtn) {
         shareBtn.addEventListener('click', (e) => {
             const btn = e.currentTarget;
             handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
@@ -1655,17 +1750,17 @@ async function openDetailsModal(id, type) {
         fC.querySelector('#modal-favorite-btn').addEventListener('click', async (e) => { item.isFavorite = !item.isFavorite; e.currentTarget.classList.toggle('active', item.isFavorite); await saveData(); renderList(data[listName], listName, true); });
     }
 
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if (history.state && history.state.modalOpen) history.back(); };
-
+    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if(history.state && history.state.modalOpen) history.back(); };
+    
     modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
         const rewatchHeader = e.target.closest('.rewatch-accordion-header'); if (rewatchHeader) { triggerHaptic('light'); rewatchHeader.parentElement.classList.toggle('expanded'); return; }
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
-        const rec = e.target.closest('.recommendation-item');
-        if (rec) {
+        const rec = e.target.closest('.recommendation-item'); 
+        if (rec) { 
             const rId = rec.dataset.id; const rType = rec.dataset.type;
             if (Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType)) openDetailsModal(rId, rType); else openPreviewModal(rId, rType);
-            return;
+            return; 
         }
         const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) { item.customTags = item.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); openDetailsModal(id, type); return; }
@@ -1686,6 +1781,7 @@ async function openDetailsModal(id, type) {
     }
     getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
     getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
+    
     if (isToWatch) populateAndRenderSeriesSections(item, document.getElementById('seasons-container'));
 
     if (isWatched) {
