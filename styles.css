@@ -4590,3 +4590,97 @@ input[type=range]::-webkit-slider-thumb {
 input[type=range]::-webkit-slider-thumb:active {
     transform: scale(1.15); /* Pływający efekt przy łapaniu za kropkę */
 }
+
+
+
+/* ==========================================
+   2. TRYB MASOWY (BULK ACTIONS / LONG PRESS)
+========================================== */
+
+/* Kiedy tryb masowy jest aktywny, wszystkie elementy listy i siatki lekko się kurczą */
+body.bulk-mode-active .list-item,
+body.bulk-mode-active .grid-item {
+    transform: scale(0.92);
+    box-shadow: none !important;
+    border-color: transparent !important;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Kółko zaznaczenia (Domyślnie ukryte) */
+.bulk-checkbox {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(0,0,0,0.5); border: 2px solid white;
+    backdrop-filter: blur(4px); z-index: 20;
+    display: none; align-items: center; justify-content: center;
+    transition: all 0.2s; pointer-events: none; flex-shrink: 0;
+}
+body.bulk-mode-active .bulk-checkbox { display: flex; }
+
+/* "Ptaszek" wewnątrz kółka */
+.bulk-checkbox svg { 
+    width: 14px; height: 14px; stroke: white; stroke-width: 3; fill: none; 
+    opacity: 0; transform: scale(0.5); 
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+}
+
+/* Układ Kółka na Siatce (Plakaty) */
+.grid-item .bulk-checkbox {
+    position: absolute; 
+    top: 8px; left: 8px;
+}
+
+/* Układ Kółka na Liście (Wiersze) */
+.list-item .bulk-checkbox {
+    position: relative;
+    top: 0; left: 0;
+    margin-right: 4px;
+    align-self: center;
+}
+
+/* --- STAN ZAZNACZONY --- */
+
+/* Dla Siatki */
+.grid-item.bulk-selected {
+    transform: scale(0.96);
+    border: 2px solid var(--primary-color) !important;
+    opacity: 1;
+}
+
+/* Dla Listy (Świecący wiersz) */
+.list-item.bulk-selected {
+    transform: scale(0.97) !important;
+    background: color-mix(in srgb, var(--primary-color) 10%, var(--card-color)) !important;
+    border: 1px solid var(--primary-color) !important;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
+}
+
+/* Wygląd zaznaczonego Kółka */
+.bulk-selected .bulk-checkbox {
+    background: var(--primary-color); border-color: var(--primary-color);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 50%, transparent);
+}
+.bulk-selected .bulk-checkbox svg { opacity: 1; transform: scale(1); }
+
+/* --- PŁYWAJĄCY PASEK AKCJI (Na dole ekranu) --- */
+#bulk-action-bar {
+    position: fixed; bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px);
+    left: 50%; transform: translateX(-50%) translateY(150px);
+    background: color-mix(in srgb, var(--card-color) 85%, transparent);
+    backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    border-radius: var(--radius-pill); padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+    z-index: 2000; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: max-content; max-width: 90%;
+}
+#bulk-action-bar.visible { transform: translateX(-50%) translateY(0); }
+
+.bulk-counter { font-weight: 800; color: var(--text-color); font-size: 0.95rem; margin-right: 8px; }
+.bulk-btn {
+    background: transparent; border: none; color: var(--text-color);
+    font-size: 0.85rem; font-weight: 700; cursor: pointer; padding: 8px 12px;
+    border-radius: var(--radius-pill); transition: background 0.2s; display: flex; align-items: center; gap: 6px;
+}
+.bulk-btn svg { width: 18px; height: 18px; fill: currentColor; }
+.bulk-btn:hover { background: color-mix(in srgb, var(--text-secondary) 20%, transparent); }
+.bulk-btn.danger { color: #ef4444; }
+.bulk-btn.danger:hover { background: color-mix(in srgb, #ef4444 15%, transparent); }
