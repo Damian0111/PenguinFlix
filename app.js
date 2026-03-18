@@ -178,10 +178,15 @@ async function init() {
         await loadData();
         applyTheme();
         switchMainTab(viewState.activeMainTab || 'movies');
-        refreshStaleSeries();
+
+        refreshStaleSeries(); // Odświeża daty seriali
         checkSmartBackup();
+
+        // ZADANIA W TLE (Opóźnione o 2 sekundy, by ekran wczytał się płynnie)
         setTimeout(() => {
             if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
+            // Uruchamiamy cichego pracownika, który uzupełni stare filmy o czas trwania!
+            if (typeof healMissingData !== 'undefined') healMissingData();
         }, 2000);
 
     } else { showConfig(); }
@@ -567,6 +572,10 @@ function renderList(originalItems, listId, preserveLimit = false) {
     const state = viewState[listId];
     if (!preserveLimit) state.displayLimit = 30;
     let itemsToRender = [...(originalItems || [])];
+    // To wklejasz do renderList(), przed innymi if'ami (jak localSearch itd.)
+    if (state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies')) {
+        itemsToRender = itemsToRender.filter(item => item.runtime && item.runtime <= state.maxRuntime);
+    }
 
     if (state.localSearch) { const query = state.localSearch.toLowerCase(); itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query))); }
     if (state.filterFavoritesOnly) itemsToRender = itemsToRender.filter(item => item.isFavorite);
@@ -765,21 +774,22 @@ async function addItemToList(id, type, list) {
         poster: fullDetails.poster,
         year: fullDetails.year,
         releaseDate: fullDetails.releaseDate,
-        genres: fullDetails.genres ? fullDetails.genres.slice(0, 3) : [], // Tylko 3 gatunki
-        overview: fullDetails.overview ? fullDetails.overview.substring(0, 120) + '...' : '', // Ucięty opis
+        genres: fullDetails.genres ? fullDetails.genres.slice(0, 3) : [],
+        overview: fullDetails.overview ? fullDetails.overview.substring(0, 120) + '...' : '',
         isFavorite: false,
         customTags: [],
         dateAdded: Date.now()
     };
 
-    if (type === 'tv') {
+    if (type === 'movie') {
+        liteItem.runtime = fullDetails.runtime || 0; // NOWOŚĆ: Zapisujemy czas trwania!
+    } else if (type === 'tv') {
         liteItem.status = fullDetails.status;
         liteItem.nextEpisodeToAir = fullDetails.nextEpisodeToAir;
         liteItem.seasons = fullDetails.seasons;
         liteItem.numberOfEpisodes = fullDetails.numberOfEpisodes;
         liteItem.progress = {};
     }
-
     const targetList = `${type === 'movie' ? 'movies' : 'series'}${list === 'toWatch' ? 'ToWatch' : 'Watched'}`;
 
     if (list === 'toWatch') {
@@ -938,16 +948,35 @@ async function getItemDetails(id, type) {
         overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [],
         isFavorite: false, customTags: [], vod: vodList, tmdbRating: d.vote_average ? parseFloat(d.vote_average).toFixed(1) : null
     };
-
     if (type === 'tv') {
         item.status = d.status;
-        item.nextEpisodeToAir = d.next_episode_to_air ? { date: d.next_episode_to_air.air_date, season: d.next_episode_to_air.season_number, episode: d.next_episode_to_air.episode_number } : null;
+        
+        // --- POCZĄTEK ZMIANY: Przesunięcie czasu dla Europy (+1 dzień) ---
+        let adjustedAirDate = null;
+        if (d.next_episode_to_air && d.next_episode_to_air.air_date) {
+            const tempDate = new Date(d.next_episode_to_air.air_date);
+            tempDate.setDate(tempDate.getDate() + 1); // Dodajemy 1 dzień
+            adjustedAirDate = tempDate.toISOString().split('T')[0]; // Formatujemy z powrotem do "RRRR-MM-DD"
+        }
+
+        item.nextEpisodeToAir = d.next_episode_to_air ? { 
+            date: adjustedAirDate, 
+            season: d.next_episode_to_air.season_number, 
+            episode: d.next_episode_to_air.episode_number 
+        } : null;
+        // --- KONIEC ZMIANY ---
+
         const realSeasons = d.seasons ? d.seasons.filter(s => s.season_number > 0) : [];
-        item.seasons = realSeasons; item.numberOfSeasons = realSeasons.length; item.numberOfEpisodes = realSeasons.reduce((acc, s) => acc + s.episode_count, 0); item.progress = {};
-    } else if (type === 'movie') { item.runtime = d.runtime || null; }
+        item.seasons = realSeasons; 
+        item.numberOfSeasons = realSeasons.length; 
+        item.numberOfEpisodes = realSeasons.reduce((acc, s) => acc + s.episode_count, 0); 
+        item.progress = {};
+    } else if (type === 'movie') { 
+        item.runtime = d.runtime || null; 
+    }
+    
     return item;
 }
-
 async function getCredits(id, type) {
     if (String(id).startsWith('custom_')) return [];
     const cacheKey = `credits_${type}_${id}`;
@@ -1051,10 +1080,35 @@ function getStatusBadge(status) {
     }
 }
 
-function getNextAirDateString(nextEpData) { if (!nextEpData || !nextEpData.date) return null; const airDate = new Date(nextEpData.date); const today = new Date(); today.setHours(0, 0, 0, 0); const diffDays = Math.ceil((airDate - today) / (1000 * 60 * 60 * 24)); const epString = `S${String(nextEpData.season).padStart(2, '0')}E${String(nextEpData.episode).padStart(2, '0')}`; const dateString = airDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); if (diffDays < 0) return null; if (diffDays === 0) return `${epString} dzisiaj!`; if (diffDays === 1) return `${epString} jutro!`; if (diffDays > 1 && diffDays <= 7) return `${epString} za ${diffDays} dni`; return `${epString}: ${dateString}`; }
+function getNextAirDateString(nextEpData) { 
+    if (!nextEpData || !nextEpData.date) return null; 
+    
+    // Tworzymy datę i ucinamy godziny, by Polska strefa czasowa nie psuła dni
+    const airDate = new Date(nextEpData.date); 
+    airDate.setHours(0, 0, 0, 0); 
+    
+    const today = new Date(); 
+    today.setHours(0, 0, 0, 0); 
+    
+    // Zmiana z ceil na round - koniec z przekłamywaniem dni o jeden w górę!
+    const diffDays = Math.round((airDate - today) / (1000 * 60 * 60 * 24)); 
+    
+    const epString = `S${String(nextEpData.season).padStart(2, '0')}E${String(nextEpData.episode).padStart(2, '0')}`; 
+    const dateString = airDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }); 
+    
+    if (diffDays < 0) return null; 
+    if (diffDays === 0) return `${epString} dzisiaj!`; 
+    if (diffDays === 1) return `${epString} jutro!`; 
+    if (diffDays > 1 && diffDays <= 7) return `${epString} za ${diffDays} dni`; 
+    return `${epString}: ${dateString}`; 
+}
+
 const formatRuntime = (minutes) => { if (!minutes || minutes <= 0) return ''; const hours = Math.floor(minutes / 60); const remainingMinutes = minutes % 60; let formatted = []; if (hours > 0) formatted.push(`${hours}h`); if (remainingMinutes > 0) formatted.push(`${remainingMinutes}min`); return formatted.join(' '); };
+
 const generateStarRatingDisplay = (rating) => { let starsHTML = ''; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for (let i = 1; i <= 5; i++) { if (rating >= i) { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--warning-color)"><path d="${starPath}"/></svg>`; } else if (rating >= i - 0.5) { starsHTML += `<svg viewBox="0 0 24 24"><defs><linearGradient id="half_grad_${i}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="50%" stop-color="var(--warning-color)"/><stop offset="50%" stop-color="var(--border-color)"/></linearGradient></defs><path d="${starPath}" fill="url(#half_grad_${i})"/></svg>`; } else { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--border-color)"><path d="${starPath}"/></svg>`; } } return `<div class="star-rating-display">${starsHTML}</div>`; };
+
 const getListAndItem = (id, type) => { for (const listName in data) { if (Array.isArray(data[listName])) { const item = data[listName].find(i => String(i.id) === String(id) && i.type === type); if (item) return { listName, item }; } } return { listName: null, item: null }; };
+
 const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'flex'; };
 
 function setupSwipeToClose(modalElement, closeCallback) {
@@ -1123,13 +1177,41 @@ function openBackupSettingsModal() {
 async function openFilterModal() {
     toggleAppDepthEffect(true);
     const listId = getActiveListId(); const state = viewState[listId];
-    if (state.filterByVod === undefined) state.filterByVod = 'all';
 
+    // Zabezpieczenie stanu startowego
+    if (state.filterByVod === undefined) state.filterByVod = 'all';
+    if (state.maxRuntime === undefined) state.maxRuntime = 240; // 240 to "Bez limitu"
+
+    const isMovies = listId.includes('movies'); // Sprawdzamy czy to zakładka filmów
     const uniqueGenres = [...new Set((data[listId] || []).flatMap(item => item.genres || []))].sort();
     const uniqueTags = [...new Set((data[listId] || []).flatMap(item => item.customTags || []))].sort();
     const topVodProviders = ['Netflix', 'Max', 'Amazon Prime Video', 'Disney Plus', 'Apple TV Plus', 'SkyShowtime'];
 
-    let filterOptionsHTML = `<label class="modern-toggle-row"><span>Tylko ulubione</span><div class="toggle-switch"><input type="checkbox" id="filter-favorites-checkbox" ${state.filterFavoritesOnly ? 'checked' : ''}><div class="slider"></div></div></label><div class="filter-section-title">Gdzie obejrzeć? (VOD)</div><div class="modern-chip-group" style="margin-bottom: 16px;"><label class="modern-chip"><input type="radio" name="vod-filter" value="all" ${state.filterByVod === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
+    // 1. Zbudowanie Suwaka Czasu (Tylko dla filmów)
+    let timeFilterHTML = '';
+    if (isMovies) {
+        const formatTime = (mins) => {
+            if (mins >= 240) return 'Bez limitu';
+            const h = Math.floor(mins / 60); const m = mins % 60;
+            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+        };
+        timeFilterHTML = `
+            <div class="filter-section-title" style="margin-top:0;">Ile masz czasu? ⏱️</div>
+            <div style="background: color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2)); border: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+                    <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Maksymalnie:</span>
+                    <strong id="runtime-display" style="color: var(--primary-color); font-size: 1.1rem;">${formatTime(state.maxRuntime)}</strong>
+                </div>
+                <input type="range" id="runtime-slider" min="60" max="240" step="10" value="${state.maxRuntime}" style="width:100%;">
+                <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-secondary); margin-top:8px; font-weight:600;">
+                    <span>1 godz.</span><span>Bez limitu</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // 2. Reszta starych filtrów
+    let filterOptionsHTML = `${timeFilterHTML}<label class="modern-toggle-row"><span>Tylko ulubione</span><div class="toggle-switch"><input type="checkbox" id="filter-favorites-checkbox" ${state.filterFavoritesOnly ? 'checked' : ''}><div class="slider"></div></div></label><div class="filter-section-title">Gdzie obejrzeć? (VOD)</div><div class="modern-chip-group" style="margin-bottom: 16px;"><label class="modern-chip"><input type="radio" name="vod-filter" value="all" ${state.filterByVod === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
     filterOptionsHTML += topVodProviders.map(v => `<label class="modern-chip"><input type="radio" name="vod-filter" value="${v}" ${state.filterByVod === v ? 'checked' : ''}><span>${v.replace(' Plus', '+').replace('Amazon ', '')}</span></label>`).join('');
     filterOptionsHTML += `</div><div style="font-size:0.75rem; color:var(--text-secondary); margin-top:-8px; margin-bottom:12px;">*Aby filtr zadziałał dla starych wpisów, otwórz najpierw ich szczegóły.</div><div class="filter-section-title">Gatunek</div><div class="modern-chip-group"><label class="modern-chip"><input type="radio" name="genre-filter" value="all" ${state.filterByGenre === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
     if (uniqueGenres.length > 0) filterOptionsHTML += uniqueGenres.map(g => `<label class="modern-chip"><input type="radio" name="genre-filter" value="${escapeHTML(g)}" ${state.filterByGenre === g ? 'checked' : ''}><span>${escapeHTML(g)}</span></label>`).join('');
@@ -1144,19 +1226,34 @@ async function openFilterModal() {
     const modalContainer = document.getElementById('detailsModalContainer');
     modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Filtruj</h3><div class="control-modal-options">${filterOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Wyczyść</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
 
+    // Ożywienie suwaka
+    if (isMovies) {
+        const slider = document.getElementById('runtime-slider');
+        const display = document.getElementById('runtime-display');
+        slider.addEventListener('input', (e) => {
+            const v = parseInt(e.target.value);
+            if (v >= 240) display.textContent = 'Bez limitu';
+            else { const h = Math.floor(v / 60); const m = v % 60; display.textContent = h > 0 ? `${h}h ${m}m` : `${m}m`; }
+        });
+    }
+
     const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
     modalContainer.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) close(); };
     setupSwipeToClose(modalContainer.querySelector('.modal-overlay'), close);
 
     modalContainer.querySelector('.apply-btn').onclick = async () => {
         state.filterFavoritesOnly = document.getElementById('filter-favorites-checkbox').checked;
+        if (isMovies) state.maxRuntime = parseInt(document.getElementById('runtime-slider').value);
+
         const selGenre = document.querySelector('input[name="genre-filter"]:checked'); if (selGenre) state.filterByGenre = selGenre.value;
         const selTag = document.querySelector('input[name="tag-filter"]:checked'); if (selTag) state.filterByCustomTag = selTag.value;
         const selVod = document.querySelector('input[name="vod-filter"]:checked'); if (selVod) state.filterByVod = selVod.value;
+
         await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close();
     };
     modalContainer.querySelector('.reset-btn').onclick = async () => {
         state.filterFavoritesOnly = false; state.filterByGenre = 'all'; state.filterByCustomTag = 'all'; state.filterByVod = 'all';
+        if (isMovies) state.maxRuntime = 240;
         await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close();
     };
 }
@@ -1969,6 +2066,56 @@ async function refreshStaleSeries() {
     await checkAndRefreshList('seriesToWatch');
     if (needsSave) { await saveData(); const activeList = getActiveListId(); if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true); }
 }
+// ==========================================
+// 15. CICHY PRACOWNIK W TLE (Naprawa starych danych)
+// ==========================================
+async function healMissingData() {
+    const listsToCheck = ['moviesToWatch', 'moviesWatched'];
+    let needsSave = false;
+    let itemsHealed = 0;
+
+    for (const listName of listsToCheck) {
+        if (!data[listName]) continue;
+
+        for (let i = 0; i < data[listName].length; i++) {
+            const item = data[listName][i];
+
+            // Pomijamy wpisy ręczne (custom) i te, które już mają wpisany czas trwania (nawet jeśli to 0)
+            if (String(item.id).startsWith('custom_')) continue;
+            if (item.runtime !== undefined && item.runtime !== null) continue;
+
+            // Jeśli brakuje czasu trwania, dociągamy go cicho z internetu
+            try {
+                const details = await getItemDetails(item.id, 'movie');
+                if (details && details.runtime !== undefined) {
+                    item.runtime = details.runtime;
+                    needsSave = true;
+                    itemsHealed++;
+                }
+            } catch (e) {
+                console.error("Błąd podczas naprawy danych", e);
+            }
+
+            // ODPOCZYNEK: 300ms pauzy, żeby nie spalić procesora i nie obciążyć API TMDB
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Zapisujemy postęp co 5 naprawionych filmów (w razie gdyby ktoś zamknął apkę)
+            if (itemsHealed > 0 && itemsHealed % 5 === 0) {
+                await saveData();
+                needsSave = false;
+            }
+        }
+    }
+
+    // Zapis końcowy i odświeżenie listy (jeśli użytkownik akurat ma włączony suwak)
+    if (needsSave) {
+        await saveData();
+        const activeList = getActiveListId();
+        if (activeList && activeList.includes('movies')) {
+            renderList(data[activeList], activeList, true);
+        }
+    }
+}
 
 // ==========================================
 // 13. PWA (Service Worker) z AUTO-UPDATE
@@ -2095,12 +2242,42 @@ const NotificationManager = {
             }
         });
 
+               // Sprawdzanie seriali "Do obejrzenia" (NAPRAWIONA INTELIGENCJA)
         (data.seriesToWatch || []).forEach(s => {
-            if (s.nextEpisodeToAir) {
+            if(s.nextEpisodeToAir) {
                 const days = getDaysToPremiere(s.nextEpisodeToAir.date);
-                if (days !== -1) {
-                    const epStr = `S${String(s.nextEpisodeToAir.season).padStart(2, '0')}E${String(s.nextEpisodeToAir.episode).padStart(2, '0')}`;
-                    this.add({ id: `prem_s_${s.id}_${s.nextEpisodeToAir.date}`, title: days === 0 ? 'Nowy odcinek! 📺' : `Odcinek za ${days} dni 📺`, desc: `Wychodzi ${epStr} serialu "${s.title}".`, image: s.poster, targetId: s.id, targetType: 'tv' });
+                if(days !== -1) {
+                    
+                    // 1. Ile odcinków użytkownik obejrzał?
+                    let totalWatched = 0;
+                    if (s.progress) {
+                        totalWatched = Object.values(s.progress).reduce((acc, arr) => acc + arr.length, 0);
+                    }
+                    
+                    // 2. Ile odcinków FAKTYCZNIE wyszło do tej pory? (Matematyka na sezonach)
+                    let airedSoFar = 0;
+                    if (s.seasons) {
+                        s.seasons.forEach(season => {
+                            // Sumujemy wszystkie odcinki z poprzednich sezonów
+                            if (season.season_number > 0 && season.season_number < s.nextEpisodeToAir.season) {
+                                airedSoFar += season.episode_count;
+                            }
+                        });
+                    }
+                    // Dodajemy wyemitowane już odcinki z bieżącego sezonu
+                    airedSoFar += (s.nextEpisodeToAir.episode - 1);
+
+                    // 3. WARUNEK: Powiadamiamy tylko jeśli masz max 3 odcinki zaległości
+                    // Jeśli to nowość (S01E01), to airedSoFar = 0, więc 0 >= -3 (Prawda -> powiadamia!)
+                    if (totalWatched >= airedSoFar - 3) {
+                        const epStr = `S${String(s.nextEpisodeToAir.season).padStart(2,'0')}E${String(s.nextEpisodeToAir.episode).padStart(2,'0')}`;
+                        this.add({ 
+                            id: `prem_s_${s.id}_${s.nextEpisodeToAir.date}`, 
+                            title: days === 0 ? 'Nowy odcinek! 📺' : `Odcinek za ${days} dni 📺`, 
+                            desc: `Wychodzi ${epStr} serialu "${s.title}".`, 
+                            image: s.poster, targetId: s.id, targetType: 'tv' 
+                        });
+                    }
                 }
             }
         });
