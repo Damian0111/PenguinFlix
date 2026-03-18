@@ -297,6 +297,34 @@ function setupEventListeners() {
     document.getElementById('restoreInput').addEventListener('change', restoreData);
     document.getElementById('btn-info').addEventListener('click', showInfoModal);
 
+    // --- NOWOŚĆ: TWARDY RESET SERIALI Z POZIOMU PROFILU ---
+    const hardRefreshBtn = document.getElementById('btn-hard-refresh');
+    if (hardRefreshBtn) {
+        hardRefreshBtn.addEventListener('click', async () => {
+            triggerHaptic('medium');
+            const confirm = await showCustomConfirm(
+                'Wymusić odświeżenie?', 
+                'Sprawdzę każdy serial na liście pod kątem nowych dat i sezonów. To może zająć dłuższą chwilę w zależności od liczby tytułów.'
+            );
+            
+            if (confirm) {
+                showCustomAlert('Odświeżanie...', 'Trwa pobieranie nowych danych...', 'info');
+                const prevIcon = hardRefreshBtn.innerHTML;
+                hardRefreshBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold;">Trwa aktualizacja...</span>`;
+                hardRefreshBtn.style.pointerEvents = 'none';
+                hardRefreshBtn.style.opacity = '0.7';
+
+                await refreshStaleSeries(true); // TRUE wymusza sprawdzanie wszystkiego
+                
+                hardRefreshBtn.innerHTML = prevIcon;
+                hardRefreshBtn.style.pointerEvents = 'auto';
+                hardRefreshBtn.style.opacity = '1';
+                showCustomAlert('Gotowe!', 'Baza seriali została w pełni zaktualizowana.', 'success');
+                if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
+            }
+        });
+    }
+
     // --- WYSZUKIWARKA ---
     const searchInput = document.getElementById('searchInput');
     const searchClearBtn = document.getElementById('searchClearBtn');
@@ -444,7 +472,9 @@ function setupEventListeners() {
                     const activePill = document.querySelector('.discover-pill.active');
                     await loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false);
                 } else if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
-                    const listId = getActiveListId(); if (listId === 'seriesToWatch') await refreshStaleSeries();
+                    const listId = getActiveListId(); 
+                    if (listId === 'seriesToWatch') await refreshStaleSeries(false); // Szybkie, lekkie odświeżanie
+                    
                     renderList(data[listId], listId, true);
                 }
                 setTimeout(() => { ptrContainer.classList.remove('refreshing'); ptrContainer.style.transform = ''; }, 600);
@@ -480,7 +510,6 @@ function setupEventListeners() {
         } finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
     });
 }
-
 // ==========================================
 // 7. NAWIGACJA I RENDEROWANIE LIST
 // ==========================================
@@ -2044,27 +2073,44 @@ async function restoreData(e) {
     };
     r.readAsText(f); e.target.value = '';
 }
-async function refreshStaleSeries() {
-    const today = new Date(); today.setHours(0, 0, 0, 0); let needsSave = false;
+async function refreshStaleSeries(forceAll = false) {
+    const today = new Date(); today.setHours(0,0,0,0); 
+    let needsSave = false;
+    
     const checkAndRefreshList = async (listName) => {
         if (!data[listName]) return;
         for (let i = 0; i < data[listName].length; i++) {
-            const item = data[listName][i]; if (String(item.id).startsWith('custom_')) continue;
-            let needsRefresh = false;
-            if (item.nextEpisodeToAir) { const airDate = new Date(item.nextEpisodeToAir.date); if (airDate <= today) needsRefresh = true; }
-            else if (item.status === 'Returning Series') { needsRefresh = true; }
+            const item = data[listName][i]; 
+            if (String(item.id).startsWith('custom_')) continue;
+            
+            // Jeśli pociągnąłeś ekran palcem w dół, FORCE = true (odświeża wszystko bez gadania)
+            let needsRefresh = forceAll; 
+            
+            if (!needsRefresh) {
+                if (item.nextEpisodeToAir) { const airDate = new Date(item.nextEpisodeToAir.date); if (airDate <= today) needsRefresh = true; }
+                else if (item.status === 'Returning Series') { needsRefresh = true; }
+            }
 
             if (needsRefresh) {
                 try {
                     const fd = await getItemDetails(item.id, 'tv');
                     if (fd) { item.status = fd.status; item.nextEpisodeToAir = fd.nextEpisodeToAir; item.seasons = fd.seasons; item.numberOfSeasons = fd.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes; needsSave = true; }
-                } catch (e) { }
-                await new Promise(r => setTimeout(r, 400));
+                } catch(e) {}
+                
+                // Jeśli odświeżasz całą listę na raz, robimy pauzę 300ms, by nie zablokować API
+                if (forceAll) await new Promise(r => setTimeout(r, 300));
             }
         }
     };
+    
     await checkAndRefreshList('seriesToWatch');
-    if (needsSave) { await saveData(); const activeList = getActiveListId(); if (activeList === 'seriesToWatch') renderList(data[activeList], activeList, true); }
+    if (forceAll) await checkAndRefreshList('seriesWatched'); // Przy twardym resecie odświeża też obejrzane
+
+    if (needsSave) { 
+        await saveData(); 
+        const activeList = getActiveListId(); 
+        if (activeList && activeList.includes('series')) renderList(data[activeList], activeList, true); 
+    }
 }
 // ==========================================
 // 15. CICHY PRACOWNIK W TLE (Naprawa starych danych)
