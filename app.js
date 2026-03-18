@@ -595,52 +595,55 @@ function updateToolbarUI(mainTabId) {
 }
 
 let listIntersectionObserver = null;
-
 function renderList(originalItems, listId, preserveLimit = false) {
     const container = document.getElementById(`${listId}ListContainer`); if (!container) return;
     const state = viewState[listId];
     if (!preserveLimit) state.displayLimit = 30;
     let itemsToRender = [...(originalItems || [])];
-    // To wklejasz do renderList(), przed innymi if'ami (jak localSearch itd.)
+
+    // --- FILTROWANIE ---
     if (state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies')) {
         itemsToRender = itemsToRender.filter(item => item.runtime && item.runtime <= state.maxRuntime);
     }
-
     if (state.localSearch) { const query = state.localSearch.toLowerCase(); itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query))); }
     if (state.filterFavoritesOnly) itemsToRender = itemsToRender.filter(item => item.isFavorite);
     if (state.filterByGenre !== 'all') itemsToRender = itemsToRender.filter(item => item.genres && item.genres.includes(state.filterByGenre));
     if (state.filterByCustomTag && state.filterByCustomTag !== 'all') itemsToRender = itemsToRender.filter(item => (item.customTags || []).includes(state.filterByCustomTag));
     if (state.filterByVod && state.filterByVod !== 'all') { const targetVod = state.filterByVod.toLowerCase(); itemsToRender = itemsToRender.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod))); }
 
+    // --- SORTOWANIE ---
     const [sortBy, direction] = state.sortBy.split('_');
-
     itemsToRender.sort((a, b) => {
         if (!state.localSearch) {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
         }
-        let valA, valB;
-        switch (sortBy) {
-            case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA;
-            default: return 0;
-        }
+        let valA, valB; 
+        switch (sortBy) { 
+            case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
+            case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA; 
+            default: return 0; 
+        } 
     });
 
     const limit = state.displayLimit || 30;
     const pagedItems = itemsToRender.slice(0, limit);
 
+    // --- RENDEROWANIE KART (HTML) ---
     const listHTML = pagedItems.map(item => {
         const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
         let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
         const safeTitle = escapeHTML(item.title); const safeOverview = escapeHTML(item.overview);
-        // OPTYMALIZACJA RAM/TRANSFERU: Dla siatki pobieramy 185px, dla listy pobieramy 92px. Są błyskawiczne!
+        
+        // Zoptymalizowane rozmiary plakatów! (Mniej RAM-u i Transferu)
         const posterSize = viewState.globalViewMode === 'grid' ? 'w185' : 'w92';
         const listPosterSrc = item.poster ? item.poster.replace('w500', posterSize) : POSTER_PLACEHOLDER;
+        
         const pinClass = item.isPinned ? 'is-pinned' : '';
         const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
         const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
 
+        // Oznaczanie filmów zapowiedzianych (bez premiery)
         if (isToWatchList) {
             if (!item.releaseDate || item.releaseDate === '') {
                 isUnreleased = true; unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Brak daty premiery</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Zapowiedź</div>`;
@@ -650,19 +653,30 @@ function renderList(originalItems, listId, preserveLimit = false) {
             }
         }
 
+        // --- WIDOK KAFELKÓW (GRID) ---
         if (viewState.globalViewMode === 'grid') {
             let favoriteBadge = item.isFavorite ? `<div class="grid-badge-favorite">${ICONS.star}</div>` : '';
             let infoBadge = ''; let quickTrackBtnGrid = ''; let nextAirDateHTMLGrid = '';
+            
             if (isWatched && item.rating > 0) { infoBadge = `<div class="grid-badge-info">★ ${item.rating}</div>`; }
             else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
                 const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
-                if (watchedCount > 0) { const pct = Math.round((watchedCount / item.numberOfEpisodes) * 100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
+                if (watchedCount > 0) { const pct = Math.round((watchedCount/item.numberOfEpisodes)*100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
                 const nextEpInfo = getNextEpisodeInfo(item);
                 if (nextEpInfo && !isUnreleased) quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
             }
             let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
-            return `<li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><div class="grid-title-fallback">${safeTitle}</div><img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">${pinGridHTML}${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}</li>`;
+            
+            return `
+            <li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}">
+                <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                <div class="grid-title-fallback">${safeTitle}</div>
+                <img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">
+                ${pinGridHTML}${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}
+            </li>`;
+            
+        // --- WIDOK LISTY (WIERSZY) ---
         } else {
             let extraInfo = '';
             if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
@@ -677,10 +691,24 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 }
                 extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
             }
-            return `<li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}"><img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span class="meta">${item.year}${pinListHTML}</span>${unreleasedBadgeList}<p class="overview">${safeOverview}</p>${extraInfo}</div><div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div></li>`;
+            
+            return `
+            <li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}">
+                <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                <img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
+                <div class="info">
+                    <strong>${safeTitle}</strong>
+                    <span class="meta">${item.year}${pinListHTML}</span>
+                    ${unreleasedBadgeList}
+                    <p class="overview">${safeOverview}</p>
+                    ${extraInfo}
+                </div>
+                <div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div>
+            </li>`;
         }
     }).join('');
 
+    // --- BUDOWANIE KONTENERA I SENTINEL'A DO INFINITE SCROLLA ---
     let ul = container.querySelector('ul');
     if (!ul) { ul = document.createElement('ul'); container.appendChild(ul); }
     ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
@@ -695,9 +723,14 @@ function renderList(originalItems, listId, preserveLimit = false) {
         sentinel.className = 'infinite-scroll-sentinel';
         sentinel.style.cssText = 'height: 20px; width: 100%; margin-top: 10px;';
         container.appendChild(sentinel);
+        
         listIntersectionObserver = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) { viewState[listId].displayLimit += 20; renderList(data[listId], listId, true); }
-        }, { rootMargin: "150px" });
+            if (entries[0].isIntersecting) { 
+                viewState[listId].displayLimit += 20; // Lżejsze skoki ładowania dla płynności
+                renderList(data[listId], listId, true); 
+            }
+        }, { rootMargin: "150px" }); // Reagujemy szybciej
+        
         listIntersectionObserver.observe(sentinel);
     }
 }
@@ -724,6 +757,11 @@ function initializeSortable(listId, listEl, viewMode) {
 
 function handleListItemClick(e) {
     const itemElement = e.target.closest('.list-item') || e.target.closest('.grid-item');
+        if (typeof bulkModeActive !== 'undefined' && bulkModeActive) {
+        e.preventDefault(); e.stopPropagation();
+        toggleBulkSelection(itemElement);
+        return;
+    }
     if (!itemElement || e.target.closest('.sortable-chosen')) return;
     const id = itemElement.dataset.id; const type = itemElement.dataset.type;
     const deleteBtn = e.target.closest('.delete-btn'); const quickTrackBtn = e.target.closest('[data-action="quick-track"]');
@@ -899,41 +937,49 @@ function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
     let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
     let runtime = 0; let gCounts = {}; let sumRat = 0; let ratCount = 0;
-    let dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; let decades = {};
+    let dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }; let decades = {};
     let tCol = data.moviesToWatch.length + tMovies + data.seriesToWatch.length + tSeries; let tComp = tMovies + tSeries;
 
     data.moviesWatched.forEach(m => {
         if (m.runtime) runtime += m.runtime;
-        if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if (b > 0 && b <= 5) dist[b]++; }
-        if (m.year) { let d = Math.floor(parseInt(m.year) / 10) * 10; decades[d] = (decades[d] || 0) + 1; }
+        if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if(b>0 && b<=5) dist[b]++; }
+        if (m.year) { let d = Math.floor(parseInt(m.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
         if (m.genres) m.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; });
     });
 
     [...data.seriesWatched, ...data.seriesToWatch].forEach(s => {
-        if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if (b > 0 && b <= 5) dist[b]++; }
-        if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year) / 10) * 10; decades[d] = (decades[d] || 0) + 1; }
+        if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if(b>0 && b<=5) dist[b]++; }
+        if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
     });
-    data.seriesWatched.forEach(s => { if (s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
+    data.seriesWatched.forEach(s => { if(s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
 
     let timeStr = '0h';
     if (runtime > 0) { const hrs = Math.floor(runtime / 60); const days = Math.floor(hrs / 24); if (days > 0) timeStr = `<span class="highlight">${days}d</span> ${hrs % 24}h`; else timeStr = `<span class="highlight">${hrs}h</span>`; }
 
     let topDec = "Brak"; let maxDec = 0;
-    for (const [dec, count] of Object.entries(decades)) { if (count > maxDec) { maxDec = count; topDec = dec + "s"; } }
+    for (const [dec, count] of Object.entries(decades)) { if(count > maxDec) { maxDec = count; topDec = dec + "s"; } }
 
     let compRate = tCol > 0 ? Math.round((tComp / tCol) * 100) : 0;
     const avgRat = ratCount > 0 ? (sumRat / ratCount).toFixed(1) : '-';
-    const topG = Object.entries(gCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const topG = Object.entries(gCounts).sort((a,b) => b[1] - a[1]).slice(0, 3);
     const topGHTML = topG.length > 0 ? `<div class="top-genres-list">${topG.map(g => `<span class="profile-genre-tag"><strong style="color: var(--primary-color);">${g[1]}</strong> ${escapeHTML(g[0])}</span>`).join('')}</div>` : '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">Brak danych</div>';
 
-    let maxRat = Math.max(...Object.values(dist)); if (maxRat === 0) maxRat = 1;
+    let maxRat = Math.max(...Object.values(dist)); if(maxRat === 0) maxRat = 1;
     let chart = `<div class="rating-bars">`;
-    for (let i = 1; i <= 5; i++) { let hPct = (dist[i] / maxRat) * 100; chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`; }
+    for(let i=1; i<=5; i++) { let hPct = (dist[i] / maxRat) * 100; chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`; }
     chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
 
-    c.innerHTML = `<div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div><div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div><div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div><div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><div class="label">Śr. Ocen</div><div class="value">${avgRat}</div></div><div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div><div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div><div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div><div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>`;
+    c.innerHTML = `
+        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div>
+        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div>
+        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div>
+        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><div class="label">Śr. Ocen</div><div class="value">${avgRat}</div></div>
+        <div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div>
+        <div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div>
+        <div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div>
+        <div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>
+    `;
 }
-
 // ==========================================
 // 9. LOGIKA POBIERANIA SZCZEGÓŁÓW API
 // ==========================================
@@ -2633,3 +2679,123 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+// ==========================================
+// 16. TRYB MASOWY (LONG PRESS & BULK ACTIONS)
+// ==========================================
+let bulkModeActive = false;
+let bulkSelectedItems = new Set();
+let longPressTimer;
+
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Wstrzyknięcie Paska Akcji do HTML
+    const actionBar = document.createElement('div');
+    actionBar.id = 'bulk-action-bar';
+    actionBar.innerHTML = `
+        <span class="bulk-counter" id="bulk-count">0</span>
+        <button class="bulk-btn" id="bulk-move-btn" title="Do obejrzanych"><svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg></button>
+        <button class="bulk-btn danger" id="bulk-delete-btn" title="Usuń"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+        <div style="width:1px; height:24px; background:var(--border-color); margin: 0 4px;"></div>
+        <button class="bulk-btn" id="bulk-cancel-btn">Anuluj</button>
+    `;
+    document.body.appendChild(actionBar);
+
+    // 2. Obsługa przycisków na pasku
+    document.getElementById('bulk-cancel-btn').addEventListener('click', exitBulkMode);
+    
+    document.getElementById('bulk-delete-btn').addEventListener('click', async () => {
+        if(bulkSelectedItems.size === 0) return;
+        if(await showCustomConfirm('Usunąć wiele?', `Czy na pewno chcesz usunąć ${bulkSelectedItems.size} pozycji z biblioteki?`)) {
+            const listId = getActiveListId();
+            bulkSelectedItems.forEach(uniqueId => {
+                const [id, type] = uniqueId.split('_');
+                data[listId] = data[listId].filter(i => !(String(i.id) === String(id) && i.type === type));
+            });
+            await saveData();
+            showCustomAlert('Usunięto', `Skasowano ${bulkSelectedItems.size} pozycji.`, 'success');
+            exitBulkMode();
+            renderList(data[listId], listId, true);
+        }
+    });
+
+    document.getElementById('bulk-move-btn').addEventListener('click', async () => {
+        if(bulkSelectedItems.size === 0) return;
+        const listId = getActiveListId();
+        if(!listId.includes('ToWatch')) { showCustomAlert('Błąd', 'Tę akcję wykonasz tylko w "Do obejrzenia"', 'error'); return; }
+        
+        if(await showCustomConfirm('Przenieść?', `Czy chcesz oznaczyć ${bulkSelectedItems.size} pozycji jako obejrzane?`)) {
+            let movedCount = 0;
+            const itemsToProcess = Array.from(bulkSelectedItems);
+            
+            for(let uniqueId of itemsToProcess) {
+                const [id, type] = uniqueId.split('_');
+                const iIdx = data[listId].findIndex(i => String(i.id) === String(id) && i.type === type);
+                if(iIdx > -1) {
+                    const [item] = data[listId].splice(iIdx, 1);
+                    item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder;
+                    item.watchDates = [Date.now()];
+                    const targetList = type === 'movie' ? 'moviesWatched' : 'seriesWatched';
+                    data[targetList].unshift(item);
+                    movedCount++;
+                }
+            }
+            await saveData();
+            showCustomAlert('Sukces!', `Przeniesiono ${movedCount} pozycji.`, 'success');
+            exitBulkMode();
+            renderList(data[listId], listId, true);
+        }
+    });
+});
+
+// Wychodzenie z trybu
+function exitBulkMode() {
+    bulkModeActive = false;
+    bulkSelectedItems.clear();
+    document.body.classList.remove('bulk-mode-active');
+    document.getElementById('bulk-action-bar').classList.remove('visible');
+    document.querySelectorAll('.bulk-selected').forEach(el => el.classList.remove('bulk-selected'));
+}
+
+// 3. Nasłuchiwanie dotyku (Long Press) w głównym kontenerze
+const mainContentNode = document.getElementById('mainContent');
+mainContentNode.addEventListener('touchstart', (e) => {
+    const item = e.target.closest('.list-item') || e.target.closest('.grid-item');
+    if (!item) return;
+    
+    // Jeśli już jesteśmy w trybie masowym, wyłączamy stoper, żeby po prostu klikać
+    if (bulkModeActive) return;
+
+    longPressTimer = setTimeout(() => {
+        triggerHaptic('heavy'); // Mocna wibracja oznacza wejście w tryb
+        bulkModeActive = true;
+        document.body.classList.add('bulk-mode-active');
+        document.getElementById('bulk-action-bar').classList.add('visible');
+        
+        // Zaznacz pierwszy przytrzymany element
+        toggleBulkSelection(item);
+    }, 600); // 600ms przytrzymania palcem
+}, { passive: true });
+
+mainContentNode.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
+mainContentNode.addEventListener('touchend', () => clearTimeout(longPressTimer), { passive: true });
+mainContentNode.addEventListener('touchcancel', () => clearTimeout(longPressTimer), { passive: true });
+
+// 4. Modyfikacja kliknięć (Z przechwytywaniem)
+function toggleBulkSelection(itemEl) {
+    triggerHaptic('light');
+    const id = itemEl.dataset.id;
+    const type = itemEl.dataset.type;
+    const uniqueId = `${id}_${type}`;
+    
+    if (bulkSelectedItems.has(uniqueId)) {
+        bulkSelectedItems.delete(uniqueId);
+        itemEl.classList.remove('bulk-selected');
+    } else {
+        bulkSelectedItems.add(uniqueId);
+        itemEl.classList.add('bulk-selected');
+    }
+    
+    document.getElementById('bulk-count').textContent = bulkSelectedItems.size;
+}
+
+// WAŻNE: Dodanie małych kółek do kafelków podczas renderowania
+// W funkcji renderList() (w app.js), podmienimy zwracany HTML kafelków, by dodać <div class="bulk-checkbox"></div>
