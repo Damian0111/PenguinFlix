@@ -4905,3 +4905,47 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
 .config-btn:active {
     transform: scale(0.96) !important;
 }
+/* ==========================================
+   UKRYTE NOTATKI PRYWATNE (W SZCZEGÓŁACH)
+========================================== */
+/* Kontener na pole tekstowe (domyślnie ukryty) */
+.private-note-container {
+    display: none; 
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s ease-out;
+}
+.private-note-container.active {
+    display: block;
+}
+
+/* Samo pole tekstowe (wklęsły, nowoczesny styl) */
+.private-note-input {
+    width: 100%;
+    min-height: 80px;
+    background: color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2));
+    border: 1px solid transparent;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.3), inset 0 0 0 1px color-mix(in srgb, var(--border-color) 30%, transparent);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    color: var(--text-color);
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.private-note-input:focus {
+    background: var(--card-color);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 2px color-mix(in srgb, var(--primary-color) 40%, transparent);
+}
+
+/* Świecący przycisk, gdy notatka nie jest pusta */
+.note-btn-active {
+    background: color-mix(in srgb, var(--warning-color) 15%, transparent) !important;
+    border-color: color-mix(in srgb, var(--warning-color) 40%, transparent) !important;
+    color: var(--warning-color) !important;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--warning-color) 30%, transparent) !important;
+}
+.note-btn-active svg {
+    stroke: var(--warning-color) !important;
+}
