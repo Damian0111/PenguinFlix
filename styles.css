@@ -4949,3 +4949,15 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
 .note-btn-active svg {
     stroke: var(--warning-color) !important;
 }
+
+
+/* Wyrzucamy strzałki (góra/dół) w polach liczbowych na PC */
+#discover-year-input::-webkit-outer-spin-button,
+#discover-year-input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+}
+/* Wyrzucamy systemowe strzałki góra/dół z inputa */
+#discover-year-input::-webkit-outer-spin-button,
+#discover-year-input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+}
