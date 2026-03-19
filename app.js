@@ -182,12 +182,7 @@ async function init() {
         refreshStaleSeries(); // Odświeża daty seriali
         checkSmartBackup();
 
-        // ZADANIA W TLE (Opóźnione o 2 sekundy, by ekran wczytał się płynnie)
-        setTimeout(() => {
-            if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
-            // Uruchamiamy cichego pracownika, który uzupełni stare filmy o czas trwania!
-            if (typeof healMissingData !== 'undefined') healMissingData();
-        }, 2000);
+
 
     } else { showConfig(); }
     setupEventListeners();
@@ -221,6 +216,7 @@ function checkSmartBackup() {
 // 6. EVENT LISTENERY (SWIPE, PTR, WYSZUKIWARKA)
 // ==========================================
 function setupEventListeners() {
+    // --- WIBRACJE (HAPTICS) NA INTERAKTYWNYCH ELEMENTACH ---
     document.addEventListener('click', (e) => {
         const interactiveElement = e.target.closest('button, .icon-button, .nav-item, .seg-btn, .ptab-btn, .discover-pill, .settings-item, .list-item, .grid-item, .discover-item, .search-item, .cast-member, .recommendation-item, .season-summary, input[type="checkbox"], input[type="radio"], input[type="text"], input[type="search"], input[type="url"], input[type="number"], label, .star, .custom-tag, .remove-tag, .existing-tag-wrap, .existing-tag-btn');
         if (interactiveElement && !interactiveElement.disabled && interactiveElement.id !== 'fab-randomize') triggerHaptic('light');
@@ -236,7 +232,7 @@ function setupEventListeners() {
         });
     }
 
-    // --- NATYWNY GEST WSTECZ ---
+    // --- NATYWNY GEST WSTECZ (TELEFONY) ---
     window.addEventListener('popstate', (e) => {
         const trailer = document.getElementById('trailerModalContainer');
         const actor = document.getElementById('actorModalContainer');
@@ -273,6 +269,7 @@ function setupEventListeners() {
         });
     }
 
+    // --- NAWIGACJA ZAKŁADEK ---
     document.querySelector('.bottom-nav').addEventListener('click', (e) => {
         const navItem = e.target.closest('.nav-item');
         if (navItem && !navItem.classList.contains('active')) switchMainTab(navItem.dataset.maintab);
@@ -290,6 +287,7 @@ function setupEventListeners() {
         });
     });
 
+    // --- USTAWIENIA PROFILU ---
     document.getElementById('btn-theme-toggle').addEventListener('click', toggleTheme);
     document.getElementById('btn-custom-add').addEventListener('click', openCustomAddModal);
     document.getElementById('btn-backup').addEventListener('click', backupData);
@@ -297,7 +295,7 @@ function setupEventListeners() {
     document.getElementById('restoreInput').addEventListener('change', restoreData);
     document.getElementById('btn-info').addEventListener('click', showInfoModal);
 
-    // --- NOWOŚĆ: TWARDY RESET SERIALI Z POZIOMU PROFILU ---
+    // --- TWARDY RESET SERIALI ---
     const hardRefreshBtn = document.getElementById('btn-hard-refresh');
     if (hardRefreshBtn) {
         hardRefreshBtn.addEventListener('click', async () => {
@@ -314,7 +312,7 @@ function setupEventListeners() {
                 hardRefreshBtn.style.pointerEvents = 'none';
                 hardRefreshBtn.style.opacity = '0.7';
 
-                await refreshStaleSeries(true); // TRUE wymusza sprawdzanie wszystkiego
+                await refreshStaleSeries(true); // Wymusza pobieranie wszystkiego z TMDB
                 
                 hardRefreshBtn.innerHTML = prevIcon;
                 hardRefreshBtn.style.pointerEvents = 'auto';
@@ -325,7 +323,80 @@ function setupEventListeners() {
         });
     }
 
-    // --- WYSZUKIWARKA ---
+    // --- TWARDY RESET FILMÓW (Kolekcje i Czas trwania) ---
+    const hardRefreshMoviesBtn = document.getElementById('btn-hard-refresh-movies');
+    if (hardRefreshMoviesBtn) {
+        hardRefreshMoviesBtn.addEventListener('click', async () => {
+            triggerHaptic('medium');
+            const confirm = await showCustomConfirm(
+                'Naprawić bazę filmów?', 
+                'Sprawdzę każdy stary film pod kątem przynależności do serii (kolekcji) oraz czasu trwania. To zajmie dłuższą chwilę.'
+            );
+            
+            if (confirm) {
+                const prevIcon = hardRefreshMoviesBtn.innerHTML;
+                hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold;">Analizowanie...</span>`;
+                hardRefreshMoviesBtn.style.pointerEvents = 'none';
+                hardRefreshMoviesBtn.style.opacity = '0.7';
+
+                const listsToCheck = ['moviesToWatch', 'moviesWatched'];
+                let needsSave = false;
+                let itemsHealed = 0;
+                
+                const totalMovies = (data.moviesToWatch?.length || 0) + (data.moviesWatched?.length || 0);
+                let currentMovie = 0;
+
+                for (const listName of listsToCheck) {
+                    if (!data[listName]) continue;
+
+                    for (let i = 0; i < data[listName].length; i++) {
+                        currentMovie++;
+                        const item = data[listName][i];
+                        
+                        if (currentMovie % 3 === 0) { 
+                            hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Pobieranie... ${currentMovie} / ${totalMovies}</span>`;
+                        }
+
+                        if (String(item.id).startsWith('custom_')) continue;
+                        
+                        if (item.runtime !== undefined && item.runtime !== null && item.collectionName !== undefined) {
+                            continue; // Jeśli ma wszystko, omijamy z prędkością światła
+                        }
+
+                        try {
+                            const details = await getItemDetails(item.id, 'movie');
+                            if (details) {
+                                if (details.runtime !== undefined) item.runtime = details.runtime;
+                                item.collectionName = details.collectionName || 'none';
+                                needsSave = true;
+                                itemsHealed++;
+                            }
+                        } catch (e) {}
+
+                        await new Promise(resolve => setTimeout(resolve, 300)); // Bezpieczna pauza
+                    }
+                }
+
+                if (needsSave) {
+                    await saveData();
+                    const activeList = getActiveListId();
+                    if (activeList && activeList.includes('movies')) renderList(data[activeList], activeList, true);
+                }
+
+                hardRefreshMoviesBtn.innerHTML = prevIcon;
+                hardRefreshMoviesBtn.style.pointerEvents = 'auto';
+                hardRefreshMoviesBtn.style.opacity = '1';
+                
+                if (itemsHealed > 0) {
+                    showCustomAlert('Sukces!', `Naprawiono dane dla ${itemsHealed} filmów.`, 'success');
+                } else {
+                    showCustomAlert('Gotowe', 'Wszystkie Twoje filmy są już w 100% aktualne!', 'info');
+                }
+            }
+        });
+    }
+
+    // --- GŁÓWNA WYSZUKIWARKA ---
     const searchInput = document.getElementById('searchInput');
     const searchClearBtn = document.getElementById('searchClearBtn');
     let searchAbortController = null;
@@ -380,7 +451,7 @@ function setupEventListeners() {
     }
     searchInput.addEventListener('focus', () => { if (searchInput.value) document.getElementById('searchResults').style.display = 'block'; });
 
-    // --- LOKALNA WYSZUKIWARKA ---
+    // --- LOKALNA WYSZUKIWARKA (Listy) ---
     const handleLocalSearchDebounced = debounce((e) => {
         const listId = getActiveListId(); if (!listId) return;
         viewState[listId].localSearch = e.target.value;
@@ -408,6 +479,7 @@ function setupEventListeners() {
         else if (item && !item.classList.contains('show-all-results-btn')) { if (item.dataset.id && item.dataset.type) openPreviewModal(item.dataset.id, item.dataset.type); }
     });
 
+    // --- PASEK NARZĘDZI LISTY (Sortuj, Filtruj) ---
     document.querySelectorAll('.list-toolbar').forEach(toolbar => {
         toolbar.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-action]');
@@ -473,7 +545,7 @@ function setupEventListeners() {
                     await loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false);
                 } else if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
                     const listId = getActiveListId(); 
-                    if (listId === 'seriesToWatch') await refreshStaleSeries(false); // Szybkie, lekkie odświeżanie
+                    if (listId === 'seriesToWatch') await refreshStaleSeries(false); // Szybkie odświeżanie bez obciążania
                     
                     renderList(data[listId], listId, true);
                 }
@@ -483,9 +555,11 @@ function setupEventListeners() {
         }
     }, { passive: true });
 
+    // --- KLIKNIĘCIA NA LIŚCIE ---
     document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
     document.getElementById('tab-series').addEventListener('click', handleListItemClick);
 
+    // --- ZAKŁADKA ODKRYWAJ ---
     const handlePillClick = (e) => {
         const pill = e.target.closest('.discover-pill');
         if (pill && !pill.classList.contains('active')) {
@@ -496,6 +570,7 @@ function setupEventListeners() {
     document.getElementById('discover-categories').addEventListener('click', handlePillClick);
     document.getElementById('discover-genres').addEventListener('click', handlePillClick);
 
+    // --- LOSOWA KOSTKA (FAB) ---
     document.getElementById('fab-randomize').addEventListener('click', async (e) => {
         const btn = e.currentTarget; if (btn.disabled) return;
         triggerHaptic('medium'); btn.disabled = true; btn.classList.add('rolling');
@@ -613,15 +688,46 @@ function renderList(originalItems, listId, preserveLimit = false) {
 
     // --- SORTOWANIE ---
     const [sortBy, direction] = state.sortBy.split('_');
+    
+    const collectionTitles = {};
+    if (sortBy === 'title') {
+        originalItems.forEach(item => {
+            if (item.collectionName && item.collectionName !== 'none') {
+                const year = parseInt(item.year) || 9999;
+                if (!collectionTitles[item.collectionName] || year < collectionTitles[item.collectionName].year) {
+                    collectionTitles[item.collectionName] = { title: (item.title || '').toLowerCase(), year: year };
+                }
+            }
+        });
+    }
+
     itemsToRender.sort((a, b) => {
         if (!state.localSearch) {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
         }
-        let valA, valB; 
+        
+        const dir = direction === 'asc' ? 1 : -1;
+        const titleA = (a.title || '').toLowerCase(); const titleB = (b.title || '').toLowerCase();
+        const yearA = parseInt(a.year) || 0; const yearB = parseInt(b.year) || 0;
+
         switch (sortBy) { 
-            case 'title': valA = a.title || ''; valB = b.title || ''; return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
-            case 'year': case 'rating': case 'dateAdded': valA = a[sortBy] || 0; valB = b[sortBy] || 0; return direction === 'asc' ? valA - valB : valB - valA; 
+            case 'title': {
+                let sortTitleA = titleA; let sortTitleB = titleB;
+                if (a.collectionName && a.collectionName !== 'none' && collectionTitles[a.collectionName]) sortTitleA = collectionTitles[a.collectionName].title;
+                if (b.collectionName && b.collectionName !== 'none' && collectionTitles[b.collectionName]) sortTitleB = collectionTitles[b.collectionName].title;
+                const titleCmp = sortTitleA.localeCompare(sortTitleB, 'pl');
+                if (titleCmp !== 0) return titleCmp * dir;
+                if (yearA !== yearB) return (yearA - yearB) * dir;
+                return titleA.localeCompare(titleB, 'pl') * dir;
+            }
+            case 'year': { if (yearA !== yearB) return (yearA - yearB) * dir; return titleA.localeCompare(titleB, 'pl'); }
+            case 'rating': 
+            case 'dateAdded': {
+                const valA = a[sortBy] || 0; const valB = b[sortBy] || 0; 
+                if (valA !== valB) return (valA - valB) * dir;
+                return titleA.localeCompare(titleB, 'pl');
+            }
             default: return 0; 
         } 
     });
@@ -629,13 +735,11 @@ function renderList(originalItems, listId, preserveLimit = false) {
     const limit = state.displayLimit || 30;
     const pagedItems = itemsToRender.slice(0, limit);
 
-    // --- RENDEROWANIE KART (HTML) ---
+    // --- RENDEROWANIE KART ---
     const listHTML = pagedItems.map(item => {
         const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
         let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
         const safeTitle = escapeHTML(item.title); const safeOverview = escapeHTML(item.overview);
-        
-        // Zoptymalizowane rozmiary plakatów! (Mniej RAM-u i Transferu)
         const posterSize = viewState.globalViewMode === 'grid' ? 'w185' : 'w92';
         const listPosterSrc = item.poster ? item.poster.replace('w500', posterSize) : POSTER_PLACEHOLDER;
         
@@ -643,7 +747,10 @@ function renderList(originalItems, listId, preserveLimit = false) {
         const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
         const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
 
-        // Oznaczanie filmów zapowiedzianych (bez premiery)
+        // NOWOŚĆ: Sprawdzamy czy ten element był zaznaczony w trybie masowym!
+        const uniqueId = `${item.id}_${item.type}`;
+        const isBulkSelected = (typeof bulkModeActive !== 'undefined' && bulkModeActive && bulkSelectedItems.has(uniqueId)) ? 'bulk-selected' : '';
+
         if (isToWatchList) {
             if (!item.releaseDate || item.releaseDate === '') {
                 isUnreleased = true; unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Brak daty premiery</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Zapowiedź</div>`;
@@ -653,7 +760,6 @@ function renderList(originalItems, listId, preserveLimit = false) {
             }
         }
 
-        // --- WIDOK KAFELKÓW (GRID) ---
         if (viewState.globalViewMode === 'grid') {
             let favoriteBadge = item.isFavorite ? `<div class="grid-badge-favorite">${ICONS.star}</div>` : '';
             let infoBadge = ''; let quickTrackBtnGrid = ''; let nextAirDateHTMLGrid = '';
@@ -668,15 +774,15 @@ function renderList(originalItems, listId, preserveLimit = false) {
             }
             let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
             
+            // Wstrzyknięcie klasy isBulkSelected
             return `
-            <li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}">
+            <li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
                 <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
                 <div class="grid-title-fallback">${safeTitle}</div>
                 <img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">
                 ${pinGridHTML}${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}
             </li>`;
             
-        // --- WIDOK LISTY (WIERSZY) ---
         } else {
             let extraInfo = '';
             if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
@@ -692,8 +798,9 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
             }
             
+            // Wstrzyknięcie klasy isBulkSelected
             return `
-            <li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''}" data-id="${item.id}" data-type="${item.type}">
+            <li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
                 <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
                 <img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
                 <div class="info">
@@ -708,7 +815,6 @@ function renderList(originalItems, listId, preserveLimit = false) {
         }
     }).join('');
 
-    // --- BUDOWANIE KONTENERA I SENTINEL'A DO INFINITE SCROLLA ---
     let ul = container.querySelector('ul');
     if (!ul) { ul = document.createElement('ul'); container.appendChild(ul); }
     ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
@@ -726,10 +832,10 @@ function renderList(originalItems, listId, preserveLimit = false) {
         
         listIntersectionObserver = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting) { 
-                viewState[listId].displayLimit += 20; // Lżejsze skoki ładowania dla płynności
+                viewState[listId].displayLimit += 20; 
                 renderList(data[listId], listId, true); 
             }
-        }, { rootMargin: "150px" }); // Reagujemy szybciej
+        }, { rootMargin: "150px" }); 
         
         listIntersectionObserver.observe(sentinel);
     }
@@ -834,18 +940,20 @@ async function addItemToList(id, type, list) {
 
     // KOMPRESJA: Tworzymy "lekki" obiekt tylko do wyświetlania na liście. 
     // Odcinamy ciężkie dane: backdrop, vod, pełny overview (zostawiamy max 120 znaków dla widoku listy)
-    const liteItem = {
+        const liteItem = {
         id: fullDetails.id,
         title: fullDetails.title,
         type: fullDetails.type,
         poster: fullDetails.poster,
         year: fullDetails.year,
         releaseDate: fullDetails.releaseDate,
-        genres: fullDetails.genres ? fullDetails.genres.slice(0, 3) : [],
-        overview: fullDetails.overview ? fullDetails.overview.substring(0, 120) + '...' : '',
+        genres: fullDetails.genres ? fullDetails.genres.slice(0, 3) : [], 
+        overview: fullDetails.overview ? fullDetails.overview.substring(0, 120) + '...' : '', 
         isFavorite: false,
         customTags: [],
-        dateAdded: Date.now()
+        dateAdded: Date.now(),
+        // ZMIANA: Przepisujemy nazwę kolekcji do lekkiej bazy
+        collectionName: fullDetails.collectionName || null 
     };
 
     if (type === 'movie') {
@@ -1016,12 +1124,22 @@ async function getItemDetails(id, type) {
         }
     }
 
-    const item = {
-        id: d.id, title: d.title || d.name, poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null,
-        backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null,
-        type: type, year: (finalReleaseDate || '').substring(0, 4), releaseDate: finalReleaseDate,
-        overview: d.overview, genres: d.genres ? d.genres.map(g => g.name) : [],
-        isFavorite: false, customTags: [], vod: vodList, tmdbRating: d.vote_average ? parseFloat(d.vote_average).toFixed(1) : null
+       const item = { 
+        id: d.id, 
+        title: d.title || d.name, 
+        poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, 
+        backdrop: d.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + d.backdrop_path : null, 
+        type: type, 
+        year: (finalReleaseDate || '').substring(0, 4), 
+        releaseDate: finalReleaseDate, 
+        overview: d.overview, 
+        genres: d.genres ? d.genres.map(g => g.name) : [], 
+        isFavorite: false, 
+        customTags: [], 
+        vod: vodList, 
+        tmdbRating: d.vote_average ? parseFloat(d.vote_average).toFixed(1) : null,
+        // ZMIANA: Zapisujemy pełną NAZWĘ kolekcji
+        collectionName: d.belongs_to_collection ? d.belongs_to_collection.name : null 
     };
     if (type === 'tv') {
         item.status = d.status;
@@ -2257,53 +2375,9 @@ async function refreshStaleSeries(forceAll = false) {
 // ==========================================
 // 15. CICHY PRACOWNIK W TLE (Naprawa starych danych)
 // ==========================================
-async function healMissingData() {
-    const listsToCheck = ['moviesToWatch', 'moviesWatched'];
-    let needsSave = false;
-    let itemsHealed = 0;
-
-    for (const listName of listsToCheck) {
-        if (!data[listName]) continue;
-
-        for (let i = 0; i < data[listName].length; i++) {
-            const item = data[listName][i];
-
-            // Pomijamy wpisy ręczne (custom) i te, które już mają wpisany czas trwania (nawet jeśli to 0)
-            if (String(item.id).startsWith('custom_')) continue;
-            if (item.runtime !== undefined && item.runtime !== null) continue;
-
-            // Jeśli brakuje czasu trwania, dociągamy go cicho z internetu
-            try {
-                const details = await getItemDetails(item.id, 'movie');
-                if (details && details.runtime !== undefined) {
-                    item.runtime = details.runtime;
-                    needsSave = true;
-                    itemsHealed++;
-                }
-            } catch (e) {
-                console.error("Błąd podczas naprawy danych", e);
-            }
-
-            // ODPOCZYNEK: 300ms pauzy, żeby nie spalić procesora i nie obciążyć API TMDB
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            // Zapisujemy postęp co 5 naprawionych filmów (w razie gdyby ktoś zamknął apkę)
-            if (itemsHealed > 0 && itemsHealed % 5 === 0) {
-                await saveData();
-                needsSave = false;
-            }
-        }
-    }
-
-    // Zapis końcowy i odświeżenie listy (jeśli użytkownik akurat ma włączony suwak)
-    if (needsSave) {
-        await saveData();
-        const activeList = getActiveListId();
-        if (activeList && activeList.includes('movies')) {
-            renderList(data[activeList], activeList, true);
-        }
-    }
-}
+// ==========================================
+// 15. CICHY PRACOWNIK W TLE (Naprawa starych danych: Runtime & Kolekcje)
+// ==========================================
 
 // ==========================================
 // 13. PWA (Service Worker) z AUTO-UPDATE
@@ -2682,16 +2756,23 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // 16. TRYB MASOWY (LONG PRESS & BULK ACTIONS)
 // ==========================================
+// ==========================================
+// 16. TRYB MASOWY (LONG PRESS & BULK ACTIONS)
+// ==========================================
 let bulkModeActive = false;
 let bulkSelectedItems = new Set();
 let longPressTimer;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Wstrzyknięcie Paska Akcji do HTML
+    // 1. Wstrzyknięcie Paska Akcji do HTML (DODANO PRZYCISK ZAZNACZ WSZYSTKO)
     const actionBar = document.createElement('div');
     actionBar.id = 'bulk-action-bar';
     actionBar.innerHTML = `
+        <button class="bulk-btn" id="bulk-select-all-btn" title="Zaznacz wszystko">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        </button>
         <span class="bulk-counter" id="bulk-count">0</span>
+        <div style="width:1px; height:24px; background:var(--border-color); margin: 0 4px;"></div>
         <button class="bulk-btn" id="bulk-move-btn" title="Do obejrzanych"><svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg></button>
         <button class="bulk-btn danger" id="bulk-delete-btn" title="Usuń"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
         <div style="width:1px; height:24px; background:var(--border-color); margin: 0 4px;"></div>
@@ -2702,6 +2783,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Obsługa przycisków na pasku
     document.getElementById('bulk-cancel-btn').addEventListener('click', exitBulkMode);
     
+       // NOWOŚĆ: Logika "Zaznacz / Odznacz wszystko" bazująca na DANYCH, a nie widoku HTML
+    document.getElementById('bulk-select-all-btn').addEventListener('click', () => {
+        triggerHaptic('light');
+        const listId = getActiveListId();
+        const state = viewState[listId];
+        let itemsToSelect = [...data[listId]];
+
+        // 1. Zaciągamy te same filtry co na liście, by zaznaczyć TYLKO to, co pasuje do wyszukiwarki/suwaka
+        if (state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies')) {
+            itemsToSelect = itemsToSelect.filter(item => item.runtime && item.runtime <= state.maxRuntime);
+        }
+        if (state.localSearch) {
+            const query = state.localSearch.toLowerCase();
+            itemsToSelect = itemsToSelect.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query)));
+        }
+        if (state.filterFavoritesOnly) itemsToSelect = itemsToSelect.filter(item => item.isFavorite);
+        if (state.filterByGenre !== 'all') itemsToSelect = itemsToSelect.filter(item => item.genres && item.genres.includes(state.filterByGenre));
+        if (state.filterByCustomTag && state.filterByCustomTag !== 'all') itemsToSelect = itemsToSelect.filter(item => (item.customTags || []).includes(state.filterByCustomTag));
+        if (state.filterByVod && state.filterByVod !== 'all') {
+            const targetVod = state.filterByVod.toLowerCase();
+            itemsToSelect = itemsToSelect.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod)));
+        }
+
+        // 2. Sprawdzamy czy WSZYSTKIE przefiltrowane są już w zbiorze zaznaczonych
+        const allSelected = itemsToSelect.every(item => bulkSelectedItems.has(`${item.id}_${item.type}`));
+
+        if (allSelected) {
+            // ODFASZKOWUJEMY wszystko co pasuje
+            itemsToSelect.forEach(item => bulkSelectedItems.delete(`${item.id}_${item.type}`));
+        } else {
+            // ZAZNACZAMY wszystko co pasuje do filtra (nawet 500 pozycji)
+            itemsToSelect.forEach(item => bulkSelectedItems.add(`${item.id}_${item.type}`));
+        }
+
+        document.getElementById('bulk-count').textContent = bulkSelectedItems.size;
+        
+        // Przebudowujemy listę na ekranie (teraz renderList zapamięta, że są zaznaczone!)
+        renderList(data[listId], listId, true); 
+    });
     document.getElementById('bulk-delete-btn').addEventListener('click', async () => {
         if(bulkSelectedItems.size === 0) return;
         if(await showCustomConfirm('Usunąć wiele?', `Czy na pewno chcesz usunąć ${bulkSelectedItems.size} pozycji z biblioteki?`)) {
