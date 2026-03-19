@@ -231,6 +231,19 @@ function setupEventListeners() {
             if (hapticsEnabled) triggerHaptic('success');
         });
     }
+        // --- UX: AUTO-CHOWANIE KLAWIATURY PRZY PRZEWIJANIU ---
+    // Jeśli użytkownik zacznie przewijać główny kontener lub ekran wyszukiwania, zdejmujemy focus z inputów
+    document.getElementById('mainContent').addEventListener('touchmove', () => {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+            activeEl.blur(); // Chowa klawiaturę systemową
+        }
+    }, { passive: true });
+
+    document.getElementById('searchResults').addEventListener('touchmove', () => {
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.tagName === 'INPUT') activeEl.blur();
+    }, { passive: true });
 
     // --- NATYWNY GEST WSTECZ (TELEFONY) ---
     window.addEventListener('popstate', (e) => {
@@ -559,14 +572,174 @@ function setupEventListeners() {
     document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
     document.getElementById('tab-series').addEventListener('click', handleListItemClick);
 
-    // --- ZAKŁADKA ODKRYWAJ ---
+     // --- ZAKŁADKA ODKRYWAJ (Kategorie i Ukrywany Rok) ---
     const handlePillClick = (e) => {
         const pill = e.target.closest('.discover-pill');
-        if (pill && !pill.classList.contains('active')) {
-            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); pill.classList.add('active');
-            if (pill.dataset.genre) loadDiscoverTab(pill.dataset.genre, true); else loadDiscoverTab(pill.dataset.endpoint, false);
+        if (!pill) return;
+        
+        if (!pill.classList.contains('active')) {
+            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); 
+            pill.classList.add('active');
+            
+            // Szukamy elementów w HTMLu w momencie kliknięcia
+            const yearContainer = document.getElementById('discover-year-container');
+            const yearInput = document.getElementById('discover-year-input');
+            const yearClear = document.getElementById('discover-year-clear');
+            const yearWrap = document.getElementById('discover-year-wrapper');
+            
+            // LOGIKA POKAZYWANIA / UKRYWANIA
+            if (pill.dataset.genre) {
+                // To jest NASTRÓJ - Pokaż pasek!
+                if (yearContainer) {
+                    yearContainer.style.display = 'block';
+                }
+                loadDiscoverTab(pill.dataset.genre, true, 1); 
+            } else {
+                // To jest TRENDY/KINO - Schowaj pasek i wyczyść dane!
+                if (yearContainer) yearContainer.style.display = 'none';
+                if (yearInput) yearInput.value = '';
+                if (yearClear) yearClear.style.display = 'none';
+                if (yearWrap) {
+                    yearWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                    yearWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+                    yearWrap.style.borderColor = 'transparent';
+                }
+                currentDiscoverYear = 'all'; // Twardy reset pamięci
+                
+                loadDiscoverTab(pill.dataset.endpoint, false, 1);
+            }
         }
     };
+    
+    // Nasłuchiwacze na paski
+    const catsContainer = document.getElementById('discover-categories');
+    if (catsContainer) catsContainer.addEventListener('click', handlePillClick);
+    
+    const genresContainer = document.getElementById('discover-genres');
+    if (genresContainer) genresContainer.addEventListener('click', handlePillClick);
+
+    // --- LOGIKA SAMEGO POLA WPISYWANIA ROKU ---
+    const discoverYearInput = document.getElementById('discover-year-input');
+    if (discoverYearInput) {
+        const discoverYearWrap = document.getElementById('discover-year-wrapper');
+        const discoverYearClear = document.getElementById('discover-year-clear');
+
+        // Neumorficzne efekty podświetlenia
+        discoverYearInput.addEventListener('focus', () => {
+            if(discoverYearWrap) {
+                discoverYearWrap.style.background = 'var(--card-color)';
+                discoverYearWrap.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 4px color-mix(in srgb, var(--primary-color) 15%, transparent)';
+                discoverYearWrap.style.borderColor = 'var(--primary-color)';
+            }
+        });
+        discoverYearInput.addEventListener('blur', () => {
+            if(discoverYearWrap) {
+                discoverYearWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                discoverYearWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+                discoverYearWrap.style.borderColor = 'transparent';
+            }
+        });
+
+        // Wpisywanie cyfr
+        const handleYearSearch = debounce((e) => {
+            const val = e.target.value.trim();
+            if (discoverYearClear) discoverYearClear.style.display = val.length > 0 ? 'flex' : 'none';
+
+            if (val.length === 4 || val.length === 0) {
+                currentDiscoverYear = val.length === 4 ? val : 'all';
+                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
+                if (activeCatPill && activeCatPill.dataset.genre) {
+                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
+                }
+            }
+        }, 600); 
+
+        discoverYearInput.addEventListener('input', handleYearSearch);
+
+        // Czyszczenie roku
+        if (discoverYearClear) {
+            discoverYearClear.addEventListener('click', (e) => {
+                e.stopPropagation();
+                discoverYearInput.value = '';
+                discoverYearClear.style.display = 'none';
+                if(discoverYearWrap) {
+                    discoverYearWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                    discoverYearWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+                    discoverYearWrap.style.borderColor = 'transparent';
+                }
+                
+                currentDiscoverYear = 'all';
+                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
+                if (activeCatPill && activeCatPill.dataset.genre) {
+                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
+                }
+            });
+        }
+    }
+    
+    document.getElementById('discover-categories').addEventListener('click', handlePillClick);
+    document.getElementById('discover-genres').addEventListener('click', handlePillClick);
+
+    // --- OBSŁUGA SAMEGO POLA WPISYWANIA ROKU ---
+    const discoverYearInputLive = document.getElementById('discover-year-input');
+    const discoverYearClearLive = document.getElementById('discover-year-clear');
+    const discoverYearWrapLive = document.getElementById('discover-year-wrapper');
+
+    if (discoverYearInputLive) {
+        // Efekty graficzne (Neumorfizm)
+        discoverYearInputLive.addEventListener('focus', () => {
+            if (discoverYearWrapLive) {
+                discoverYearWrapLive.style.background = 'var(--card-color)';
+                discoverYearWrapLive.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 4px color-mix(in srgb, var(--primary-color) 15%, transparent)';
+                discoverYearWrapLive.style.borderColor = 'var(--primary-color)';
+            }
+        });
+        discoverYearInputLive.addEventListener('blur', () => {
+            if (discoverYearWrapLive) {
+                discoverYearWrapLive.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                discoverYearWrapLive.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+                discoverYearWrapLive.style.borderColor = 'transparent';
+            }
+        });
+
+        // Nasłuchiwanie wpisanych cyfr
+        const handleYearSearch = debounce((e) => {
+            const val = e.target.value.trim();
+            if (discoverYearClearLive) discoverYearClearLive.style.display = val.length > 0 ? 'flex' : 'none';
+
+            // Szukamy po wpisaniu 4 cyfr (lub po wyczyszczeniu)
+            if (val.length === 4 || val.length === 0) {
+                currentDiscoverYear = val.length === 4 ? val : 'all';
+                
+                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
+                if (activeCatPill && activeCatPill.dataset.genre) {
+                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
+                }
+            }
+        }, 600); 
+
+        discoverYearInputLive.addEventListener('input', handleYearSearch);
+
+        // Czyszczenie roku z krzyżyka
+        if (discoverYearClearLive) {
+            discoverYearClearLive.addEventListener('click', (e) => {
+                e.stopPropagation();
+                discoverYearInputLive.value = '';
+                discoverYearClearLive.style.display = 'none';
+                if (discoverYearWrapLive) {
+                    discoverYearWrapLive.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                    discoverYearWrapLive.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+                    discoverYearWrapLive.style.borderColor = 'transparent';
+                }
+                currentDiscoverYear = 'all';
+                
+                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
+                if (activeCatPill && activeCatPill.dataset.genre) {
+                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
+                }
+            });
+        }
+    }
     document.getElementById('discover-categories').addEventListener('click', handlePillClick);
     document.getElementById('discover-genres').addEventListener('click', handlePillClick);
 
@@ -987,58 +1160,162 @@ async function addItemToList(id, type, list) {
 // ==========================================
 // 8. ZAKŁADKA ODKRYWAJ I STATYSTYKI
 // ==========================================
-async function loadDiscoverTab(endpoint = 'trending', isGenre = false) {
+let currentDiscoverPage = 1;
+let currentDiscoverEndpoint = 'trending';
+let isDiscoverLoading = false;
+let discoverObserver = null;
+
+// DODANA ZMIENNA: Pamięć wpisanego roku
+let currentDiscoverYear = 'all'; 
+
+async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1) {
+    if (isDiscoverLoading) return;
+    isDiscoverLoading = true;
+    
+    currentDiscoverEndpoint = endpoint;
+    currentDiscoverPage = page;
+    
     const gridContainer = document.getElementById('main-discover-grid');
-    gridContainer.innerHTML = `<div style="text-align:center; padding: 40px 0; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Ładowanie...</div>`;
-    let res, typeOver = null;
-
-    try {
-        if (isGenre) { res = await fetchFromTMDB('/discover/movie', { sort_by: 'popularity.desc', with_genres: endpoint, page: 1 }); typeOver = 'movie'; }
-        else {
-            switch (endpoint) {
-                case 'movies_popular': res = await fetchFromTMDB('/movie/popular', { region: 'PL' }); typeOver = 'movie'; break;
-                case 'series_popular': res = await fetchFromTMDB('/tv/popular'); typeOver = 'tv'; break;
-                case 'in_theaters': res = await fetchFromTMDB('/movie/now_playing', { region: 'PL' }); typeOver = 'movie'; break;
-                case 'top_rated': res = await fetchFromTMDB('/movie/top_rated', { region: 'PL' }); typeOver = 'movie'; break;
-                default: res = await fetchFromTMDB('/trending/all/week'); break;
-            }
-        }
-        if (res) {
-            let results = res.results.filter(i => i.poster_path).slice(0, 18);
-            if (typeOver) results.forEach(i => i.media_type = typeOver); else results = results.filter(i => i.media_type === 'movie' || i.media_type === 'tv');
-            renderDiscoverGridHTML(results, gridContainer);
-        } else { gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Błąd pobierania danych.</div>`; }
-    } catch { gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Sprawdź połączenie sieciowe.</div>`; }
-}
-
-function renderDiscoverGridHTML(results, gridContainer) {
-    if (!results || results.length === 0) { gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Brak wyników.</div>`; return; }
-
-    let html = '';
-    const heroItem = results[0];
-    if (heroItem) {
-        const bgSrc = heroItem.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + heroItem.backdrop_path : (heroItem.poster_path ? IMAGE_BASE_URL + heroItem.poster_path : POSTER_PLACEHOLDER);
-        const safeTitle = escapeHTML(heroItem.title || heroItem.name);
-        html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">Nr 1 w Trendach</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
+    
+    if (page === 1) {
+        gridContainer.innerHTML = `<div style="text-align:center; padding: 40px 0; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Ładowanie...</div>`;
+    } else {
+        const oldSentinel = document.getElementById('discover-sentinel');
+        if (oldSentinel) oldSentinel.remove();
+        gridContainer.insertAdjacentHTML('beforeend', `<div id="discover-loading-more" style="text-align:center; padding: 20px 0; color:var(--primary-color); width:100%; grid-column: 1 / -1;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:currentColor;animation:spin 1s linear infinite;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></div>`);
     }
 
-    const gridItems = results.slice(1).map((item, index) => {
+    let res, typeOver = null;
+    let params = { page: page };
+
+    // --- NOWOŚĆ: DOPISANIE ROKU DO ZAPYTANIA TMDB ---
+    if (currentDiscoverYear && currentDiscoverYear !== 'all') {
+        params.primary_release_year = currentDiscoverYear; // Tylko filmy z tego roku
+        params.first_air_date_year = currentDiscoverYear;  // Tylko seriale z tego roku
+    }
+
+    try {
+        if (isGenre) { 
+            params.sort_by = 'popularity.desc';
+            params.with_genres = endpoint;
+            res = await fetchFromTMDB('/discover/movie', params); 
+            typeOver = 'movie'; 
+        }
+        else {
+            switch(endpoint) {
+                case 'movies_popular': 
+                    params.region = 'PL'; params.sort_by = 'popularity.desc';
+                    res = await fetchFromTMDB('/discover/movie', params); 
+                    typeOver = 'movie'; 
+                    break;
+                case 'series_popular': 
+                    params.sort_by = 'popularity.desc';
+                    res = await fetchFromTMDB('/discover/tv', params); 
+                    typeOver = 'tv'; 
+                    break;
+                case 'in_theaters': 
+                    params.region = 'PL'; 
+                    res = await fetchFromTMDB('/movie/now_playing', params); 
+                    typeOver = 'movie'; 
+                    break;
+                case 'top_rated': 
+                    params.region = 'PL'; params.sort_by = 'vote_average.desc'; params['vote_count.gte'] = 200;
+                    res = await fetchFromTMDB('/discover/movie', params); 
+                    typeOver = 'movie'; 
+                    break;
+                default: 
+                    res = await fetchFromTMDB(`/trending/all/week`, {page: page}); 
+                    break;
+            }
+        }
+
+        const loader = document.getElementById('discover-loading-more');
+        if (loader) loader.remove();
+
+        if (res && res.results) {
+            let results = res.results.filter(i => i.poster_path);
+            if(typeOver) results.forEach(i => i.media_type = typeOver); 
+            else results = results.filter(i => i.media_type === 'movie' || i.media_type === 'tv');
+
+            renderDiscoverGridHTML(results, gridContainer, page, isGenre);
+        } else if (page === 1) { 
+            gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Brak wyników lub błąd pobierania danych.</div>`; 
+        }
+    } catch { 
+        if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Sprawdź połączenie sieciowe.</div>`; 
+    }
+    
+    isDiscoverLoading = false;
+}
+
+function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
+    if (!results || results.length === 0) { 
+        if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Brak wyników.</div>`; 
+        return; 
+    }
+    
+    let html = '';
+    
+    // BANER HERO (Generujemy TYLKO na pierwszej stronie!)
+    if (page === 1) {
+        const heroItem = results[0];
+        if (heroItem) {
+            const bgSrc = heroItem.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + heroItem.backdrop_path : (heroItem.poster_path ? IMAGE_BASE_URL + heroItem.poster_path : POSTER_PLACEHOLDER);
+            const safeTitle = escapeHTML(heroItem.title || heroItem.name);
+            html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">Nr 1 w Trendach</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
+            
+            // Usuwamy bohatera z listy, żeby nie dublować go w siatce poniżej
+            results = results.slice(1);
+        }
+    }
+
+    // GENEROWANIE KAFELKÓW (Dla strony 1 oraz każdej kolejnej)
+    const gridItems = results.map((item, index) => {
         const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w300') + item.poster_path : POSTER_PLACEHOLDER;
         const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(item.id));
         const badgeHTML = isAlreadyAdded ? `<div class="discover-badge-unreleased" style="background:var(--success-color);">W kolekcji</div>` : '';
-        return `<div class="discover-item" data-id="${item.id}" data-type="${item.media_type}" title="${escapeHTML(item.title || item.name)}" style="animation: fadeIn 0.4s ease-out ${(index % 18) * 0.03}s both;"><div class="discover-poster-wrapper"><img class="fade-image" src="${posterSrc}" alt="okładka" loading="lazy" decoding="async" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';">${badgeHTML}</div><div class="discover-item-title">${escapeHTML(item.title || item.name)}</div></div>`;
+        
+        // Czas animacji liczymy od zera dla każdej nowej paczki
+        const delay = (index % 20) * 0.03; 
+        
+        return `<div class="discover-item" data-id="${item.id}" data-type="${item.media_type}" title="${escapeHTML(item.title || item.name)}" style="animation: fadeIn 0.4s ease-out ${delay}s both;"><div class="discover-poster-wrapper"><img class="fade-image" src="${posterSrc}" alt="okładka" loading="lazy" decoding="async" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';">${badgeHTML}</div><div class="discover-item-title">${escapeHTML(item.title || item.name)}</div></div>`;
     }).join('');
 
-    gridContainer.innerHTML = html + gridItems;
-    gridContainer.onclick = (e) => {
-        const item = e.target.closest('.discover-item') || e.target.closest('.discover-hero');
-        if (item) {
-            const id = item.dataset.id; const type = item.dataset.type;
-            const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
-            if (isInLibrary) openDetailsModal(id, type);
-            else openPreviewModal(id, type);
-        }
-    };
+    // WRZUCANIE DO KONTENERA
+    if (page === 1) {
+        gridContainer.innerHTML = html + gridItems;
+        // Podpinamy kliknięcia tylko raz, przy ładowaniu strony 1
+        gridContainer.onclick = (e) => { 
+            const item = e.target.closest('.discover-item') || e.target.closest('.discover-hero'); 
+            if (item) {
+                const id = item.dataset.id; const type = item.dataset.type;
+                const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
+                if (isInLibrary) openDetailsModal(id, type); 
+                else openPreviewModal(id, type);
+            }
+        };
+    } else {
+        // Zamiast nadpisywać (innerHTML), DOKLEJAMY nowe kafelki na sam dół (insertAdjacentHTML)
+        gridContainer.insertAdjacentHTML('beforeend', gridItems);
+    }
+
+    // --- INFINITE SCROLL SENTINEL ---
+    if (discoverObserver) discoverObserver.disconnect();
+    
+    // Jeśli TMDB zwróciło pełną stronę (20 wyników), to znaczy, że na 99% jest kolejna.
+    // Jeśli dostaliśmy np. 3 filmy, to doszliśmy do końca internetu dla danej kategorii.
+    if (results.length >= 15) {
+        gridContainer.insertAdjacentHTML('beforeend', `<div id="discover-sentinel" style="width:100%; height:20px; grid-column: 1 / -1;"></div>`);
+        const sentinel = document.getElementById('discover-sentinel');
+        
+        discoverObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                loadDiscoverTab(currentDiscoverEndpoint, isGenre, currentDiscoverPage + 1);
+            }
+        }, { rootMargin: "400px" }); // Dość duży margines, żeby ładowało się "w locie" zanim dojedziesz do końca
+        
+        discoverObserver.observe(sentinel);
+    }
 }
 
 function renderProfileStats() {
@@ -1415,13 +1692,18 @@ async function openFilterModal() {
     const topVodProviders = ['Netflix', 'Max', 'Amazon Prime Video', 'Disney Plus', 'Apple TV Plus', 'SkyShowtime'];
 
     // 1. Zbudowanie Suwaka Czasu (Tylko dla filmów)
+       // 1. Zbudowanie Inteligentnego Suwaka Czasu
     let timeFilterHTML = '';
     if (isMovies) {
+        // Zabezpieczenie: jeśli stara wartość to np. 240 (Bez limitu z poprzedniej wersji), zmieniamy na nowy zakres
+        if (state.maxRuntime === undefined || state.maxRuntime > 200) state.maxRuntime = 200;
+
         const formatTime = (mins) => {
-            if (mins >= 240) return 'Bez limitu';
+            if (mins >= 200) return 'Bez limitu';
             const h = Math.floor(mins / 60); const m = mins % 60;
-            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
         };
+        
         timeFilterHTML = `
             <div class="filter-section-title" style="margin-top:0;">Ile masz czasu? ⏱️</div>
             <div style="background: color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2)); border: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);">
@@ -1429,9 +1711,10 @@ async function openFilterModal() {
                     <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Maksymalnie:</span>
                     <strong id="runtime-display" style="color: var(--primary-color); font-size: 1.1rem;">${formatTime(state.maxRuntime)}</strong>
                 </div>
-                <input type="range" id="runtime-slider" min="60" max="240" step="10" value="${state.maxRuntime}" style="width:100%;">
+                <!-- Minimum 30 minut, Skok co 10 minut. 200 = Bez Limitu -->
+                <input type="range" id="runtime-slider" min="30" max="200" step="10" value="${state.maxRuntime}" style="width:100%;">
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-secondary); margin-top:8px; font-weight:600;">
-                    <span>1 godz.</span><span>Bez limitu</span>
+                    <span>30 min</span><span>Bez limitu</span>
                 </div>
             </div>
         `;
@@ -2802,15 +3085,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // 16. TRYB MASOWY (LONG PRESS & BULK ACTIONS)
 // ==========================================
-// ==========================================
-// 16. TRYB MASOWY (LONG PRESS & BULK ACTIONS)
-// ==========================================
 let bulkModeActive = false;
 let bulkSelectedItems = new Set();
 let longPressTimer;
+let isBulkCooldown = false; // NOWOŚĆ: Flaga blokująca przypadkowe włączenia
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Wstrzyknięcie Paska Akcji do HTML (DODANO PRZYCISK ZAZNACZ WSZYSTKO)
+    // 1. Wstrzyknięcie Paska Akcji do HTML
     const actionBar = document.createElement('div');
     actionBar.id = 'bulk-action-bar';
     actionBar.innerHTML = `
@@ -2829,14 +3110,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Obsługa przycisków na pasku
     document.getElementById('bulk-cancel-btn').addEventListener('click', exitBulkMode);
     
-       // NOWOŚĆ: Logika "Zaznacz / Odznacz wszystko" bazująca na DANYCH, a nie widoku HTML
     document.getElementById('bulk-select-all-btn').addEventListener('click', () => {
         triggerHaptic('light');
         const listId = getActiveListId();
         const state = viewState[listId];
         let itemsToSelect = [...data[listId]];
 
-        // 1. Zaciągamy te same filtry co na liście, by zaznaczyć TYLKO to, co pasuje do wyszukiwarki/suwaka
         if (state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies')) {
             itemsToSelect = itemsToSelect.filter(item => item.runtime && item.runtime <= state.maxRuntime);
         }
@@ -2852,22 +3131,18 @@ document.addEventListener('DOMContentLoaded', () => {
             itemsToSelect = itemsToSelect.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod)));
         }
 
-        // 2. Sprawdzamy czy WSZYSTKIE przefiltrowane są już w zbiorze zaznaczonych
         const allSelected = itemsToSelect.every(item => bulkSelectedItems.has(`${item.id}_${item.type}`));
 
         if (allSelected) {
-            // ODFASZKOWUJEMY wszystko co pasuje
             itemsToSelect.forEach(item => bulkSelectedItems.delete(`${item.id}_${item.type}`));
         } else {
-            // ZAZNACZAMY wszystko co pasuje do filtra (nawet 500 pozycji)
             itemsToSelect.forEach(item => bulkSelectedItems.add(`${item.id}_${item.type}`));
         }
 
         document.getElementById('bulk-count').textContent = bulkSelectedItems.size;
-        
-        // Przebudowujemy listę na ekranie (teraz renderList zapamięta, że są zaznaczone!)
         renderList(data[listId], listId, true); 
     });
+
     document.getElementById('bulk-delete-btn').addEventListener('click', async () => {
         if(bulkSelectedItems.size === 0) return;
         if(await showCustomConfirm('Usunąć wiele?', `Czy na pewno chcesz usunąć ${bulkSelectedItems.size} pozycji z biblioteki?`)) {
@@ -2912,40 +3187,59 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Wychodzenie z trybu
+// --- NOWOŚĆ: WYJŚCIE Z TRYBU Z BLOKADĄ (COOLDOWN) ---
 function exitBulkMode() {
     bulkModeActive = false;
-    bulkSelectedItems.clear();
+    
+    // Blokujemy ekran na ułamek sekundy, by zapobiec przypadkowym kliknięciom
+    isBulkCooldown = true;
+    setTimeout(() => { isBulkCooldown = false; }, 500);
+
+    document.querySelectorAll('.bulk-selected').forEach(el => el.classList.remove('bulk-selected'));
+    bulkSelectedItems.clear(); 
+    
+    const countEl = document.getElementById('bulk-count');
+    if (countEl) countEl.textContent = '0';
+    
     document.body.classList.remove('bulk-mode-active');
     document.getElementById('bulk-action-bar').classList.remove('visible');
-    document.querySelectorAll('.bulk-selected').forEach(el => el.classList.remove('bulk-selected'));
 }
 
-// 3. Nasłuchiwanie dotyku (Long Press) w głównym kontenerze
+// --- NOWOŚĆ: NASŁUCHIWACZ DOTYKU Z ZABEZPIECZENIAMI ---
 const mainContentNode = document.getElementById('mainContent');
 mainContentNode.addEventListener('touchstart', (e) => {
+    // 1. Zabezpieczenie przed "widmowym klikiem" po wyjściu z trybu
+    if (isBulkCooldown) return;
+
+    // 2. Zabezpieczenie: Long press działa tylko na listach (nie w profilu)
+    if (viewState.activeMainTab === 'profile' || viewState.activeMainTab === 'discover') return;
+
+    // 3. Zabezpieczenie: Ignorujemy kliknięcia w ikony i przyciski akcji!
+    if (e.target.closest('button') || e.target.closest('.icon-button') || e.target.closest('input')) return;
+
     const item = e.target.closest('.list-item') || e.target.closest('.grid-item');
     if (!item) return;
     
-    // Jeśli już jesteśmy w trybie masowym, wyłączamy stoper, żeby po prostu klikać
+    // Jeśli już jesteśmy w trybie masowym, wyłączamy stoper
     if (bulkModeActive) return;
 
+    // Start odliczania (Long Press)
     longPressTimer = setTimeout(() => {
-        triggerHaptic('heavy'); // Mocna wibracja oznacza wejście w tryb
+        if (isBulkCooldown) return; // Ostateczne zabezpieczenie
+        
+        triggerHaptic('heavy');
         bulkModeActive = true;
         document.body.classList.add('bulk-mode-active');
         document.getElementById('bulk-action-bar').classList.add('visible');
         
-        // Zaznacz pierwszy przytrzymany element
         toggleBulkSelection(item);
-    }, 600); // 600ms przytrzymania palcem
+    }, 600); // 600ms przytrzymania
 }, { passive: true });
 
-mainContentNode.addEventListener('touchmove', () => clearTimeout(longPressTimer), { passive: true });
-mainContentNode.addEventListener('touchend', () => clearTimeout(longPressTimer), { passive: true });
-mainContentNode.addEventListener('touchcancel', () => clearTimeout(longPressTimer), { passive: true });
+mainContentNode.addEventListener('touchmove', () => { if (longPressTimer) clearTimeout(longPressTimer); }, { passive: true });
+mainContentNode.addEventListener('touchend', () => { if (longPressTimer) clearTimeout(longPressTimer); }, { passive: true });
+mainContentNode.addEventListener('touchcancel', () => { if (longPressTimer) clearTimeout(longPressTimer); }, { passive: true });
 
-// 4. Modyfikacja kliknięć (Z przechwytywaniem)
 function toggleBulkSelection(itemEl) {
     triggerHaptic('light');
     const id = itemEl.dataset.id;
@@ -2962,6 +3256,3 @@ function toggleBulkSelection(itemEl) {
     
     document.getElementById('bulk-count').textContent = bulkSelectedItems.size;
 }
-
-// WAŻNE: Dodanie małych kółek do kafelków podczas renderowania
-// W funkcji renderList() (w app.js), podmienimy zwracany HTML kafelków, by dodać <div class="bulk-checkbox"></div>
