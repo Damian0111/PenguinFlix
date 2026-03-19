@@ -1777,7 +1777,6 @@ async function openDetailsModal(id, type) {
 
     const isToWatch = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
     
-    // --- OBLICZANIE DOLNEJ STOPKI (FHTML) Z ZEGARKIEM ---
     let fHTML = '';
     if (isWatched) { 
         fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; 
@@ -1832,7 +1831,6 @@ async function openDetailsModal(id, type) {
         }
     }
 
-    // --- CZERWONY BANER ODCINKA (BEZ LICZNIKA) ---
     let nxBanner = '';
     if (isToWatch) {
         const nextEp = getNextEpisodeStr(item);
@@ -1875,14 +1873,62 @@ async function openDetailsModal(id, type) {
     
     let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     
+    // --- NOWOŚĆ: PRZYCISK NOTATKI ---
+    const hasNote = item.privateNote && item.privateNote.trim() !== '';
+    let noteBtnHTML = `<button id="modal-note-btn" class="${hasNote ? 'note-btn-active' : ''}" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-secondary); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Prywatna Notatka">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+    </button>`;
+
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
     
-    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
+    let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:8px;">${noteBtnHTML}${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
+    // --- NOWOŚĆ: KONTENER NOTATKI (Z wstrzykniętym tekstem) ---
+    const savedNote = item.privateNote ? escapeHTML(item.privateNote) : '';
+    let privateNoteAreaHTML = `
+    <div id="private-note-wrapper" class="private-note-container ${hasNote ? 'active' : ''}">
+        <textarea id="private-note-textarea" class="private-note-input" placeholder="Wpisz prywatną notatkę, polecajkę, powód dodania...">${savedNote}</textarea>
+    </div>`;
+
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}${privateNoteAreaHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
     
+    // --- NOWOŚĆ: LOGIKA ZAPISU NOTATKI ---
+    const noteBtn = modal.querySelector('#modal-note-btn');
+    const noteWrapper = modal.querySelector('#private-note-wrapper');
+    const noteTextarea = modal.querySelector('#private-note-textarea');
+
+    if (noteBtn && noteWrapper && noteTextarea) {
+        noteBtn.addEventListener('click', () => {
+            triggerHaptic('light');
+            noteWrapper.classList.toggle('active');
+            if (noteWrapper.classList.contains('active')) {
+                noteTextarea.focus();
+            }
+        });
+
+        // Autozapis po kliknięciu poza pole
+        noteTextarea.addEventListener('blur', async (e) => {
+            const newVal = e.target.value.trim();
+            // Zapisujemy tylko jeśli tekst się zmienił, żeby oszczędzać bazę!
+            if (item.privateNote !== newVal) {
+                item.privateNote = newVal;
+                await saveData();
+                
+                if (newVal !== '') {
+                    noteBtn.classList.add('note-btn-active');
+                } else {
+                    noteBtn.classList.remove('note-btn-active');
+                    noteWrapper.classList.remove('active'); // Chowa puste pole
+                }
+            }
+        });
+    }
+
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
 
