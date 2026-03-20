@@ -540,6 +540,7 @@ function setupEventListeners() {
     });
 
     // --- GESTY SWIPE & PULL TO REFRESH ---
+     // --- GESTY SWIPE & PULL TO REFRESH ---
     let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
     let ptrCurrentY = 0; let isPulling = false;
     const mainContent = document.getElementById('mainContent');
@@ -562,14 +563,23 @@ function setupEventListeners() {
     };
 
     mainContent.addEventListener('touchstart', e => {
-        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return;
+        // KLUCZOWE WYKLUCZENIA: Ignorujemy przeciąganie list z pigułkami, sortable list oraz osi czasu plakatów!
+        if (e.target.closest('.sortable-chosen') || 
+            e.target.closest('.discover-categories-wrapper') || 
+            e.target.closest('.stats-poster-wall')) return;
+            
         touchstartX = e.touches[0].clientX; touchstartY = e.touches[0].clientY;
         if (window.scrollY === 0) isPulling = true;
     }, { passive: true });
 
     mainContent.addEventListener('touchmove', e => {
-        if (e.target.closest('.modal-overlay')) return;
+        // Ignorujemy przesunięcia po modalach, panelach i paskach przewijanych w poziomie
+        if (e.target.closest('.modal-overlay') || 
+            e.target.closest('.discover-categories-wrapper') || 
+            e.target.closest('.stats-poster-wall')) return;
+            
         const deltaY = e.touches[0].clientY - touchstartY;
+        // Odblokowanie Pull-to-refresh
         if (isPulling && deltaY > 0 && window.scrollY === 0) {
             e.preventDefault(); ptrCurrentY = deltaY;
             if (ptrContainer) {
@@ -580,7 +590,10 @@ function setupEventListeners() {
     }, { passive: false });
 
     mainContent.addEventListener('touchend', async e => {
-        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper')) return;
+        if (e.target.closest('.sortable-chosen') || 
+            e.target.closest('.discover-categories-wrapper') || 
+            e.target.closest('.stats-poster-wall')) return;
+            
         touchendX = e.changedTouches[0].clientX; touchendY = e.changedTouches[0].clientY;
         handleSwipeGesture();
         if (isPulling) {
@@ -589,11 +602,10 @@ function setupEventListeners() {
                 ptrContainer.classList.add('refreshing'); triggerHaptic('medium');
                 if (viewState.activeMainTab === 'discover') {
                     const activePill = document.querySelector('.discover-pill.active');
-                    await loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false);
+                    await loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false, 1, currentDiscoverMediaType);
                 } else if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
                     const listId = getActiveListId(); 
                     if (listId === 'seriesToWatch') await refreshStaleSeries(false); 
-                    
                     renderList(data[listId], listId, true);
                 }
                 setTimeout(() => { ptrContainer.classList.remove('refreshing'); ptrContainer.style.transform = ''; }, 600);
@@ -612,9 +624,15 @@ function setupEventListeners() {
     const discoverYearClearLive = document.getElementById('discover-year-clear');
     const discoverYearWrapLive = document.getElementById('discover-year-wrapper');
 
-    const handlePillClick = (e) => {
+      const handlePillClick = (e) => {
         const pill = e.target.closest('.discover-pill');
         if (!pill) return;
+
+        if (pill.id === 'btn-more-genres') {
+            triggerHaptic('light');
+            openAllGenresModal();
+            return;
+        }
         
         if (!pill.classList.contains('active')) {
             document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); 
@@ -627,7 +645,8 @@ function setupEventListeners() {
                     discoverYearContainer.offsetHeight; 
                     discoverYearContainer.style.animation = 'fadeIn 0.3s ease-out';
                 }
-                loadDiscoverTab(pill.dataset.genre, true, 1); 
+                const mType = pill.dataset.mediaType || 'movie';
+                loadDiscoverTab(pill.dataset.genre, true, 1, mType); 
             } else {
                 if (discoverYearContainer) discoverYearContainer.style.display = 'none';
                 if (discoverYearInputLive) discoverYearInputLive.value = '';
@@ -643,7 +662,6 @@ function setupEventListeners() {
             }
         }
     };
-    
     const catsContainer = document.getElementById('discover-categories');
     if (catsContainer) catsContainer.addEventListener('click', handlePillClick);
     const genresContainer = document.getElementById('discover-genres');
@@ -1217,18 +1235,18 @@ async function addItemToList(id, type, list) {
 // ==========================================
 let currentDiscoverPage = 1;
 let currentDiscoverEndpoint = 'trending';
+let currentDiscoverMediaType = 'movie'; // <-- NOWOŚĆ: Pamięta czy to film czy serial
 let isDiscoverLoading = false;
 let discoverObserver = null;
-
-// DODANA ZMIENNA: Pamięć wpisanego roku
 let currentDiscoverYear = 'all'; 
 
-async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1) {
+async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1, mediaType = 'movie') {
     if (isDiscoverLoading) return;
     isDiscoverLoading = true;
     
     currentDiscoverEndpoint = endpoint;
     currentDiscoverPage = page;
+    currentDiscoverMediaType = mediaType; // Zapisujemy typ na wypadek przewijania w dół!
     
     const gridContainer = document.getElementById('main-discover-grid');
     
@@ -1243,18 +1261,18 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1)
     let res, typeOver = null;
     let params = { page: page };
 
-    // --- NOWOŚĆ: DOPISANIE ROKU DO ZAPYTANIA TMDB ---
     if (currentDiscoverYear && currentDiscoverYear !== 'all') {
-        params.primary_release_year = currentDiscoverYear; // Tylko filmy z tego roku
-        params.first_air_date_year = currentDiscoverYear;  // Tylko seriale z tego roku
+        params.primary_release_year = currentDiscoverYear; 
+        params.first_air_date_year = currentDiscoverYear;  
     }
 
     try {
         if (isGenre) { 
             params.sort_by = 'popularity.desc';
             params.with_genres = endpoint;
-            res = await fetchFromTMDB('/discover/movie', params); 
-            typeOver = 'movie'; 
+            // TERA SZUKAMY DYNAMICZNIE W FILMIACH LUB SERIALACH!
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); 
+            typeOver = mediaType; 
         }
         else {
             switch(endpoint) {
@@ -1294,7 +1312,7 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1)
 
             renderDiscoverGridHTML(results, gridContainer, page, isGenre);
         } else if (page === 1) { 
-            gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Brak wyników lub błąd pobierania danych.</div>`; 
+            gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Brak wyników.</div>`; 
         }
     } catch { 
         if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Sprawdź połączenie sieciowe.</div>`; 
@@ -1311,35 +1329,27 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
     
     let html = '';
     
-    // BANER HERO (Generujemy TYLKO na pierwszej stronie!)
     if (page === 1) {
         const heroItem = results[0];
         if (heroItem) {
             const bgSrc = heroItem.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + heroItem.backdrop_path : (heroItem.poster_path ? IMAGE_BASE_URL + heroItem.poster_path : POSTER_PLACEHOLDER);
             const safeTitle = escapeHTML(heroItem.title || heroItem.name);
-            html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">Nr 1 w Trendach</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
-            
-            // Usuwamy bohatera z listy, żeby nie dublować go w siatce poniżej
+            html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">Polecane dla Ciebie</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
             results = results.slice(1);
         }
     }
 
-    // GENEROWANIE KAFELKÓW (Dla strony 1 oraz każdej kolejnej)
     const gridItems = results.map((item, index) => {
         const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w300') + item.poster_path : POSTER_PLACEHOLDER;
         const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(item.id));
         const badgeHTML = isAlreadyAdded ? `<div class="discover-badge-unreleased" style="background:var(--success-color);">W kolekcji</div>` : '';
-        
-        // Czas animacji liczymy od zera dla każdej nowej paczki
         const delay = (index % 20) * 0.03; 
         
         return `<div class="discover-item" data-id="${item.id}" data-type="${item.media_type}" title="${escapeHTML(item.title || item.name)}" style="animation: fadeIn 0.4s ease-out ${delay}s both;"><div class="discover-poster-wrapper"><img class="fade-image" src="${posterSrc}" alt="okładka" loading="lazy" decoding="async" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';">${badgeHTML}</div><div class="discover-item-title">${escapeHTML(item.title || item.name)}</div></div>`;
     }).join('');
 
-    // WRZUCANIE DO KONTENERA
     if (page === 1) {
         gridContainer.innerHTML = html + gridItems;
-        // Podpinamy kliknięcia tylko raz, przy ładowaniu strony 1
         gridContainer.onclick = (e) => { 
             const item = e.target.closest('.discover-item') || e.target.closest('.discover-hero'); 
             if (item) {
@@ -1350,29 +1360,25 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
             }
         };
     } else {
-        // Zamiast nadpisywać (innerHTML), DOKLEJAMY nowe kafelki na sam dół (insertAdjacentHTML)
         gridContainer.insertAdjacentHTML('beforeend', gridItems);
     }
 
-    // --- INFINITE SCROLL SENTINEL ---
     if (discoverObserver) discoverObserver.disconnect();
     
-    // Jeśli TMDB zwróciło pełną stronę (20 wyników), to znaczy, że na 99% jest kolejna.
-    // Jeśli dostaliśmy np. 3 filmy, to doszliśmy do końca internetu dla danej kategorii.
     if (results.length >= 15) {
         gridContainer.insertAdjacentHTML('beforeend', `<div id="discover-sentinel" style="width:100%; height:20px; grid-column: 1 / -1;"></div>`);
         const sentinel = document.getElementById('discover-sentinel');
         
         discoverObserver = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting) {
-                loadDiscoverTab(currentDiscoverEndpoint, isGenre, currentDiscoverPage + 1);
+                // TERA INFINITE SCROLL PAMIĘTA CZY SZUKA FILMÓW CZY SERIALI
+                loadDiscoverTab(currentDiscoverEndpoint, isGenre, currentDiscoverPage + 1, currentDiscoverMediaType);
             }
-        }, { rootMargin: "400px" }); // Dość duży margines, żeby ładowało się "w locie" zanim dojedziesz do końca
+        }, { rootMargin: "400px" });
         
         discoverObserver.observe(sentinel);
     }
 }
-
 function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
     let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
@@ -3824,4 +3830,161 @@ function openFullStatsPage() {
             }
         });
     }
+}
+// ==========================================
+// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB
+// ==========================================
+// ==========================================
+// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (Z PODZIAŁEM)
+// ==========================================
+function openAllGenresModal() {
+    toggleAppDepthEffect(true);
+    const c = document.getElementById('detailsModalContainer'); 
+    
+    // GATUNKI FILMOWE
+    const movieGenres = [
+        { id: 28, name: "💥 Akcja" }, { id: 12, name: "🗺️ Przygodowy" },
+        { id: 16, name: "🎨 Animacja" }, { id: 35, name: "😂 Komedia" },
+        { id: 80, name: "🕵️ Kryminał" }, { id: 99, name: "🎞️ Dokument" },
+        { id: 18, name: "🎭 Dramat" }, { id: 10751, name: "👨‍👩‍👧 Familijny" },
+        { id: 14, name: "🧙 Fantasy" }, { id: 36, name: "🏛️ Historyczny" },
+        { id: 27, name: "👻 Horror" }, { id: 10402, name: "🎵 Muzyczny" },
+        { id: 9648, name: "🔍 Tajemnica" }, { id: 10749, name: "❤️ Romans" },
+        { id: 878, name: "👽 Sci-Fi" }, { id: 10770, name: "📺 Film TV" },
+        { id: 53, name: "🔪 Thriller" }, { id: 10752, name: "🪖 Wojenny" },
+        { id: 37, name: "🤠 Western" }
+    ];
+
+    // GATUNKI SERIALOWE
+    const tvGenres = [
+        { id: 10759, name: "💥 Akcja & Przygoda" }, { id: 16, name: "🎨 Animacja" },
+        { id: 35, name: "😂 Komedia" }, { id: 80, name: "🕵️ Kryminał" },
+        { id: 99, name: "🎞️ Dokument" }, { id: 18, name: "🎭 Dramat" },
+        { id: 10751, name: "👨‍👩‍👧 Familijny" }, { id: 10762, name: "🧸 Dla Dzieci" },
+        { id: 9648, name: "🔍 Tajemnica" }, { id: 10763, name: "📰 Wiadomości" },
+        { id: 10764, name: "🎬 Reality Show" }, { id: 10765, name: "👽 Sci-Fi & Fantasy" },
+        { id: 10766, name: "🧼 Opera Mydlana" }, { id: 10767, name: "🎙️ Talk Show" },
+        { id: 10768, name: "🪖 Wojna & Polityka" }, { id: 37, name: "🤠 Western" }
+    ];
+
+    const mHTML = movieGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="movie">${g.name}</button>`).join('');
+    const tHTML = tvGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="tv">${g.name}</button>`).join('');
+
+    // WYŚRODKOWANY NAGŁÓWEK BEZ PRZYCISKU ZAMYKANIA
+    c.innerHTML = `<div class="modal-overlay" id="allGenresOverlay"><div class="modern-modal-wrapper" style="max-height: 90vh;"><div class="modal-drag-handle"></div><div style="padding: 20px 24px 10px; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid var(--border-color);"><h3 style="margin: 0; font-size: 1.2rem;">Wybierz gatunek</h3></div><div class="modern-modal-scroll">
+        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">🎬 Filmy</h4>
+        <div class="all-genres-grid" style="padding-top: 8px; padding-bottom: 16px;">${mHTML}</div>
+        <div style="height: 1px; background: var(--border-color); margin: 0 24px;"></div>
+        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">📺 Seriale</h4>
+        <div class="all-genres-grid" style="padding-top: 8px;">${tHTML}</div>
+    </div></div></div>`;
+
+    const overlay = c.querySelector('#allGenresOverlay');
+    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
+    
+    // Zamykanie tylko przez kliknięcie w tło lub gest w dół
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    setupSwipeToClose(overlay, close);
+
+    c.querySelectorAll('.modal-genre-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            triggerHaptic('light');
+            const genreId = e.currentTarget.dataset.genre;
+            const mediaType = e.currentTarget.dataset.mediaType;
+            
+            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
+            
+            const mainBarBtn = document.querySelector(`.discover-categories #discover-genres .discover-pill[data-genre="${genreId}"][data-media-type="${mediaType}"]`);
+            if (mainBarBtn) mainBarBtn.classList.add('active'); 
+            else document.getElementById('btn-more-genres').classList.add('active');
+
+            const yearContainer = document.getElementById('discover-year-container');
+            if (yearContainer) {
+                yearContainer.style.display = 'block';
+                yearContainer.style.animation = 'none';
+                yearContainer.offsetHeight; 
+                yearContainer.style.animation = 'fadeIn 0.3s ease-out';
+            }
+
+            loadDiscoverTab(genreId, true, 1, mediaType);
+            close(); // Modal sam się zamyka po wybraniu gatunku
+        });
+    });
+}
+// ==========================================
+// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (Z PODZIAŁEM)
+// ==========================================
+function openAllGenresModal() {
+    toggleAppDepthEffect(true);
+    const c = document.getElementById('detailsModalContainer'); 
+    
+    // GATUNKI FILMOWE
+    const movieGenres = [
+        { id: 28, name: "💥 Akcja" }, { id: 12, name: "🗺️ Przygodowy" },
+        { id: 16, name: "🎨 Animacja" }, { id: 35, name: "😂 Komedia" },
+        { id: 80, name: "🕵️ Kryminał" }, { id: 99, name: "🎞️ Dokument" },
+        { id: 18, name: "🎭 Dramat" }, { id: 10751, name: "👨‍👩‍👧 Familijny" },
+        { id: 14, name: "🧙 Fantasy" }, { id: 36, name: "🏛️ Historyczny" },
+        { id: 27, name: "👻 Horror" }, { id: 10402, name: "🎵 Muzyczny" },
+        { id: 9648, name: "🔍 Tajemnica" }, { id: 10749, name: "❤️ Romans" },
+        { id: 878, name: "👽 Sci-Fi" }, { id: 10770, name: "📺 Film TV" },
+        { id: 53, name: "🔪 Thriller" }, { id: 10752, name: "🪖 Wojenny" },
+        { id: 37, name: "🤠 Western" }
+    ];
+
+    // GATUNKI SERIALOWE
+    const tvGenres = [
+        { id: 10759, name: "💥 Akcja & Przygoda" }, { id: 16, name: "🎨 Animacja" },
+        { id: 35, name: "😂 Komedia" }, { id: 80, name: "🕵️ Kryminał" },
+        { id: 99, name: "🎞️ Dokument" }, { id: 18, name: "🎭 Dramat" },
+        { id: 10751, name: "👨‍👩‍👧 Familijny" }, { id: 10762, name: "🧸 Dla Dzieci" },
+        { id: 9648, name: "🔍 Tajemnica" }, { id: 10763, name: "📰 Wiadomości" },
+        { id: 10764, name: "🎬 Reality Show" }, { id: 10765, name: "👽 Sci-Fi & Fantasy" },
+        { id: 10766, name: "🧼 Opera Mydlana" }, { id: 10767, name: "🎙️ Talk Show" },
+        { id: 10768, name: "🪖 Wojna & Polityka" }, { id: 37, name: "🤠 Western" }
+    ];
+
+    const mHTML = movieGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="movie">${g.name}</button>`).join('');
+    const tHTML = tvGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="tv">${g.name}</button>`).join('');
+
+    c.innerHTML = `<div class="modal-overlay" id="allGenresOverlay"><div class="modern-modal-wrapper" style="max-height: 90vh;"><div class="modal-drag-handle"></div><div style="padding: 20px 24px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);"><h3 style="margin: 0; font-size: 1.2rem;">Wybierz gatunek</h3><button class="icon-button close-genres-btn" style="background: var(--card-color);">${ICONS.close}</button></div><div class="modern-modal-scroll">
+        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">🎬 Filmy</h4>
+        <div class="all-genres-grid" style="padding-top: 8px; padding-bottom: 16px;">${mHTML}</div>
+        <div style="height: 1px; background: var(--border-color); margin: 0 24px;"></div>
+        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">📺 Seriale</h4>
+        <div class="all-genres-grid" style="padding-top: 8px;">${tHTML}</div>
+    </div></div></div>`;
+
+    const overlay = c.querySelector('#allGenresOverlay');
+    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
+    
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    c.querySelector('.close-genres-btn').addEventListener('click', close);
+    setupSwipeToClose(overlay, close);
+
+    c.querySelectorAll('.modal-genre-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            triggerHaptic('light');
+            const genreId = e.currentTarget.dataset.genre;
+            const mediaType = e.currentTarget.dataset.mediaType;
+            
+            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
+            
+            // Szukamy, czy ten gatunek jest na głównym pasku
+            const mainBarBtn = document.querySelector(`.discover-categories #discover-genres .discover-pill[data-genre="${genreId}"][data-media-type="${mediaType}"]`);
+            if (mainBarBtn) mainBarBtn.classList.add('active'); 
+            else document.getElementById('btn-more-genres').classList.add('active');
+
+            const yearContainer = document.getElementById('discover-year-container');
+            if (yearContainer) {
+                yearContainer.style.display = 'block';
+                yearContainer.style.animation = 'none';
+                yearContainer.offsetHeight; 
+                yearContainer.style.animation = 'fadeIn 0.3s ease-out';
+            }
+
+            loadDiscoverTab(genreId, true, 1, mediaType);
+            close();
+        });
+    });
 }
