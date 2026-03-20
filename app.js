@@ -920,7 +920,6 @@ function renderList(originalItems, listId, preserveLimit = false) {
         const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
         const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
 
-        // NOWOŚĆ: Sprawdzamy czy ten element był zaznaczony w trybie masowym!
         const uniqueId = `${item.id}_${item.type}`;
         const isBulkSelected = (typeof bulkModeActive !== 'undefined' && bulkModeActive && bulkSelectedItems.has(uniqueId)) ? 'bulk-selected' : '';
 
@@ -942,12 +941,29 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
                 if (watchedCount > 0) { const pct = Math.round((watchedCount/item.numberOfEpisodes)*100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
                 const nextEpInfo = getNextEpisodeInfo(item);
-                if (nextEpInfo && !isUnreleased) quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
+                
+                if (nextEpInfo && !isUnreleased) {
+                    // CZYSTY CZAS DLA WIDOKU KAFELKÓW
+                    let isEpisodeReleased = true;
+                    if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === nextEpInfo.season && item.nextEpisodeToAir.episode === nextEpInfo.episode) {
+                         const today = new Date(); today.setHours(0,0,0,0);
+                         const airDate = new Date(item.nextEpisodeToAir.date); 
+                         airDate.setHours(0,0,0,0);
+                         if (airDate.getTime() > today.getTime()) {
+                             isEpisodeReleased = false; 
+                         }
+                    }
+
+                    if (isEpisodeReleased) {
+                        quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
+                    } else {
+                        nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
+                    }
+                }
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
             }
             let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
             
-            // Wstrzyknięcie klasy isBulkSelected
             return `
             <li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
                 <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
@@ -962,7 +978,26 @@ function renderList(originalItems, listId, preserveLimit = false) {
             else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
                 const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0); const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
                 const nextEpInfo = getNextEpisodeInfo(item); let nextEpHTML = '';
-                if (nextEpInfo) { nextEpHTML = `<button class="quick-track-btn" data-action="quick-track">${ICONS.quickTrack} Obejrzano ${nextEpInfo.string}</button>`; }
+                
+                if (nextEpInfo) { 
+                    // CZYSTY CZAS DLA WIDOKU LISTY
+                    let isEpisodeReleased = true;
+                    if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === nextEpInfo.season && item.nextEpisodeToAir.episode === nextEpInfo.episode) {
+                         const today = new Date(); today.setHours(0,0,0,0);
+                         const airDate = new Date(item.nextEpisodeToAir.date); 
+                         airDate.setHours(0,0,0,0);
+                         if (airDate.getTime() > today.getTime()) {
+                             isEpisodeReleased = false;
+                         }
+                    }
+
+                    if (isEpisodeReleased) {
+                        nextEpHTML = `<button class="quick-track-btn" data-action="quick-track">${ICONS.quickTrack} Obejrzano ${nextEpInfo.string}</button>`; 
+                    } else {
+                        const airStr = getNextAirDateString(item.nextEpisodeToAir);
+                        nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Premiera: ${airStr}</div>`;
+                    }
+                }
                 else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) {
                     const airStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
                     if (airStr) nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Premiera: ${airStr}</div>`;
@@ -971,7 +1006,6 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
             }
             
-            // Wstrzyknięcie klasy isBulkSelected
             return `
             <li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
                 <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
@@ -1062,22 +1096,91 @@ function handleListItemClick(e) {
 }
 
 async function handleQuickTrack(id) {
-    const listName = 'seriesToWatch'; const item = data[listName].find(i => String(i.id) === String(id));
+    const listName = 'seriesToWatch'; 
+    const item = data[listName].find(i => String(i.id) === String(id));
     if (!item) return;
-    const next = getNextEpisodeInfo(item); if (!next) return;
+    
+    const next = getNextEpisodeInfo(item); 
+    if (!next) return;
+
+    // --- KROK 1: OPTYMISITC UI (Natychmiastowe działanie dla użytkownika!) ---
+    // Zapisujemy postęp od razu, bo ufamy naszej lokalnej blokadzie z getNextEpisodeInfo
     if (!item.progress[next.season]) item.progress[next.season] = [];
     item.progress[next.season].push(next.episode);
-    await saveData(); showCustomAlert('Obejrzano', `Odcinek ${next.string} oznaczony.`, 'success');
 
+    // Kasujemy stary wskaźnik premiery
+    item.nextEpisodeToAir = null;
+
+    // Natychmiastowy zapis i powiadomienie - użytkownik ma wrażenie, że apka ma 0ms opóźnienia
+    await saveData(); 
+    triggerHaptic('success');
+    showCustomAlert('Obejrzano', `Odcinek ${next.string} oznaczony.`, 'success');
+
+    // Sprawdzamy czy to finał
     const totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
-    if (totalWatched >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) {
-        renderList(data[listName], listName, true);
+    const isFinished = totalWatched >= item.numberOfEpisodes;
+
+    renderList(data[listName], listName, true); // Odświeżamy listę błyskawicznie
+
+    if (isFinished && isSeriesFinished(item)) {
         setTimeout(async () => {
-            if (await showCustomConfirm('Gratulacje! 🎉', `Obejrzałeś cały serial "${escapeHTML(item.title)}". Przenieść do Obejrzanych?`)) await handleMoveItem(item.id, 'tv');
+            if (await showCustomConfirm('Gratulacje! 🎉', `Obejrzałeś cały serial "${escapeHTML(item.title)}". Przenieść do Obejrzanych?`)) {
+                await handleMoveItem(item.id, 'tv');
+            }
         }, 400);
-    } else { renderList(data[listName], listName, true); }
+        return; // Jeśli serial się skończył, nie szukamy w tle dat kolejnych odcinków.
+    }
+
+    // --- KROK 2: MAGIA W TLE (Szukamy kolejnego odcinka, NIE blokując ekranu) ---
+    // Wywołujemy funkcję asynchroniczną, ale celowo bez słowa 'await', żeby działała w tle!
+    fetchNextEpisodeDataInBackground(item, listName);
 }
 
+// Funkcja pomocnicza do cichej pracy z TMDB po kliknięciu
+async function fetchNextEpisodeDataInBackground(item, listName) {
+    const newNext = getNextEpisodeInfo(item); 
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const formatLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    if (newNext) {
+        try {
+            const sData = await getSeasonDetails(item.id, newNext.season);
+            if (sData && sData.episodes) {
+                const newEpData = sData.episodes.find(e => e.episode_number === newNext.episode);
+                if (newEpData && newEpData.air_date) {
+                    const nDate = new Date(newEpData.air_date);
+                    nDate.setDate(nDate.getDate() + 1); // Strefa EU +1
+                    nDate.setHours(0, 0, 0, 0);
+
+                    // Jeśli kolejny odcinek wychodzi w przyszłości - aktualizujemy na cicho bazę
+                    if (nDate.getTime() > today.getTime()) {
+                        item.nextEpisodeToAir = {
+                            date: formatLocal(nDate),
+                            season: newNext.season,
+                            episode: newNext.episode
+                        };
+                        await saveData();
+                        renderList(data[listName], listName, true); // Ciche przerysowanie daty na kafelku
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Błąd pobierania nowej daty w tle:", e);
+        }
+    } else {
+         // Jeśli wyklikaliśmy S03E10, a sezonu 4 jeszcze nie było w bazie, pytamy TMDB, czy go ogłosili
+         if (item.status === 'Returning Series') {
+             try {
+                 const freshData = await getItemDetails(item.id, 'tv');
+                 if (freshData && freshData.nextEpisodeToAir) {
+                     item.nextEpisodeToAir = freshData.nextEpisodeToAir;
+                     await saveData();
+                     renderList(data[listName], listName, true);
+                 }
+             } catch(e) {}
+         }
+    }
+}
 async function handleMoveItem(id, type) {
     const fList = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; const tList = `${type === 'movie' ? 'movies' : 'series'}Watched`;
     const iIdx = data[fList].findIndex(i => String(i.id) === String(id) && i.type == type);
@@ -1421,12 +1524,12 @@ async function getItemDetails(id, type) {
     if (type === 'tv') {
         item.status = d.status;
         
-        // --- POCZĄTEK ZMIANY: Przesunięcie czasu dla Europy (+1 dzień) ---
+        // --- KLUCZOWA ZMIANA: TWARDE +1 DZIEŃ W BAZIE ---
         let adjustedAirDate = null;
         if (d.next_episode_to_air && d.next_episode_to_air.air_date) {
             const tempDate = new Date(d.next_episode_to_air.air_date);
-            tempDate.setDate(tempDate.getDate() + 1); // Dodajemy 1 dzień
-            adjustedAirDate = tempDate.toISOString().split('T')[0]; // Formatujemy z powrotem do "RRRR-MM-DD"
+            tempDate.setDate(tempDate.getDate() + 1); // Wymuszenie +1 dnia dla strefy EU
+            adjustedAirDate = tempDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
         }
 
         item.nextEpisodeToAir = d.next_episode_to_air ? { 
@@ -1434,7 +1537,7 @@ async function getItemDetails(id, type) {
             season: d.next_episode_to_air.season_number, 
             episode: d.next_episode_to_air.episode_number 
         } : null;
-        // --- KONIEC ZMIANY ---
+        // ------------------------------------------------
 
         const realSeasons = d.seasons ? d.seasons.filter(s => s.season_number > 0) : [];
         item.seasons = realSeasons; 
@@ -1541,7 +1644,51 @@ async function getReviews(id, type) {
 function isSeriesFinished(item) { if (item.type !== 'tv') return true; return item.status === 'Ended' || item.status === 'Canceled'; }
 function getAllUniqueTags() { const allItems = [...data.moviesToWatch, ...data.moviesWatched, ...data.seriesToWatch, ...data.seriesWatched]; return [...new Set(allItems.flatMap(item => item.customTags || []))].sort(); }
 function renderCollapsibleText(text) { if (!text) return 'Brak informacji dla tego wpisu.'; const safeText = escapeHTML(text).replace(/\n/g, '<br>'); if (safeText.length > 280) { return `<div class="collapsible-text-container"><div class="overview-text collapsible-text">${safeText}</div><button type="button" class="read-more-btn" onclick="this.previousElementSibling.classList.toggle('expanded'); this.textContent = this.previousElementSibling.classList.contains('expanded') ? 'Zwiń' : 'Rozwiń';">Rozwiń</button></div>`; } return `<div class="overview-text">${safeText}</div>`; }
-function getNextEpisodeInfo(item) { if (!item.seasons || item.seasons.length === 0) return null; if (!item.progress) item.progress = {}; const sortedSeasons = [...item.seasons].sort((a, b) => a.season_number - b.season_number); const today = new Date(); today.setHours(0, 0, 0, 0); for (let s of sortedSeasons) { const sNum = s.season_number; if (sNum === 0) continue; const watched = item.progress[sNum] || []; let maxAvailableEp = s.episode_count; if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) { const airDate = new Date(item.nextEpisodeToAir.date); if (airDate > today) maxAvailableEp = item.nextEpisodeToAir.episode - 1; } if (watched.length < maxAvailableEp) { for (let i = 1; i <= maxAvailableEp; i++) { if (!watched.includes(i)) return { season: sNum, episode: i, string: `S${String(sNum).padStart(2, '0')}E${String(i).padStart(2, '0')}` }; } } } return null; }
+function getNextEpisodeInfo(item) { 
+    if (!item.seasons || item.seasons.length === 0) return null; 
+    if (!item.progress) item.progress = {}; 
+    
+    const sortedSeasons = [...item.seasons].sort((a, b) => a.season_number - b.season_number); 
+    const today = new Date(); 
+    today.setHours(0,0,0,0); 
+    
+    for (let s of sortedSeasons) { 
+        const sNum = s.season_number; 
+        if (sNum === 0) continue; 
+        
+        const watched = item.progress[sNum] || []; 
+        const maxEpisodes = s.episode_count; 
+        
+        for (let epNum = 1; epNum <= maxEpisodes; epNum++) {
+            if (!watched.includes(epNum)) {
+                
+                // --- NOWOŚĆ: ŻELAZNA ŚCIANA PREMIER ---
+                if (item.nextEpisodeToAir) {
+                    // 1. Jeśli odcinek z kolejki ma wyższy numer niż "Najbliższa premiera na świecie" - BLOKUJEMY
+                    if (sNum > item.nextEpisodeToAir.season || (sNum === item.nextEpisodeToAir.season && epNum > item.nextEpisodeToAir.episode)) {
+                        return null; 
+                    }
+                    
+                    // 2. Jeśli to dokładnie ten oczekujący odcinek - sprawdzamy kalendarz!
+                    if (sNum === item.nextEpisodeToAir.season && epNum === item.nextEpisodeToAir.episode) {
+                        const airDate = new Date(item.nextEpisodeToAir.date); // Korzysta z Twojej daty z bazy (+1 dzień)
+                        airDate.setHours(0,0,0,0);
+                        
+                        // Jeśli wciąż jesteśmy przed dniem premiery - BLOKUJEMY GUZIK
+                        if (airDate.getTime() > today.getTime()) {
+                            return null; 
+                        }
+                    }
+                }
+                // ---------------------------------------
+
+                // Jeśli przeszedł zabezpieczenia, pozwalamy mu wyświetlić guzik!
+                return { season: sNum, episode: epNum, string: `S${String(sNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}` }; 
+            }
+        }
+    } 
+    return null; 
+}
 function getNextEpisodeStr(item) { const info = getNextEpisodeInfo(item); return info ? info.string : null; }
 
 function getStatusBadge(status) {
@@ -2330,19 +2477,69 @@ function renderSeasonsProgress(item, container) {
 
 function renderEpisodes(item, seasonData, container) {
     const sNum = seasonData.season_number; if (!item.progress[sNum]) item.progress[sNum] = [];
-    const td = new Date(); td.setHours(0, 0, 0, 0);
-    let blockFrom = 9999; if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) { const ad = new Date(item.nextEpisodeToAir.date); if (ad > td) blockFrom = item.nextEpisodeToAir.episode; }
+    const td = new Date(); td.setHours(0,0,0,0);
+    
+    // --- ZMIANA: ZAWSZE używamy daty już przesuniętej o +1 dzień (zapisanej w bazie) ---
+    let blockFrom = 9999; 
+    if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) { 
+        const ad = new Date(item.nextEpisodeToAir.date); 
+        ad.setHours(0,0,0,0); // Pancerne zrównanie z systemowym czasem!
+        if (ad > td) blockFrom = item.nextEpisodeToAir.episode; 
+    }
 
     const epHTML = seasonData.episodes.map(ep => {
         const isC = item.progress[sNum].includes(ep.episode_number); const uId = `s${sNum}-ep${ep.episode_number}`;
         const rt = ep.runtime ? `<span class="episode-runtime">${ep.runtime} min</span>` : '';
         let isFut = false; let fw = '';
-        if (ep.episode_number >= blockFrom) { isFut = true; const ed = new Date(ep.air_date); fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${ed > td ? ed.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' }) : 'wkrótce'}</div>`; }
-        else if (ep.air_date) { const ed = new Date(ep.air_date); if (ed > td) { isFut = true; fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${ed.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</div>`; } }
-        return `<div class="episode-item" style="${isFut ? 'opacity: 0.6; pointer-events: none;' : ''}"><div class="episode-info"><div class="episode-title-line"><div class="episode-title-group"><span class="episode-number">${ep.episode_number}.</span><span class="episode-title">${escapeHTML(ep.name)}</span></div>${rt}</div>${renderCollapsibleText(ep.overview)}${fw}</div><label class="episode-status-toggle" for="${uId}"><input type="checkbox" id="${uId}" data-episode-number="${ep.episode_number}" ${isC ? 'checked' : ''} ${isFut ? 'disabled' : ''}><svg class="icon icon-watched" viewBox="0 0 24 24"><path d="M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27-3.11 11-7.5C21.27,7.61 17,4.5 12,4.5M12,17a5,5 0 1,1 0-10,5 5 0 0,1 0,10m0-8a3,3 0 1,0 0,6,3 3 0 0,0 0-6Z"/></svg><svg class="icon icon-unwatched" viewBox="0 0 24 24"><path d="M11.83,9.17C12.2,9.06 12.59,9 13,9a4,4 0 0,1 4,4c0,0.41-0.06,0.8-0.17,1.17L19.83,17.17C21.5,15.82 22.8,14 23.5,12C21.83,8.44 17.75,6 13,6c-1.55,0-3.04,0.33-4.38,0.9L11.83,9.17M13,4.5C18,4.5 22.27,7.61 24,12c-0.69,1.66-1.7,3.16-2.92,4.33L18.6,13.87C18.85,13.29 19,12.66 19,12a4,4 0 0,0-4-4c-0.66,0-1.29,0.15-1.87,0.4L10.6,5.92C11.39,4.72 12.56,4.5 13,4.5M3.27,4.27l1.59,1.59C3.15,7.45 1.83,9.53 1,12c1.83,3.56 5.75,6 10.5,6c1.76,0 3.44-0.44 5-1.18l2.18,2.18l1.41-1.41L4.68,2.86L3.27,4.27M7.53,9.8l1.55,1.55c-0.05,0.21-0.08,0.42-0.08,0.65a2.5,2.5 0 0,0 2.5,2.5c0.23,0 0.44-0.03 0.65-0.08l1.55,1.55C11.7,16.84 10.9,17 10,17a4.5,4.5 0 0,1-4.5-4.5c0-0.9,0.16-1.7,0.47-2.47Z"/></svg></label></div>`;
+        
+        // --- ZMIANA: Ręcznie przesuwamy daty starszych odcinków pobranych na surowo z TMDB ---
+        let epDate = null;
+        if (ep.air_date) {
+            epDate = new Date(ep.air_date);
+            epDate.setDate(epDate.getDate() + 1); // +1 Dzień dla Europy!
+            epDate.setHours(0,0,0,0);
+        }
+
+        if (ep.episode_number >= blockFrom) { 
+            isFut = true; 
+            fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${epDate && epDate > td ? epDate.toLocaleDateString('pl-PL', {day:'numeric',month:'short'}) : 'wkrótce'}</div>`; 
+        } else if (epDate) { 
+            if(epDate > td) { 
+                isFut = true; 
+                fw = `<div style="font-size:0.75rem; color:var(--primary-color); margin-top:2px;">Premiera: ${epDate.toLocaleDateString('pl-PL', {day:'numeric',month:'short'})}</div>`; 
+            } 
+        }
+        
+        return `<div class="episode-item" style="${isFut ? 'opacity: 0.6; pointer-events: none;' : ''}">
+            <div class="episode-info">
+                <div class="episode-title-line">
+                    <div class="episode-title-group">
+                        <span class="episode-number">${ep.episode_number}.</span>
+                        <span class="episode-title">${escapeHTML(ep.name)}</span>
+                    </div>
+                    ${rt}
+                </div>
+                ${renderCollapsibleText(ep.overview)}
+                ${fw}
+            </div>
+            <label class="episode-status-toggle" for="${uId}">
+                <input type="checkbox" id="${uId}" data-episode-number="${ep.episode_number}" ${isC ? 'checked' : ''} ${isFut ? 'disabled' : ''}>
+                <svg class="icon icon-watched" viewBox="0 0 24 24"><path d="M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27-3.11 11-7.5C21.27,7.61 17,4.5 12,4.5M12,17a5,5 0 1,1 0-10,5 5 0 0,1 0,10m0-8a3,3 0 1,0 0,6,3 3 0 0,0 0-6Z"/></svg>
+                <svg class="icon icon-unwatched" viewBox="0 0 24 24"><path d="M11.83,9.17C12.2,9.06 12.59,9 13,9a4,4 0 0,1 4,4c0,0.41-0.06,0.8-0.17,1.17L19.83,17.17C21.5,15.82 22.8,14 23.5,12C21.83,8.44 17.75,6 13,6c-1.55,0-3.04,0.33-4.38,0.9L11.83,9.17M13,4.5C18,4.5 22.27,7.61 24,12c-0.69,1.66-1.7,3.16-2.92,4.33L18.6,13.87C18.85,13.29 19,12.66 19,12a4,4 0 0,0-4-4c-0.66,0-1.29,0.15-1.87,0.4L10.6,5.92C11.39,4.72 12.56,4.5 13,4.5M3.27,4.27l1.59,1.59C3.15,7.45 1.83,9.53 1,12c1.83,3.56 5.75,6 10.5,6c1.76,0 3.44-0.44 5-1.18l2.18,2.18l1.41-1.41L4.68,2.86L3.27,4.27M7.53,9.8l1.55,1.55c-0.05,0.21-0.08,0.42-0.08,0.65a2.5,2.5 0 0,0 2.5,2.5c0.23,0 0.44-0.03 0.65-0.08l1.55,1.55C11.7,16.84 10.9,17 10,17a4.5,4.5 0 0,1-4.5-4.5c0-0.9,0.16-1.7,0.47-2.47Z"/></svg>
+            </label>
+        </div>`;
     }).join('');
 
-    const avEps = seasonData.episodes.filter(ep => { const ed = ep.air_date ? new Date(ep.air_date) : null; return (!ed || ed <= td) && ep.episode_number < blockFrom; });
+    const avEps = seasonData.episodes.filter(ep => { 
+        let ed = null;
+        if(ep.air_date) {
+            ed = new Date(ep.air_date); 
+            ed.setDate(ed.getDate() + 1); 
+            ed.setHours(0,0,0,0);
+        }
+        return (!ed || ed <= td) && ep.episode_number < blockFrom; 
+    });
+    
     const allW = item.progress[sNum].length >= avEps.length && avEps.length > 0;
 
     container.innerHTML = `<div class="season-actions"><button class="season-toggle-all-btn" data-action="toggle-all">${allW ? 'Odznacz obejrzane' : 'Zaznacz wydane'}</button></div>${epHTML}`;
@@ -2351,18 +2548,18 @@ function renderEpisodes(item, seasonData, container) {
         if (e.target.type === 'checkbox') {
             const epNum = parseInt(e.target.dataset.episodeNumber);
             if (e.target.checked) {
-                let hasUnch = false; for (let i = 1; i < epNum; i++) { if (!item.progress[sNum].includes(i)) hasUnch = true; }
-                if (hasUnch) {
-                    if (await showCustomConfirm('Zaznaczyć poprzednie?', 'Zaznaczyć też wszystkie poprzednie odcinki z tego sezonu?')) {
-                        for (let i = 1; i <= epNum; i++) if (!item.progress[sNum].includes(i)) item.progress[sNum].push(i);
-                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => { if (parseInt(cb.dataset.episodeNumber) <= epNum && !cb.disabled) cb.checked = true; });
+                let hasUnch = false; for(let i=1; i<epNum; i++) { if(!item.progress[sNum].includes(i)) hasUnch = true; }
+                if(hasUnch) {
+                    if(await showCustomConfirm('Zaznaczyć poprzednie?', 'Zaznaczyć też wszystkie poprzednie odcinki z tego sezonu?')) {
+                        for(let i=1; i<=epNum; i++) if (!item.progress[sNum].includes(i)) item.progress[sNum].push(i);
+                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => { if(parseInt(cb.dataset.episodeNumber) <= epNum && !cb.disabled) cb.checked = true; });
                     } else if (!item.progress[sNum].includes(epNum)) item.progress[sNum].push(epNum);
                 } else if (!item.progress[sNum].includes(epNum)) item.progress[sNum].push(epNum);
             } else item.progress[sNum] = item.progress[sNum].filter(ep => ep !== epNum);
 
             await saveData(); updateSeasonProgressUI(item, sNum); renderList(data['seriesToWatch'], 'seriesToWatch', true);
             const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
-            if (totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if (await showCustomConfirm('Gratulacje! 🎉', 'Obejrzałeś cały serial. Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); }
+            if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if(await showCustomConfirm('Gratulacje! 🎉', 'Obejrzałeś cały serial. Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); }
         }
     });
 
@@ -2370,10 +2567,9 @@ function renderEpisodes(item, seasonData, container) {
         if (allW) { item.progress[sNum] = []; container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); }
         else { item.progress[sNum] = avEps.map(ep => ep.episode_number); container.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true); }
         await saveData(); updateSeasonProgressUI(item, sNum); e.target.textContent = allW ? 'Zaznacz wydane' : 'Odznacz obejrzane'; renderList(data['seriesToWatch'], 'seriesToWatch', true);
-        if (!allW) { const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0); if (totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if (await showCustomConfirm('Ukończono! 🎉', 'Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); } }
+        if(!allW) { const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0); if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if(await showCustomConfirm('Ukończono! 🎉', 'Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); } }
     });
 }
-
 function updateSeasonProgressUI(item, sNum) { const sd = document.querySelector(`.season-details[data-season-number="${sNum}"]`); if (sd) { const p = sd.querySelector('.season-progress'); const tot = p.textContent.split('/')[1].trim(); p.textContent = `${item.progress[sNum]?.length || 0} / ${tot}`; } }
 
 function openCustomAddModal() {
@@ -2755,22 +2951,31 @@ const NotificationManager = {
     add(notif) {
         const notifs = this.get();
         const existingIndex = notifs.findIndex(n => n.id === notif.id);
-
+        
         if (existingIndex === -1) {
-            // Całkowicie nowe powiadomienie - dodajemy i zapalamy kropkę
+            // Całkowicie nowe powiadomienie
             notifs.unshift({ ...notif, timestamp: Date.now(), read: false });
-            this.save(notifs.slice(0, 20));
+            this.save(notifs.slice(0, 20)); 
         } else {
-            // Powiadomienie istnieje. Sprawdzamy, czy zmienił się tekst (minął dzień)
+            // Powiadomienie istnieje. Sprawdzamy czy mija dzień.
             if (notifs[existingIndex].title !== notif.title) {
                 notifs[existingIndex].title = notif.title;
                 notifs[existingIndex].desc = notif.desc;
-                notifs[existingIndex].read = false; // Oznaczamy jako NIEPRZECZYTANE
-                this.save(notifs); // Zapisuje i ZAPALA kropkę!
+                notifs[existingIndex].read = false; // Zapal kropkę!
+                
+                // --- NOWOŚĆ: "ODMŁADZANIE" CZASU ---
+                // Resetujemy czas jego "przyjścia" na TERAZ. 
+                notifs[existingIndex].timestamp = Date.now();
+                
+                // OPCJONALNIE: Wyciągamy to powiadomienie na sam szczyt listy!
+                // Żeby nowa "dzisiejsza" premiera nie leżała zakopana pod innymi starymi
+                const updatedNotif = notifs.splice(existingIndex, 1)[0];
+                notifs.unshift(updatedNotif);
+                
+                this.save(notifs); 
             }
         }
     },
-
     // ZMIANA 2: Funkcja do ręcznego usuwania konkretnego powiadomienia
     remove(id) {
         const notifs = this.get();
