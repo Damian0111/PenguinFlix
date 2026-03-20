@@ -8,6 +8,7 @@
   <title>PenguinFlix - Twój Dziennik Filmowy</title>
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
   <link rel="preconnect" href="https://api.themoviedb.org" crossorigin />
+  <link rel="icon" type="image/png" href="icon-192.png">
 
   <meta name="theme-color" content="#101114" id="theme-color-meta" />
   <meta name="color-scheme" content="dark" id="color-scheme-meta" />
@@ -431,6 +432,36 @@
   <div id="notificationPanelContainer"></div>
   <!-- Podpięcie zewnętrznego pliku JS -->
   <script src="app.js"></script>
+      <!-- ==========================================
+         PEŁNOEKRANOWE CENTRUM STATYSTYK
+    ========================================== -->
+     <div id="full-stats-page" class="full-page-view">
+        <!-- DODANY UCHWYT GESTU NA LEWEJ KRAWĘDZI -->
+        <div class="drawer-swipe-handle"></div>
+        
+        <!-- WYŚRODKOWANY NAGŁÓWEK BEZ STRZAŁKI -->
+        <div class="fp-header" style="justify-content: center;">
+            <h2 class="fp-title">Centrum Statystyk</h2>
+        </div>
+        
+             <div class="fp-tabs">
+            <div class="segmented-control" style="margin: 0 16px 12px; max-width: 100%;">
+                <button class="seg-btn active" data-fptab="months">Miesiące</button>
+                <button class="seg-btn" data-fptab="years">Lata</button>
+                <button class="seg-btn" data-fptab="rhythm">Rytm</button>
+                <!-- NOWA ZAKŁADKA -->
+                <button class="seg-btn" data-fptab="analysis">Analiza</button>
+            </div>
+        </div>
+
+        <div class="fp-content">
+            <div id="fp-tab-months" class="fp-tab-content active"></div>
+            <div id="fp-tab-years" class="fp-tab-content"></div>
+            <div id="fp-tab-rhythm" class="fp-tab-content"></div>
+            <!-- NOWY KONTENER NA ANALIZĘ -->
+            <div id="fp-tab-analysis" class="fp-tab-content"></div>
+        </div>
+    </div>
 </body>
 
 </html>
