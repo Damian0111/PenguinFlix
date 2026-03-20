@@ -5123,3 +5123,40 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
     border: 1px solid color-mix(in srgb, #ff4b2b 30%, transparent); border-radius: var(--radius-md);
     padding: 10px; display: flex; align-items: center; justify-content: space-between;
 }
+/* SIATKA WSZYSTKICH GATUNKÓW W ODKRYWAJ */
+.all-genres-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    padding: 16px 24px 32px;
+}
+.all-genres-grid .discover-pill {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    display: flex;
+    font-size: 0.95rem;
+}
+/* ODBLOKOWANIE GESTÓW POZIOMYCH DLA PASKÓW PRZEWIJANIA */
+.discover-categories-wrapper,
+.cast-scroller,
+.known-for-scroller,
+.recommendations-scroller,
+.reviews-scroller,
+.stats-poster-wall {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: auto !important;
+    will-change: scroll-position;
+}
+
+/* Upewniamy się, że same pigułki i elementy też reagują naturalnie */
+.discover-categories-wrapper *,
+.stats-poster-wall * {
+    touch-action: auto !important;
+}
+/* Wymuszone ukrycie przycisku X w modalu gatunków (np. gdy JS jest w cache) */
+#allGenresOverlay .modal-top-close-btn,
+#allGenresOverlay .close-genres-btn {
+    display: none !important;
+}
