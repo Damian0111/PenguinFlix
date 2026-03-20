@@ -231,13 +231,11 @@ function setupEventListeners() {
             if (hapticsEnabled) triggerHaptic('success');
         });
     }
-        // --- UX: AUTO-CHOWANIE KLAWIATURY PRZY PRZEWIJANIU ---
-    // Jeśli użytkownik zacznie przewijać główny kontener lub ekran wyszukiwania, zdejmujemy focus z inputów
+
+    // --- UX: AUTO-CHOWANIE KLAWIATURY PRZY PRZEWIJANIU ---
     document.getElementById('mainContent').addEventListener('touchmove', () => {
         const activeEl = document.activeElement;
-        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-            activeEl.blur(); // Chowa klawiaturę systemową
-        }
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) activeEl.blur();
     }, { passive: true });
 
     document.getElementById('searchResults').addEventListener('touchmove', () => {
@@ -245,16 +243,52 @@ function setupEventListeners() {
         if (activeEl && activeEl.tagName === 'INPUT') activeEl.blur();
     }, { passive: true });
 
-    // --- NATYWNY GEST WSTECZ (TELEFONY) ---
+    // --- NATYWNY GEST WSTECZ (TELEFONY I PRZEGLĄDARKI) ---
+    
+        // --- NATYWNY GEST WSTECZ (TELEFONY I PRZEGLĄDARKI) ---
     window.addEventListener('popstate', (e) => {
         const trailer = document.getElementById('trailerModalContainer');
         const actor = document.getElementById('actorModalContainer');
         const details = document.getElementById('detailsModalContainer');
+        const statsPage = document.getElementById('full-stats-page'); 
 
+        // Zamykanie zwiastuna
         if (trailer && trailer.innerHTML !== '') { trailer.innerHTML = ''; return; }
+        
+        // Zamykanie aktora
         if (actor && actor.innerHTML !== '') { actor.innerHTML = ''; toggleAppDepthEffect(false); return; }
+        
+        // Zamykanie detali filmu/serialu
         if (details && details.innerHTML !== '') { details.innerHTML = ''; toggleAppDepthEffect(false); return; }
 
+        // --- OBSŁUGA COFANIA W STATYSTYKACH ---
+        if (statsPage && statsPage.classList.contains('active')) {
+            // Jeśli cofamy się i w historii JEST zapisana poprzednia zakładka statystyk:
+            if (e.state && e.state.statsPageOpen && e.state.statsTab) {
+                if (typeof statsHistorySteps !== 'undefined') statsHistorySteps--; // Zmniejszamy licznik
+                
+                // Zmieniamy zakładkę wizualnie (bez tworzenia nowej historii)
+                const tabId = e.state.statsTab;
+                statsPage.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+                const btn = statsPage.querySelector(`.seg-btn[data-fptab="${tabId}"]`);
+                if (btn) btn.classList.add('active');
+                
+                statsPage.querySelectorAll('.fp-tab-content').forEach(c => c.classList.remove('active'));
+                const tab = document.getElementById(`fp-tab-${tabId}`);
+                if (tab) tab.classList.add('active');
+                
+                return; // Przerywamy, okno zostaje otwarte na poprzedniej zakładce!
+            } else {
+                // Jeśli cofnęliśmy się aż do początku (poza statystyki) - zamykamy panel
+                if (typeof statsHistorySteps !== 'undefined') statsHistorySteps = 0;
+                statsPage.classList.remove('active');
+                statsPage.style.transform = ''; 
+                toggleAppDepthEffect(false); 
+                return;
+            }
+        }
+
+        // Standardowa nawigacja (jeśli nic innego nie jest otwarte)
         if (e.state) {
             if (e.state.mainTab && e.state.mainTab !== viewState.activeMainTab) {
                 switchMainTab(e.state.mainTab, true);
@@ -325,7 +359,7 @@ function setupEventListeners() {
                 hardRefreshBtn.style.pointerEvents = 'none';
                 hardRefreshBtn.style.opacity = '0.7';
 
-                await refreshStaleSeries(true); // Wymusza pobieranie wszystkiego z TMDB
+                await refreshStaleSeries(true); 
                 
                 hardRefreshBtn.innerHTML = prevIcon;
                 hardRefreshBtn.style.pointerEvents = 'auto';
@@ -336,7 +370,7 @@ function setupEventListeners() {
         });
     }
 
-    // --- TWARDY RESET FILMÓW (Kolekcje i Czas trwania) ---
+    // --- TWARDY RESET FILMÓW ---
     const hardRefreshMoviesBtn = document.getElementById('btn-hard-refresh-movies');
     if (hardRefreshMoviesBtn) {
         hardRefreshMoviesBtn.addEventListener('click', async () => {
@@ -373,7 +407,7 @@ function setupEventListeners() {
                         if (String(item.id).startsWith('custom_')) continue;
                         
                         if (item.runtime !== undefined && item.runtime !== null && item.collectionName !== undefined) {
-                            continue; // Jeśli ma wszystko, omijamy z prędkością światła
+                            continue; 
                         }
 
                         try {
@@ -386,7 +420,7 @@ function setupEventListeners() {
                             }
                         } catch (e) {}
 
-                        await new Promise(resolve => setTimeout(resolve, 300)); // Bezpieczna pauza
+                        await new Promise(resolve => setTimeout(resolve, 300)); 
                     }
                 }
 
@@ -558,7 +592,7 @@ function setupEventListeners() {
                     await loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false);
                 } else if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
                     const listId = getActiveListId(); 
-                    if (listId === 'seriesToWatch') await refreshStaleSeries(false); // Szybkie odświeżanie bez obciążania
+                    if (listId === 'seriesToWatch') await refreshStaleSeries(false); 
                     
                     renderList(data[listId], listId, true);
                 }
@@ -572,7 +606,12 @@ function setupEventListeners() {
     document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
     document.getElementById('tab-series').addEventListener('click', handleListItemClick);
 
-     // --- ZAKŁADKA ODKRYWAJ (Kategorie i Ukrywany Rok) ---
+    // --- ZAKŁADKA ODKRYWAJ (Kategorie i Rok) ---
+    const discoverYearContainer = document.getElementById('discover-year-container');
+    const discoverYearInputLive = document.getElementById('discover-year-input');
+    const discoverYearClearLive = document.getElementById('discover-year-clear');
+    const discoverYearWrapLive = document.getElementById('discover-year-wrapper');
+
     const handlePillClick = (e) => {
         const pill = e.target.closest('.discover-pill');
         if (!pill) return;
@@ -581,112 +620,36 @@ function setupEventListeners() {
             document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active')); 
             pill.classList.add('active');
             
-            // Szukamy elementów w HTMLu w momencie kliknięcia
-            const yearContainer = document.getElementById('discover-year-container');
-            const yearInput = document.getElementById('discover-year-input');
-            const yearClear = document.getElementById('discover-year-clear');
-            const yearWrap = document.getElementById('discover-year-wrapper');
-            
-            // LOGIKA POKAZYWANIA / UKRYWANIA
             if (pill.dataset.genre) {
-                // To jest NASTRÓJ - Pokaż pasek!
-                if (yearContainer) {
-                    yearContainer.style.display = 'block';
+                if (discoverYearContainer) {
+                    discoverYearContainer.style.display = 'block';
+                    discoverYearContainer.style.animation = 'none';
+                    discoverYearContainer.offsetHeight; 
+                    discoverYearContainer.style.animation = 'fadeIn 0.3s ease-out';
                 }
                 loadDiscoverTab(pill.dataset.genre, true, 1); 
             } else {
-                // To jest TRENDY/KINO - Schowaj pasek i wyczyść dane!
-                if (yearContainer) yearContainer.style.display = 'none';
-                if (yearInput) yearInput.value = '';
-                if (yearClear) yearClear.style.display = 'none';
-                if (yearWrap) {
-                    yearWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
-                    yearWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
-                    yearWrap.style.borderColor = 'transparent';
+                if (discoverYearContainer) discoverYearContainer.style.display = 'none';
+                if (discoverYearInputLive) discoverYearInputLive.value = '';
+                if (discoverYearClearLive) discoverYearClearLive.style.display = 'none';
+                if (discoverYearWrapLive) {
+                    discoverYearWrapLive.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                    discoverYearWrapLive.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+                    discoverYearWrapLive.style.borderColor = 'transparent';
                 }
-                currentDiscoverYear = 'all'; // Twardy reset pamięci
+                currentDiscoverYear = 'all'; 
                 
                 loadDiscoverTab(pill.dataset.endpoint, false, 1);
             }
         }
     };
     
-    // Nasłuchiwacze na paski
     const catsContainer = document.getElementById('discover-categories');
     if (catsContainer) catsContainer.addEventListener('click', handlePillClick);
-    
     const genresContainer = document.getElementById('discover-genres');
     if (genresContainer) genresContainer.addEventListener('click', handlePillClick);
 
-    // --- LOGIKA SAMEGO POLA WPISYWANIA ROKU ---
-    const discoverYearInput = document.getElementById('discover-year-input');
-    if (discoverYearInput) {
-        const discoverYearWrap = document.getElementById('discover-year-wrapper');
-        const discoverYearClear = document.getElementById('discover-year-clear');
-
-        // Neumorficzne efekty podświetlenia
-        discoverYearInput.addEventListener('focus', () => {
-            if(discoverYearWrap) {
-                discoverYearWrap.style.background = 'var(--card-color)';
-                discoverYearWrap.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 4px color-mix(in srgb, var(--primary-color) 15%, transparent)';
-                discoverYearWrap.style.borderColor = 'var(--primary-color)';
-            }
-        });
-        discoverYearInput.addEventListener('blur', () => {
-            if(discoverYearWrap) {
-                discoverYearWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
-                discoverYearWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
-                discoverYearWrap.style.borderColor = 'transparent';
-            }
-        });
-
-        // Wpisywanie cyfr
-        const handleYearSearch = debounce((e) => {
-            const val = e.target.value.trim();
-            if (discoverYearClear) discoverYearClear.style.display = val.length > 0 ? 'flex' : 'none';
-
-            if (val.length === 4 || val.length === 0) {
-                currentDiscoverYear = val.length === 4 ? val : 'all';
-                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
-                if (activeCatPill && activeCatPill.dataset.genre) {
-                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
-                }
-            }
-        }, 600); 
-
-        discoverYearInput.addEventListener('input', handleYearSearch);
-
-        // Czyszczenie roku
-        if (discoverYearClear) {
-            discoverYearClear.addEventListener('click', (e) => {
-                e.stopPropagation();
-                discoverYearInput.value = '';
-                discoverYearClear.style.display = 'none';
-                if(discoverYearWrap) {
-                    discoverYearWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
-                    discoverYearWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
-                    discoverYearWrap.style.borderColor = 'transparent';
-                }
-                
-                currentDiscoverYear = 'all';
-                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
-                if (activeCatPill && activeCatPill.dataset.genre) {
-                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
-                }
-            });
-        }
-    }
-    
-    document.getElementById('discover-categories').addEventListener('click', handlePillClick);
-    document.getElementById('discover-genres').addEventListener('click', handlePillClick);
-
-    // --- OBSŁUGA SAMEGO POLA WPISYWANIA ROKU ---
-    const discoverYearInputLive = document.getElementById('discover-year-input');
-    const discoverYearClearLive = document.getElementById('discover-year-clear');
-    const discoverYearWrapLive = document.getElementById('discover-year-wrapper');
-
     if (discoverYearInputLive) {
-        // Efekty graficzne (Neumorfizm)
         discoverYearInputLive.addEventListener('focus', () => {
             if (discoverYearWrapLive) {
                 discoverYearWrapLive.style.background = 'var(--card-color)';
@@ -702,25 +665,19 @@ function setupEventListeners() {
             }
         });
 
-        // Nasłuchiwanie wpisanych cyfr
         const handleYearSearch = debounce((e) => {
             const val = e.target.value.trim();
             if (discoverYearClearLive) discoverYearClearLive.style.display = val.length > 0 ? 'flex' : 'none';
 
-            // Szukamy po wpisaniu 4 cyfr (lub po wyczyszczeniu)
             if (val.length === 4 || val.length === 0) {
                 currentDiscoverYear = val.length === 4 ? val : 'all';
-                
                 const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
-                if (activeCatPill && activeCatPill.dataset.genre) {
-                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
-                }
+                if (activeCatPill && activeCatPill.dataset.genre) loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
             }
         }, 600); 
 
         discoverYearInputLive.addEventListener('input', handleYearSearch);
 
-        // Czyszczenie roku z krzyżyka
         if (discoverYearClearLive) {
             discoverYearClearLive.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -732,16 +689,11 @@ function setupEventListeners() {
                     discoverYearWrapLive.style.borderColor = 'transparent';
                 }
                 currentDiscoverYear = 'all';
-                
                 const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
-                if (activeCatPill && activeCatPill.dataset.genre) {
-                    loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
-                }
+                if (activeCatPill && activeCatPill.dataset.genre) loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
             });
         }
     }
-    document.getElementById('discover-categories').addEventListener('click', handlePillClick);
-    document.getElementById('discover-genres').addEventListener('click', handlePillClick);
 
     // --- LOSOWA KOSTKA (FAB) ---
     document.getElementById('fab-randomize').addEventListener('click', async (e) => {
@@ -1457,7 +1409,23 @@ function renderProfileStats() {
     for(let i=1; i<=5; i++) { let hPct = (dist[i] / maxRat) * 100; chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`; }
     chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
 
+    // --- CZYSTY PROFIL + NOWY POTĘŻNY GUZIK ---
     c.innerHTML = `
+        <div style="grid-column: 1/-1; margin-bottom: 8px;">
+            <button id="btn-open-advanced-stats" style="width: 100%; background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); color: var(--text-color); border-radius: var(--radius-lg); padding: 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div style="width:48px; height:48px; border-radius:50%; background:color-mix(in srgb, var(--primary-color) 15%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2;"><path d="M18 20V10M12 20V4M6 20v-6"></path></svg>
+                    </div>
+                    <div style="text-align:left;">
+                        <div style="font-size:1.1rem; font-weight:800; margin-bottom:4px;">Centrum Statystyk</div>
+                        <div style="font-size:0.8rem; color:var(--text-secondary);">Miesięczne raporty, dni tygodnia i więcej</div>
+                    </div>
+                </div>
+                <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+        </div>
+        
         <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div>
         <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div>
         <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div>
@@ -1467,6 +1435,16 @@ function renderProfileStats() {
         <div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div>
         <div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>
     `;
+
+    // Aktywacja nowego guzika
+    const advBtn = document.getElementById('btn-open-advanced-stats');
+    if (advBtn) {
+        advBtn.addEventListener('click', () => {
+            triggerHaptic('medium');
+            advBtn.style.transform = 'scale(0.96)';
+            setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150);
+        });
+    }
 }
 // ==========================================
 // 9. LOGIKA POBIERANIA SZCZEGÓŁÓW API
@@ -3460,4 +3438,390 @@ function toggleBulkSelection(itemEl) {
     }
     
     document.getElementById('bulk-count').textContent = bulkSelectedItems.size;
+}
+
+// ==========================================
+// 17. PEŁNOEKRANOWE CENTRUM STATYSTYK (Z GESTAMI)
+// ==========================================
+let statsHistorySteps = 0; 
+
+function openFullStatsPage() {
+    toggleAppDepthEffect(true);
+    
+    statsHistorySteps = 0;
+    history.pushState({ statsPageOpen: true, statsTab: 'months' }, '');
+
+    const page = document.getElementById('full-stats-page');
+    page.classList.add('active');
+
+    page.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    page.querySelectorAll('.fp-tab-content').forEach(c => c.classList.remove('active'));
+    
+    const firstBtn = page.querySelector('.seg-btn[data-fptab="months"]');
+    if (firstBtn) firstBtn.classList.add('active');
+    const firstTab = document.getElementById('fp-tab-months');
+    if (firstTab) firstTab.classList.add('active');
+
+    // 1. ZBIERANIE DANYCH (Rozbudowane o plakaty i dni)
+    const daysOfWeek = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 }; 
+    const monthlyData = {}; const yearlyData = {}; 
+
+    const processItemDate = (dateTs, item) => {
+        const d = new Date(dateTs);
+        daysOfWeek[d.getDay()]++;
+        const year = d.getFullYear(); 
+        const mKey = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const dayStr = d.toISOString().split('T')[0]; // Format np. 2023-11-14
+        
+        // Inicjalizacja struktury
+        if (!monthlyData[mKey]) monthlyData[mKey] = { mCount: 0, sCount: 0, runtime: 0, highestRated: null, longestMovie: null, genres: {}, sumRat: 0, ratCount: 0, daysMap: {}, posters: [] };
+        if (!yearlyData[year]) yearlyData[year] = { mCount: 0, sCount: 0, runtime: 0, highestRated: null, longestMovie: null, genres: {}, sumRat: 0, ratCount: 0, daysMap: {}, posters: [] };
+        
+        const processData = (target) => {
+            // Statystyki dzienne (do wyliczania Binge-Day)
+            target.daysMap[dayStr] = (target.daysMap[dayStr] || 0) + 1;
+            
+            // Zbieranie plakatów (max 20 do wyświetlenia, żeby nie zamulać)
+            if (item.poster && target.posters.length < 20 && !target.posters.some(p => p.id === item.id)) {
+                target.posters.push({ id: item.id, type: item.type, url: item.poster.replace('w500', 'w154'), title: item.title });
+            }
+
+            if (item.type === 'movie') {
+                target.mCount++;
+                if (item.runtime) { target.runtime += item.runtime; if (!target.longestMovie || item.runtime > target.longestMovie.runtime) target.longestMovie = item; }
+            } else target.sCount++; 
+            
+            if (item.genres) item.genres.forEach(g => { target.genres[g] = (target.genres[g] || 0) + 1; });
+            if (item.rating > 0) { target.sumRat += item.rating; target.ratCount++; if (!target.highestRated || item.rating > target.highestRated.rating) target.highestRated = item; }
+        };
+
+        processData(monthlyData[mKey]); processData(yearlyData[year]);
+    };
+
+    data.moviesWatched.forEach(m => { if (m.watchDates) m.watchDates.forEach(ts => processItemDate(ts, m)); });
+    data.seriesWatched.forEach(s => { if (s.dateAdded) processItemDate(s.dateAdded, s); });
+
+    // 2. FUNKCJA BUDUJĄCA KARTĘ MIESIĄCA/ROKU (Teraz przyjmuje też prevData do trendów!)
+    const buildReportCard = (title, rData, isYearly = false, prevData = null) => {
+        const hrs = Math.floor(rData.runtime / 60); const mins = rData.runtime % 60;
+        const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        const avgR = rData.ratCount > 0 ? (rData.sumRat / rData.ratCount).toFixed(1) : '-';
+        const sortedGenres = Object.entries(rData.genres).sort((a,b) => b[1] - a[1]);
+        const topGenre = sortedGenres.length > 0 ? sortedGenres[0] : null;
+
+        // --- IDEAS 2: STRZAŁKI TRENDÓW ---
+        const getTrendHTML = (curr, prev) => {
+            if (!prev) return '';
+            const diff = curr - prev;
+            if (diff > 0) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${diff}</span>`;
+            if (diff < 0) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.abs(diff)}</span>`;
+            return '';
+        };
+        const getTrendTimeHTML = (curr, prev) => {
+            if (!prev) return '';
+            const diff = curr - prev;
+            if (diff > 60) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${Math.floor(diff/60)}h</span>`;
+            if (diff < -60) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.floor(Math.abs(diff)/60)}h</span>`;
+            return '';
+        };
+
+        const mTrend = prevData ? getTrendHTML(rData.mCount, prevData.mCount) : '';
+        const sTrend = prevData ? getTrendHTML(rData.sCount, prevData.sCount) : '';
+        const tTrend = prevData ? getTrendTimeHTML(rData.runtime, prevData.runtime) : '';
+
+        // --- IDEAS 3: DZIEŃ MARATONU (Binge-Day) ---
+        let bingeHTML = '';
+        if (Object.keys(rData.daysMap).length > 0) {
+            const topDay = Object.entries(rData.daysMap).sort((a,b) => b[1] - a[1])[0];
+            if (topDay && topDay[1] > 1) { // Pokazujemy tylko jeśli w dany dzień obejrzano > 1 tytuł
+                const dateObj = new Date(topDay[0]);
+                const niceDate = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
+                bingeHTML = `<div class="binge-day-badge">
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">🔥 Szczytowy dzień (${niceDate})</span>
+                    <strong style="color:#ff4b2b; font-size:0.9rem;">${topDay[1]} tytuły</strong>
+                </div>`;
+            }
+        }
+
+        // --- IDEAS 1: ŚCIANA PLAKATÓW ---
+        let postersHTML = '';
+        if (rData.posters && rData.posters.length > 0) {
+            postersHTML = `<div class="stats-poster-wall">` + 
+                rData.posters.map(p => `<img src="${p.url}" data-id="${p.id}" data-type="${p.type}" title="${escapeHTML(p.title)}" onerror="this.style.display='none'">`).join('') + 
+            `</div>`;
+        }
+
+        let extendedInfoHTML = '';
+        if (rData.highestRated) extendedInfoHTML += `<div style="margin-top:16px; padding-top:16px; border-top:1px dashed color-mix(in srgb, var(--border-color) 50%, transparent); display:flex; align-items:center; gap:12px;"><img src="${rData.highestRated.poster || POSTER_PLACEHOLDER}" style="width:40px; height:60px; object-fit:cover; border-radius:4px; flex-shrink:0;"><div style="min-width: 0; flex-grow: 1;"><div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">Tytuł ${isYearly ? 'Roku' : 'Miesiąca'}</div><div class="month-movie-title" style="font-size:0.95rem; font-weight:800; color:var(--text-color); margin-bottom:4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block;">${escapeHTML(rData.highestRated.title)}</div><span style="font-size:0.75rem; font-weight:800; color:#000; background:var(--warning-color); padding:2px 6px; border-radius:4px;">⭐ ${rData.highestRated.rating}</span></div></div>`;
+        if (rData.longestMovie) extendedInfoHTML += `<div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px; border-radius: var(--radius-sm);"><span style="font-size:0.8rem; color:var(--text-secondary);">Najdłuższy seans:</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-color); max-width:60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHTML(rData.longestMovie.title)} (${rData.longestMovie.runtime}m)</span></div>`;
+        if (topGenre) extendedInfoHTML += `<div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px; border-radius: var(--radius-sm);"><span style="font-size:0.8rem; color:var(--text-secondary);">Ulubiony gatunek:</span><span style="font-size:0.85rem; font-weight:800; color:var(--primary-color);">${escapeHTML(topGenre[0])}</span></div>`;
+
+        const cardStyle = isYearly ? `background: linear-gradient(135deg, color-mix(in srgb, var(--warning-color) 8%, var(--card-color)), var(--card-color)); border:1px solid color-mix(in srgb, var(--warning-color) 25%, transparent);` : `background:var(--card-color); border:1px solid var(--border-color);`;
+        const headerStyle = isYearly ? `background: transparent;` : `background:color-mix(in srgb, var(--bg-color) 50%, transparent);`;
+
+        return `<div class="month-card" style="${cardStyle} border-radius:var(--radius-md); margin-bottom:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);"><div class="month-header" style="padding:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; ${headerStyle} flex-wrap: wrap; gap: 8px;"><div style="font-size:1.1rem; font-weight:800; color:var(--text-color); text-transform:capitalize; display:flex; align-items:center; gap:8px;">${isYearly ? '🏆' : '📅'} ${title}</div><div style="display:flex; gap:8px; align-items:center;"><span style="background:color-mix(in srgb, ${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'} 15%, transparent); color:${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'}; font-size:0.8rem; font-weight:700; padding:4px 8px; border-radius:20px;">${rData.mCount + rData.sCount} Tytułów</span><svg class="month-chevron" viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5; transition:transform 0.3s;"><polyline points="6 9 12 15 18 9"></polyline></svg></div></div><div class="month-content" style="display:none; padding:0 16px 16px 16px; animation:fadeIn 0.3s;"><div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-top:16px;"><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Filmy</div><div style="font-size:1.1rem; font-weight:800;">${rData.mCount}${mTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Seriale</div><div style="font-size:1.1rem; font-weight:800;">${rData.sCount}${sTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Czas (F)</div><div style="font-size:1.1rem; font-weight:800; color:var(--primary-color);">${timeStr}${tTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Średnia</div><div style="font-size:1.1rem; font-weight:800; color:var(--warning-color);">${avgR}</div></div></div>${bingeHTML}${extendedInfoHTML}${postersHTML}</div></div>`;
+    };
+
+    // Wypełnianie Miesięcy (Z TRENDAMI)
+    const sortedMonths = Object.keys(monthlyData).sort().reverse();
+    document.getElementById('fp-tab-months').innerHTML = sortedMonths.length === 0 ? `<div style="text-align:center; padding:40px;">Brak danych.</div>` : sortedMonths.map((mKey, index) => { 
+        const [y, m] = mKey.split('-'); 
+        const prevKey = sortedMonths[index + 1]; // Bierzemy dane z poprzedniego chronologicznie miesiąca
+        return buildReportCard(new Date(y, m - 1).toLocaleString('pl-PL', { month: 'long', year: 'numeric' }), monthlyData[mKey], false, prevKey ? monthlyData[prevKey] : null); 
+    }).join('');
+    
+    // Wypełnianie Lat (Z TRENDAMI)
+    const sortedYears = Object.keys(yearlyData).sort().reverse();
+    document.getElementById('fp-tab-years').innerHTML = sortedYears.length === 0 ? `<div style="text-align:center; padding:40px;">Brak danych.</div>` : sortedYears.map((year, index) => {
+        const prevYear = sortedYears[index + 1];
+        return buildReportCard(`Podsumowanie Roku ${year}`, yearlyData[year], true, prevYear ? yearlyData[prevYear] : null);
+    }).join('');
+
+    // Dni tygodnia
+    const dayNames = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
+    const maxDayVal = Math.max(...Object.values(daysOfWeek), 1); 
+    const sortedDays = [1, 2, 3, 4, 5, 6, 0].map(dIdx => ({ index: dIdx, name: dayNames[dIdx], count: daysOfWeek[dIdx] })).sort((a, b) => b.count - a.count);
+    let daysChartHTML = `<div style="display:flex; flex-direction:column; gap:14px; margin-top: 8px;">`;
+    sortedDays.forEach((day, i) => {
+        if (day.count === 0 && i > 3) return; 
+        const hPct = (day.count / maxDayVal) * 100; const isMax = day.count === maxDayVal && day.count > 0;
+        daysChartHTML += `<div style="display:flex; align-items:center; gap:12px;"><div style="width: 95px; font-size: 0.85rem; font-weight: ${isMax ? '800' : '600'}; color: ${isMax ? 'var(--primary-color)' : 'var(--text-secondary)'}; text-align:right; flex-shrink: 0;">${day.name}</div><div style="flex-grow: 1; height: 12px; background: color-mix(in srgb, var(--border-color) 40%, transparent); border-radius: 6px; overflow: hidden; display: flex; align-items:center;"><div style="height: 100%; width: ${hPct}%; background: ${isMax ? 'linear-gradient(90deg, var(--primary-color) 0%, #ff4b2b 100%)' : 'var(--text-secondary)'}; border-radius: 6px; transition: width 0.5s ease-out;"></div></div><div style="width: 35px; font-size: 0.95rem; font-weight: 800; color: var(--text-color); flex-shrink: 0;">${day.count}</div></div>`;
+    });
+    daysChartHTML += `</div>`;
+    document.getElementById('fp-tab-rhythm').innerHTML = `<div class="analysis-card"><h4 class="analysis-title">Kiedy najczęściej oglądasz?</h4><p style="font-size:0.85rem; color:var(--text-secondary); margin:0 0 24px; line-height:1.4;">Zestawienie dni, w które odhaczasz najwięcej tytułów.</p>${daysChartHTML}</div>`;
+
+
+    // ==========================================
+    // 3. ZAKŁADKA: ANALIZA
+    // ==========================================
+    let analysisHTML = '';
+    const allWatched = [...data.moviesWatched, ...data.seriesWatched];
+
+    // --- 1. PROFIL KRYTYKA ---
+    let diffSum = 0, diffCount = 0;
+    let gpItem = null, maxGpDiff = -99; 
+    let uoItem = null, maxUoDiff = -99; 
+
+    allWatched.forEach(item => {
+        if (item.rating > 0 && item.tmdbRating > 0 && !String(item.id).startsWith('custom_')) {
+            const tmdbConv = item.tmdbRating / 2; 
+            const diff = item.rating - tmdbConv;
+            diffSum += diff; diffCount++;
+            if (diff > maxGpDiff) { maxGpDiff = diff; gpItem = item; }
+            if (-diff > maxUoDiff) { maxUoDiff = -diff; uoItem = item; }
+        }
+    });
+
+    if (diffCount > 0) {
+        const avgDiff = diffSum / diffCount;
+        let criticTitle = "Obiektywny Widz"; let criticColor = "var(--info-color)"; let criticDesc = "Twoje oceny pokrywają się z resztą świata niemal idealnie!";
+        if (avgDiff <= -0.5) { criticTitle = "Surowy Krytyk"; criticColor = "var(--primary-color)"; criticDesc = "Oceniasz filmy znacznie surowiej niż ogół widowni."; }
+        else if (avgDiff >= 0.5) { criticTitle = "Entuzjasta Kina"; criticColor = "var(--success-color)"; criticDesc = "Jesteś bardziej łaskawy dla twórców niż reszta świata!"; }
+
+        analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Twój Profil Krytyka</h4><div style="background: color-mix(in srgb, ${criticColor} 15%, transparent); border: 1px solid color-mix(in srgb, ${criticColor} 30%, transparent); padding: 16px; border-radius: var(--radius-md); text-align:center;"><div style="font-size: 1.2rem; font-weight: 900; color: ${criticColor};">${criticTitle}</div><div style="font-size: 0.85rem; color: var(--text-color); margin-top: 4px;">${criticDesc}</div><div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">Średnia różnica: ${avgDiff > 0 ? '+' : ''}${avgDiff.toFixed(2)} gwiazdki w stosunku do ocen TMDb.</div></div>`;
+        if (gpItem && maxGpDiff > 0.5) analysisHTML += `<div style="margin-top: 20px; font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Twoje "Guilty Pleasure"</div><div class="movie-versus-card"><img src="${gpItem.poster || POSTER_PLACEHOLDER}"><div class="movie-versus-info"><div class="movie-versus-title">${escapeHTML(gpItem.title)}</div><div class="movie-versus-ratings"><span class="rat-user">Ty: ⭐ ${gpItem.rating}</span><span class="rat-tmdb">Świat: ⭐ ${(gpItem.tmdbRating/2).toFixed(1)}</span></div></div></div>`;
+        if (uoItem && maxUoDiff > 0.5) analysisHTML += `<div style="margin-top: 20px; font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Niepopularna Opinia</div><div class="movie-versus-card"><img src="${uoItem.poster || POSTER_PLACEHOLDER}"><div class="movie-versus-info"><div class="movie-versus-title">${escapeHTML(uoItem.title)}</div><div class="movie-versus-ratings"><span class="rat-user">Ty: ⭐ ${uoItem.rating}</span><span class="rat-tmdb">Świat: ⭐ ${(uoItem.tmdbRating/2).toFixed(1)}</span></div></div></div>`;
+        analysisHTML += `</div>`;
+    }
+
+    // --- 2. PRAWDZIWY POSTĘP KOLEKCJI ---
+    const colls = {};
+    data.moviesWatched.forEach(m => {
+        if (m.collectionName && m.collectionName !== 'none') colls[m.collectionName] = (colls[m.collectionName] || 0) + 1;
+    });
+    const topColls = Object.entries(colls).filter(c => c[1] > 1).sort((a,b) => b[1]-a[1]).slice(0, 5);
+    
+    if (topColls.length > 0) {
+        analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Postęp Kolekcji</h4><p id="colls-desc-text" style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Sprawdzam bazę TMDB w poszukiwaniu brakujących części...</p><div id="dynamic-collections-container"><div style="text-align:center; padding: 20px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:var(--primary-color);animation:spin 1s linear infinite;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></div></div></div>`;
+        setTimeout(async () => {
+            const container = document.getElementById('dynamic-collections-container'); if (!container) return;
+            let builtHTML = '';
+            const watchedIds = new Set(data.moviesWatched.map(m => String(m.id)));
+            const toWatchIds = new Set(data.moviesToWatch.map(m => String(m.id)));
+
+            for (const [cName, wCount] of topColls) {
+                let collectionParts = []; let total = wCount; 
+                try {
+                    const cacheKey = `coll_full_${cName.replace(/\s+/g, '_')}`;
+                    let cachedData = await db.getCache(cacheKey, 7); 
+                    if (cachedData) collectionParts = cachedData;
+                    else {
+                        const sRes = await fetchFromTMDB('/search/collection', { query: cName });
+                        if (sRes && sRes.results && sRes.results.length > 0) {
+                            const cDetails = await fetchFromTMDB(`/collection/${sRes.results[0].id}`);
+                            if (cDetails && cDetails.parts) {
+                                collectionParts = cDetails.parts.sort((a,b) => new Date(a.release_date || '9999') - new Date(b.release_date || '9999'));
+                                await db.setCache(cacheKey, collectionParts);
+                            }
+                        }
+                    }
+                } catch(e) {}
+
+                if (collectionParts.length > 0) total = collectionParts.length;
+                if (total < wCount) total = wCount; 
+
+                const pct = Math.round((wCount / total) * 100); const isCompleted = pct === 100;
+                const barColor = isCompleted ? 'var(--success-color)' : 'var(--primary-color)';
+
+                let missingHTML = '';
+                if (!isCompleted && collectionParts.length > 0) {
+                    const missingParts = collectionParts.filter(p => !watchedIds.has(String(p.id)));
+                    if (missingParts.length > 0) {
+                        const missingList = missingParts.map(p => {
+                            const year = p.release_date ? p.release_date.substring(0,4) : 'Brak daty';
+                            const isInToWatch = toWatchIds.has(String(p.id));
+                            const toWatchBadge = isInToWatch ? `<span style="color:var(--info-color); font-size:0.7rem; border:1px solid var(--info-color); padding:1px 4px; border-radius:4px; margin-left:6px;">W planach</span>` : '';
+                            return `<div class="missing-collection-item" data-id="${p.id}" data-type="movie" style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent); cursor:pointer;"><span style="font-size:0.85rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px;">${escapeHTML(p.title)}</span><span style="font-size:0.75rem; color:var(--text-secondary); flex-shrink:0;">${year}${toWatchBadge}</span></div>`;
+                        }).join('');
+                        missingHTML = `<div class="collection-missing-wrap" style="margin-top: 8px;"><button class="toggle-missing-btn" style="background:transparent; border:none; color:var(--text-secondary); font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; padding:4px 0;">Brakuje Ci ${missingParts.length} filmów <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5;transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg></button><div class="missing-list-content" style="display:none; padding-top:4px; animation:fadeIn 0.3s;">${missingList}</div></div>`;
+                    }
+                }
+                builtHTML += `<div style="margin-bottom:16px;"><div style="display:flex; justify-content:space-between; align-items:flex-end; font-size:0.85rem; font-weight:600; margin-bottom:6px;"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:75%; ${isCompleted ? 'color: var(--success-color);' : ''}">${isCompleted ? '🏆 ' : ''}${escapeHTML(cName)}</span><span style="color:var(--text-secondary); font-size:0.8rem; flex-shrink:0;"><strong style="color: ${barColor}; font-size:0.95rem;">${wCount}</strong> / ${total}</span></div><div style="height:8px; background:color-mix(in srgb, var(--border-color) 40%, transparent); border-radius:4px; overflow:hidden; display: flex;"><div style="height:100%; width:${pct}%; background:${barColor}; border-radius:4px; transition: width 1s cubic-bezier(0.2, 0.8, 0.2, 1);"></div></div>${missingHTML}</div>`;
+            }
+            container.innerHTML = builtHTML;
+            const desc = document.getElementById('colls-desc-text'); if (desc) desc.textContent = "Prawdziwy postęp względem oficjalnej bazy danych TMDB.";
+        }, 350);
+    }
+
+    // --- 3. WEHIKUŁ CZASU (Epoki) ---
+    const decades = {};
+    allWatched.forEach(i => {
+        if (i.year) {
+            const dec = Math.floor(parseInt(i.year)/10)*10;
+            if(dec >= 1950 && dec <= 2020) decades[dec] = (decades[dec] || 0) + 1;
+        }
+    });
+    const decKeys = Object.keys(decades).sort();
+    if (decKeys.length > 0) {
+        const minD = parseInt(decKeys[0]); const maxD = parseInt(decKeys[decKeys.length-1]);
+        for(let d=minD; d<=maxD; d+=10) { if(!decades[d]) decades[d] = 0; }
+        const finalDecs = Object.entries(decades).sort((a,b) => a[0]-b[0]);
+        const maxDecVal = Math.max(...Object.values(decades), 1);
+        const chartHTML = finalDecs.map(d => `<div class="era-bar-wrapper"><div class="era-count">${d[1] > 0 ? d[1] : ''}</div><div class="era-bar" style="height:${(d[1] / maxDecVal) * 100}%;"></div><div class="era-label">${d[0]}s</div></div>`).join('');
+        analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Kinowy Wehikuł Czasu</h4><p style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Z których lat najczęściej pochodzą Twoje filmy i seriale?</p><div class="era-chart-container">${chartHTML}</div></div>`;
+    }
+
+    if(analysisHTML === '') analysisHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);">Obejrzyj i oceń więcej filmów, aby odblokować analizę profilu!</div>`;
+    document.getElementById('fp-tab-analysis').innerHTML = analysisHTML;
+
+    // ==========================================
+    // 4. OBSŁUGA INTERFEJSU (Gesty i Kliknięcia)
+    // ==========================================
+    let isClosingStats = false;
+    
+    const closePage = () => {
+        if (isClosingStats) return;
+        isClosingStats = true;
+        page.style.transform = ''; 
+        if (history.state && history.state.statsPageOpen) { history.go(-(statsHistorySteps + 1)); } 
+        else { page.classList.remove('active'); toggleAppDepthEffect(false); }
+        setTimeout(() => { isClosingStats = false; }, 400);
+    };
+
+    const switchStatsTab = (tabId, isGoingBack = false) => {
+        const btn = page.querySelector(`.seg-btn[data-fptab="${tabId}"]`);
+        if (btn && !btn.classList.contains('active')) {
+            triggerHaptic('light');
+            if (!isGoingBack) { history.pushState({ statsPageOpen: true, statsTab: tabId }, ''); statsHistorySteps++; }
+            page.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            page.querySelectorAll('.fp-tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`fp-tab-${tabId}`).classList.add('active');
+        }
+    };
+
+    if (!page.dataset.eventsBound) {
+        page.dataset.eventsBound = 'true';
+
+        page.querySelector('.segmented-control').onclick = (e) => {
+            const btn = e.target.closest('.seg-btn');
+            if (btn) switchStatsTab(btn.dataset.fptab);
+        };
+
+        page.addEventListener('click', (e) => {
+            // Obsługa kliknięć w nagłówki miesięcy (Akordeony)
+            const header = e.target.closest('.month-header');
+            if (header) {
+                triggerHaptic('light');
+                const content = header.nextElementSibling;
+                const chevron = header.querySelector('.month-chevron');
+                if (content.style.display === 'none') { content.style.display = 'block'; if(chevron) chevron.style.transform = 'rotate(180deg)'; } 
+                else { content.style.display = 'none'; if(chevron) chevron.style.transform = 'rotate(0deg)'; }
+                return;
+            }
+            
+            // Kliknięcie w plakat na osi czasu (Miesiące/Lata)
+            if (e.target.tagName === 'IMG' && e.target.closest('.stats-poster-wall')) {
+                triggerHaptic('light');
+                const mId = e.target.dataset.id;
+                const mType = e.target.dataset.type;
+                closePage();
+                setTimeout(() => openDetailsModal(mId, mType), 350);
+                return;
+            }
+
+            // Rozwijanie brakujących filmów z kolekcji
+            const missingToggle = e.target.closest('.toggle-missing-btn');
+            if (missingToggle) {
+                triggerHaptic('light');
+                const content = missingToggle.nextElementSibling;
+                const chevron = missingToggle.querySelector('svg');
+                if (content.style.display === 'none') { content.style.display = 'block'; chevron.style.transform = 'rotate(180deg)'; } 
+                else { content.style.display = 'none'; chevron.style.transform = 'rotate(0deg)'; }
+                return;
+            }
+
+            // Kliknięcie w konkretny brakujący film z kolekcji
+            const missingItem = e.target.closest('.missing-collection-item');
+            if (missingItem) {
+                triggerHaptic('light');
+                const mId = missingItem.dataset.id;
+                const mType = missingItem.dataset.type;
+                const inLib = Object.values(data).flat().some(i => String(i.id) === String(mId));
+                closePage();
+                setTimeout(() => { if (inLib) openDetailsModal(mId, mType); else openPreviewModal(mId, mType); }, 350);
+                return;
+            }
+        });
+
+        // GESTY PRZESUWANIA (SWIPE)
+        const statsContentArea = page.querySelector('.fp-content');
+        const tabsOrder = ['months', 'years', 'rhythm', 'analysis']; 
+        
+        let startX = 0; let currentX = 0; let startY = 0; let isDragging = false; let swipeStartTime = 0;
+
+        statsContentArea.addEventListener('touchstart', (e) => {
+            // Blokujemy gesty jeśli użytkownik próbuje przewinąć karuzelę z plakatami!
+            if (e.target.closest('.stats-poster-wall')) return;
+            
+            startX = e.touches[0].clientX; startY = e.touches[0].clientY; swipeStartTime = Date.now();
+            isDragging = true; page.style.transition = 'none';
+        }, { passive: true });
+
+        statsContentArea.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.touches[0].clientX - startX; const deltaY = e.touches[0].clientY - startY;
+            if (Math.abs(deltaY) > Math.abs(deltaX) + 10) { isDragging = false; page.style.transform = ''; return; }
+            if (startX < 40 && deltaX > 0) { e.preventDefault(); currentX = deltaX; page.style.transform = `translateX(${currentX}px)`; }
+        }, { passive: false });
+
+        statsContentArea.addEventListener('touchend', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            page.style.transition = 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            const deltaX = e.changedTouches[0].clientX - startX; const timeElapsed = Date.now() - swipeStartTime;
+
+            if (startX < 40 && (deltaX > 80 || (deltaX > 40 && timeElapsed < 250))) { closePage(); currentX = 0; return; } 
+            else { page.style.transform = ''; }
+
+            if (startX > 40 && Math.abs(deltaX) > 60) {
+                const activeBtn = page.querySelector('.seg-btn.active');
+                if (!activeBtn) return;
+                const currentIndex = tabsOrder.indexOf(activeBtn.dataset.fptab);
+                
+                if (deltaX < 0 && currentIndex < tabsOrder.length - 1) page.querySelector(`.seg-btn[data-fptab="${tabsOrder[currentIndex + 1]}"]`).click();
+                else if (deltaX > 0 && currentIndex > 0) page.querySelector(`.seg-btn[data-fptab="${tabsOrder[currentIndex - 1]}"]`).click();
+            }
+        });
+    }
 }
