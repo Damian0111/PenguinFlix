@@ -1381,13 +1381,10 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
         discoverObserver.observe(sentinel);
     }
 }
-// ==========================================
-// ZOPTYMALIZOWANE STATYSTYKI GŁÓWNEGO PROFILU
-// ==========================================
 function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
     
-    // 1. NATYCHMIASTOWY RENDER SZKIELETU (Szkielet nie blokuje wątku)
+    // 1. NATYCHMIASTOWY RENDER SZKIELETU
     c.innerHTML = `
         <div style="grid-column: 1/-1; margin-bottom: 8px;">
             <div class="skeleton-box" style="height: 88px; width: 100%; border-radius: var(--radius-lg);"></div>
@@ -1401,8 +1398,11 @@ function renderProfileStats() {
         </div>
     `;
 
-    // 2. OPÓŹNIENIE OBLICZEŃ (Czekamy, aż animacja przełączania zakładki się skończy)
+    // 2. OPÓŹNIENIE OBLICZEŃ
     setTimeout(() => {
+        // Formater skraca liczby: np. 2500 -> "2,5 tys."
+        const formatNum = (num) => new Intl.NumberFormat('pl-PL', { notation: "compact", maximumFractionDigits: 1 }).format(num);
+
         let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
         let runtime = 0; let gCounts = {}; let sumRat = 0; let ratCount = 0;
         let dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }; let decades = {};
@@ -1430,14 +1430,14 @@ function renderProfileStats() {
         let compRate = tCol > 0 ? Math.round((tComp / tCol) * 100) : 0;
         const avgRat = ratCount > 0 ? (sumRat / ratCount).toFixed(1) : '-';
         const topG = Object.entries(gCounts).sort((a,b) => b[1] - a[1]).slice(0, 3);
-        const topGHTML = topG.length > 0 ? `<div class="top-genres-list">${topG.map(g => `<span class="profile-genre-tag"><strong style="color: var(--primary-color);">${g[1]}</strong> ${escapeHTML(g[0])}</span>`).join('')}</div>` : '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">Brak danych</div>';
+        const topGHTML = topG.length > 0 ? `<div class="top-genres-list">${topG.map(g => `<span class="profile-genre-tag"><strong style="color: var(--primary-color);">${formatNum(g[1])}</strong> ${escapeHTML(g[0])}</span>`).join('')}</div>` : '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">Brak danych</div>';
 
         let maxRat = Math.max(...Object.values(dist)); if(maxRat === 0) maxRat = 1;
         let chart = `<div class="rating-bars">`;
         for(let i=1; i<=5; i++) { 
-            let scalePct = dist[i] / maxRat; // Zmiana z procentów na skalę od 0 do 1
-            // Zmiana style="height:..." na style="transform: scaleY(...)"
-            chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="transform: scaleY(${scalePct});"></div></div>`; 
+            let scalePct = dist[i] / maxRat; 
+            // Użycie formatNum dla wyświetlenia ładnych liczb (np. "1,2 tys.")
+            chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i] > 0 ? formatNum(dist[i]) : '0'}</div><div class="chart-bar" style="transform: scaleY(${scalePct});"></div></div>`; 
         }
         chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
 
@@ -1457,9 +1457,9 @@ function renderProfileStats() {
                 </button>
             </div>
             
-            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div>
+            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${formatNum(tMovies)}</div></div>
             <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div>
-            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div>
+            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${formatNum(tSeries)}</div></div>
             <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><div class="label">Śr. Ocen</div><div class="value">${avgRat}</div></div>
             <div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div>
             <div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div>
@@ -1475,7 +1475,7 @@ function renderProfileStats() {
                 setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150);
             });
         }
-    }, 250); // Czas opóźnienia
+    }, 250);
 }
 // ==========================================
 // 9. LOGIKA POBIERANIA SZCZEGÓŁÓW API
@@ -3573,8 +3573,11 @@ function openFullStatsPage() {
         </div>`;
     }
 
-    // 2. PRZESUNIĘCIE OBLICZEŃ W CZASIE (Czekamy, aż karta płynnie wyjedzie)
+    // 2. PRZESUNIĘCIE OBLICZEŃ W CZASIE
     setTimeout(() => {
+        // Dodany formater liczb na potrzeby wykresów
+        const formatNum = (num) => new Intl.NumberFormat('pl-PL', { notation: "compact", maximumFractionDigits: 1 }).format(num);
+
         const daysOfWeek = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 }; 
         const monthlyData = {}; const yearlyData = {}; 
 
@@ -3620,8 +3623,8 @@ function openFullStatsPage() {
             const getTrendHTML = (curr, prev) => {
                 if (!prev) return '';
                 const diff = curr - prev;
-                if (diff > 0) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${diff}</span>`;
-                if (diff < 0) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.abs(diff)}</span>`;
+                if (diff > 0) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${formatNum(diff)}</span>`;
+                if (diff < 0) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${formatNum(Math.abs(diff))}</span>`;
                 return '';
             };
             const getTrendTimeHTML = (curr, prev) => {
@@ -3644,7 +3647,7 @@ function openFullStatsPage() {
                     const niceDate = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
                     bingeHTML = `<div class="binge-day-badge">
                         <span style="font-size:0.8rem; color:var(--text-secondary);">🔥 Szczytowy dzień (${niceDate})</span>
-                        <strong style="color:#ff4b2b; font-size:0.9rem;">${topDay[1]} tytuły</strong>
+                        <strong style="color:#ff4b2b; font-size:0.9rem;">${formatNum(topDay[1])} tytuły</strong>
                     </div>`;
                 }
             }
@@ -3664,7 +3667,7 @@ function openFullStatsPage() {
             const cardStyle = isYearly ? `background: linear-gradient(135deg, color-mix(in srgb, var(--warning-color) 8%, var(--card-color)), var(--card-color)); border:1px solid color-mix(in srgb, var(--warning-color) 25%, transparent);` : `background:var(--card-color); border:1px solid var(--border-color);`;
             const headerStyle = isYearly ? `background: transparent;` : `background:color-mix(in srgb, var(--bg-color) 50%, transparent);`;
 
-            return `<div class="month-card" style="${cardStyle} border-radius:var(--radius-md); margin-bottom:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);"><div class="month-header" style="padding:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; ${headerStyle} flex-wrap: wrap; gap: 8px;"><div style="font-size:1.1rem; font-weight:800; color:var(--text-color); text-transform:capitalize; display:flex; align-items:center; gap:8px;">${isYearly ? '🏆' : '📅'} ${title}</div><div style="display:flex; gap:8px; align-items:center;"><span style="background:color-mix(in srgb, ${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'} 15%, transparent); color:${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'}; font-size:0.8rem; font-weight:700; padding:4px 8px; border-radius:20px;">${rData.mCount + rData.sCount} Tytułów</span><svg class="month-chevron" viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5; transition:transform 0.3s;"><polyline points="6 9 12 15 18 9"></polyline></svg></div></div><div class="month-content" style="display:none; padding:0 16px 16px 16px; animation:fadeIn 0.3s;"><div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-top:16px;"><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Filmy</div><div style="font-size:1.1rem; font-weight:800;">${rData.mCount}${mTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Seriale</div><div style="font-size:1.1rem; font-weight:800;">${rData.sCount}${sTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Czas (F)</div><div style="font-size:1.1rem; font-weight:800; color:var(--primary-color);">${timeStr}${tTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Średnia</div><div style="font-size:1.1rem; font-weight:800; color:var(--warning-color);">${avgR}</div></div></div>${bingeHTML}${extendedInfoHTML}${postersHTML}</div></div>`;
+            return `<div class="month-card" style="${cardStyle} border-radius:var(--radius-md); margin-bottom:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);"><div class="month-header" style="padding:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; ${headerStyle} flex-wrap: wrap; gap: 8px;"><div style="font-size:1.1rem; font-weight:800; color:var(--text-color); text-transform:capitalize; display:flex; align-items:center; gap:8px;">${isYearly ? '🏆' : '📅'} ${title}</div><div style="display:flex; gap:8px; align-items:center;"><span style="background:color-mix(in srgb, ${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'} 15%, transparent); color:${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'}; font-size:0.8rem; font-weight:700; padding:4px 8px; border-radius:20px;">${formatNum(rData.mCount + rData.sCount)} Tytułów</span><svg class="month-chevron" viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5; transition:transform 0.3s;"><polyline points="6 9 12 15 18 9"></polyline></svg></div></div><div class="month-content" style="display:none; padding:0 16px 16px 16px; animation:fadeIn 0.3s;"><div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-top:16px;"><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Filmy</div><div style="font-size:1.1rem; font-weight:800;">${formatNum(rData.mCount)}${mTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Seriale</div><div style="font-size:1.1rem; font-weight:800;">${formatNum(rData.sCount)}${sTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Czas (F)</div><div style="font-size:1.1rem; font-weight:800; color:var(--primary-color);">${timeStr}${tTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Średnia</div><div style="font-size:1.1rem; font-weight:800; color:var(--warning-color);">${avgR}</div></div></div>${bingeHTML}${extendedInfoHTML}${postersHTML}</div></div>`;
         };
 
         const sortedMonths = Object.keys(monthlyData).sort().reverse();
@@ -3687,7 +3690,8 @@ function openFullStatsPage() {
         sortedDays.forEach((day, i) => {
             if (day.count === 0 && i > 3) return; 
             const hPct = (day.count / maxDayVal) * 100; const isMax = day.count === maxDayVal && day.count > 0;
-            daysChartHTML += `<div style="display:flex; align-items:center; gap:12px;"><div style="width: 95px; font-size: 0.85rem; font-weight: ${isMax ? '800' : '600'}; color: ${isMax ? 'var(--primary-color)' : 'var(--text-secondary)'}; text-align:right; flex-shrink: 0;">${day.name}</div><div style="flex-grow: 1; height: 12px; background: color-mix(in srgb, var(--border-color) 40%, transparent); border-radius: 6px; overflow: hidden; display: flex; align-items:center;"><div style="height: 100%; width: ${hPct}%; background: ${isMax ? 'linear-gradient(90deg, var(--primary-color) 0%, #ff4b2b 100%)' : 'var(--text-secondary)'}; border-radius: 6px; transition: width 0.5s ease-out;"></div></div><div style="width: 35px; font-size: 0.95rem; font-weight: 800; color: var(--text-color); flex-shrink: 0;">${day.count}</div></div>`;
+            // Poprawka: min-width: 45px dla tekstu zamiast sztywnego 35px i użycie formatNum(day.count)
+            daysChartHTML += `<div style="display:flex; align-items:center; gap:12px;"><div style="width: 95px; font-size: 0.85rem; font-weight: ${isMax ? '800' : '600'}; color: ${isMax ? 'var(--primary-color)' : 'var(--text-secondary)'}; text-align:right; flex-shrink: 0;">${day.name}</div><div style="flex-grow: 1; height: 12px; background: color-mix(in srgb, var(--border-color) 40%, transparent); border-radius: 6px; overflow: hidden; display: flex; align-items:center;"><div style="height: 100%; width: ${hPct}%; background: ${isMax ? 'linear-gradient(90deg, var(--primary-color) 0%, #ff4b2b 100%)' : 'var(--text-secondary)'}; border-radius: 6px; transition: width 0.5s ease-out;"></div></div><div style="min-width: 45px; text-align: right; font-size: 0.95rem; font-weight: 800; color: var(--text-color); flex-shrink: 0;">${formatNum(day.count)}</div></div>`;
         });
         daysChartHTML += `</div>`;
         document.getElementById('fp-tab-rhythm').innerHTML = `<div class="analysis-card"><h4 class="analysis-title">Kiedy najczęściej oglądasz?</h4><p style="font-size:0.85rem; color:var(--text-secondary); margin:0 0 24px; line-height:1.4;">Zestawienie dni, w które odhaczasz najwięcej tytułów.</p>${daysChartHTML}</div>`;
@@ -3779,11 +3783,12 @@ function openFullStatsPage() {
             }, 350);
         }
 
-        const decades = {};
+             const decades = {};
         allWatched.forEach(i => {
             if (i.year) {
                 const dec = Math.floor(parseInt(i.year)/10)*10;
-                if(dec >= 1950 && dec <= 2020) decades[dec] = (decades[dec] || 0) + 1;
+                // Brak twardego limitu - puszczamy wszystko od 1890 roku!
+                if(dec >= 1890 && dec <= new Date().getFullYear()) decades[dec] = (decades[dec] || 0) + 1;
             }
         });
         const decKeys = Object.keys(decades).sort();
@@ -3793,10 +3798,10 @@ function openFullStatsPage() {
             const finalDecs = Object.entries(decades).sort((a,b) => a[0]-b[0]);
             const maxDecVal = Math.max(...Object.values(decades), 1);
             
-            // Zmiana style="height:..." na style="transform: scaleY(...)"
             const chartHTML = finalDecs.map(d => {
                 let scalePct = d[1] / maxDecVal;
-                return `<div class="era-bar-wrapper"><div class="era-count">${d[1] > 0 ? d[1] : ''}</div><div class="era-bar" style="transform: scaleY(${scalePct});"></div><div class="era-label">${d[0]}s</div></div>`
+                // Użycie formatNum dla wyświetlenia ładnych liczb nad epokami
+                return `<div class="era-bar-wrapper"><div class="era-count">${d[1] > 0 ? formatNum(d[1]) : ''}</div><div class="era-bar" style="transform: scaleY(${scalePct});"></div><div class="era-label">${d[0]}s</div></div>`
             }).join('');
             
             analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Kinowy Wehikuł Czasu</h4><p style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Z których lat najczęściej pochodzą Twoje filmy i seriale?</p><div class="era-chart-container">${chartHTML}</div></div>`;
@@ -3805,9 +3810,8 @@ function openFullStatsPage() {
         if(analysisHTML === '') analysisHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);">Obejrzyj i oceń więcej filmów, aby odblokować analizę profilu!</div>`;
         document.getElementById('fp-tab-analysis').innerHTML = analysisHTML;
 
-    }, 350); // Czekamy ułamek sekundy aż animacja okna się skończy
+    }, 350); 
 
-    // Reszta starych listenerów dla 'page'... (Zostają bez zmian)
     let isClosingStats = false;
     
     const closePage = () => {
@@ -3926,55 +3930,107 @@ function openFullStatsPage() {
 // ==========================================
 // SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (Z PODZIAŁEM)
 // ==========================================
+// ==========================================
+// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (KAFELKI SPOTIFY)
+// ==========================================
 function openAllGenresModal() {
     toggleAppDepthEffect(true);
     const c = document.getElementById('detailsModalContainer'); 
     
-    // GATUNKI FILMOWE
+    // GATUNKI FILMOWE (Rozbite na ikonę i tekst)
     const movieGenres = [
-        { id: 28, name: "💥 Akcja" }, { id: 12, name: "🗺️ Przygodowy" },
-        { id: 16, name: "🎨 Animacja" }, { id: 35, name: "😂 Komedia" },
-        { id: 80, name: "🕵️ Kryminał" }, { id: 99, name: "🎞️ Dokument" },
-        { id: 18, name: "🎭 Dramat" }, { id: 10751, name: "👨‍👩‍👧 Familijny" },
-        { id: 14, name: "🧙 Fantasy" }, { id: 36, name: "🏛️ Historyczny" },
-        { id: 27, name: "👻 Horror" }, { id: 10402, name: "🎵 Muzyczny" },
-        { id: 9648, name: "🔍 Tajemnica" }, { id: 10749, name: "❤️ Romans" },
-        { id: 878, name: "👽 Sci-Fi" }, { id: 10770, name: "📺 Film TV" },
-        { id: 53, name: "🔪 Thriller" }, { id: 10752, name: "🪖 Wojenny" },
-        { id: 37, name: "🤠 Western" }
+        { id: 28, icon: "💥", name: "Akcja" }, { id: 12, icon: "🗺️", name: "Przygodowy" },
+        { id: 16, icon: "🎨", name: "Animacja" }, { id: 35, icon: "😂", name: "Komedia" },
+        { id: 80, icon: "🕵️", name: "Kryminał" }, { id: 99, icon: "🎞️", name: "Dokument" },
+        { id: 18, icon: "🎭", name: "Dramat" }, { id: 10751, icon: "👨‍👩‍👧", name: "Familijny" },
+        { id: 14, icon: "🧙", name: "Fantasy" }, { id: 36, icon: "🏛️", name: "Historyczny" },
+        { id: 27, icon: "👻", name: "Horror" }, { id: 10402, icon: "🎵", name: "Muzyczny" },
+        { id: 9648, icon: "🔍", name: "Tajemnica" }, { id: 10749, icon: "❤️", name: "Romans" },
+        { id: 878, icon: "👽", name: "Sci-Fi" }, { id: 10770, icon: "📺", name: "Film TV" },
+        { id: 53, icon: "🔪", name: "Thriller" }, { id: 10752, icon: "🪖", name: "Wojenny" },
+        { id: 37, icon: "🤠", name: "Western" }
     ];
 
     // GATUNKI SERIALOWE
     const tvGenres = [
-        { id: 10759, name: "💥 Akcja & Przygoda" }, { id: 16, name: "🎨 Animacja" },
-        { id: 35, name: "😂 Komedia" }, { id: 80, name: "🕵️ Kryminał" },
-        { id: 99, name: "🎞️ Dokument" }, { id: 18, name: "🎭 Dramat" },
-        { id: 10751, name: "👨‍👩‍👧 Familijny" }, { id: 10762, name: "🧸 Dla Dzieci" },
-        { id: 9648, name: "🔍 Tajemnica" }, { id: 10763, name: "📰 Wiadomości" },
-        { id: 10764, name: "🎬 Reality Show" }, { id: 10765, name: "👽 Sci-Fi & Fantasy" },
-        { id: 10766, name: "🧼 Opera Mydlana" }, { id: 10767, name: "🎙️ Talk Show" },
-        { id: 10768, name: "🪖 Wojna & Polityka" }, { id: 37, name: "🤠 Western" }
+        { id: 10759, icon: "💥", name: "Akcja & Przygoda" }, { id: 16, icon: "🎨", name: "Animacja" },
+        { id: 35, icon: "😂", name: "Komedia" }, { id: 80, icon: "🕵️", name: "Kryminał" },
+        { id: 99, icon: "🎞️", name: "Dokument" }, { id: 18, icon: "🎭", name: "Dramat" },
+        { id: 10751, icon: "👨‍👩‍👧", name: "Familijny" }, { id: 10762, icon: "🧸", name: "Dla Dzieci" },
+        { id: 9648, icon: "🔍", name: "Tajemnica" }, { id: 10763, icon: "📰", name: "Wiadomości" },
+        { id: 10764, icon: "🎬", name: "Reality Show" }, { id: 10765, icon: "👽", name: "Sci-Fi & Fantasy" },
+        { id: 10766, icon: "🧼", name: "Opera Mydlana" }, { id: 10767, icon: "🎙️", name: "Talk Show" },
+        { id: 10768, icon: "🪖", name: "Wojna & Polityka" }, { id: 37, icon: "🤠", name: "Western" }
     ];
 
-    const mHTML = movieGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="movie">${g.name}</button>`).join('');
-    const tHTML = tvGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="tv">${g.name}</button>`).join('');
+    const generateGrid = (genres, mediaType) => {
+        return genres.map(g => `
+            <div class="genre-block-card modal-genre-btn" data-genre="${g.id}" data-media-type="${mediaType}">
+                <span class="genre-block-emoji">${g.icon}</span>
+                <span class="genre-block-name">${g.name}</span>
+            </div>
+        `).join('');
+    };
 
-    // WYŚRODKOWANY NAGŁÓWEK BEZ PRZYCISKU ZAMYKANIA
-    c.innerHTML = `<div class="modal-overlay" id="allGenresOverlay"><div class="modern-modal-wrapper" style="max-height: 90vh;"><div class="modal-drag-handle"></div><div style="padding: 20px 24px 10px; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid var(--border-color);"><h3 style="margin: 0; font-size: 1.2rem;">Wybierz gatunek</h3></div><div class="modern-modal-scroll">
-        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">🎬 Filmy</h4>
-        <div class="all-genres-grid" style="padding-top: 8px; padding-bottom: 16px;">${mHTML}</div>
-        <div style="height: 1px; background: var(--border-color); margin: 0 24px;"></div>
-        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">📺 Seriale</h4>
-        <div class="all-genres-grid" style="padding-top: 8px;">${tHTML}</div>
-    </div></div></div>`;
+    c.innerHTML = `
+    <div class="modal-overlay" id="allGenresOverlay">
+        <div class="modern-modal-wrapper" style="max-height: 90vh; background: var(--bg-color);">
+            <div class="modal-drag-handle"></div>
+            
+            <div style="padding: 24px 24px 16px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.4rem; font-weight: 800;">Odkrywaj</h3>
+                <button class="icon-button close-genres-btn" style="background: var(--card-color);">${ICONS.close}</button>
+            </div>
+
+            <!-- Zakładki Filmy / Seriale -->
+            <div class="modal-tabs-wrapper">
+                <div class="segmented-control" style="max-width: 100%;">
+                    <button class="seg-btn active" id="btn-show-movies">🎬 Filmy</button>
+                    <button class="seg-btn" id="btn-show-tv">📺 Seriale</button>
+                </div>
+            </div>
+
+            <div class="modern-modal-scroll" style="padding-top: 0;">
+                <div id="grid-movies-genres" class="genre-block-grid active">
+                    ${generateGrid(movieGenres, 'movie')}
+                </div>
+                <div id="grid-tv-genres" class="genre-block-grid">
+                    ${generateGrid(tvGenres, 'tv')}
+                </div>
+            </div>
+        </div>
+    </div>`;
 
     const overlay = c.querySelector('#allGenresOverlay');
     const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
     
-    // Zamykanie tylko przez kliknięcie w tło lub gest w dół
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    c.querySelector('.close-genres-btn').addEventListener('click', close);
     setupSwipeToClose(overlay, close);
 
+    // --- Logika przełączania zakładek ---
+    const btnMovies = c.querySelector('#btn-show-movies');
+    const btnTv = c.querySelector('#btn-show-tv');
+    const gridMovies = c.querySelector('#grid-movies-genres');
+    const gridTv = c.querySelector('#grid-tv-genres');
+
+    btnMovies.addEventListener('click', () => {
+        triggerHaptic('light');
+        btnTv.classList.remove('active');
+        btnMovies.classList.add('active');
+        gridTv.classList.remove('active');
+        gridMovies.classList.add('active');
+    });
+
+    btnTv.addEventListener('click', () => {
+        triggerHaptic('light');
+        btnMovies.classList.remove('active');
+        btnTv.classList.add('active');
+        gridMovies.classList.remove('active');
+        gridTv.classList.add('active');
+    });
+
+    // --- Logika kliknięcia w kafelek ---
     c.querySelectorAll('.modal-genre-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             triggerHaptic('light');
@@ -3983,9 +4039,10 @@ function openAllGenresModal() {
             
             document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
             
+            // Szukamy, czy ten gatunek jest na głównym pasku podążającym
             const mainBarBtn = document.querySelector(`.discover-categories #discover-genres .discover-pill[data-genre="${genreId}"][data-media-type="${mediaType}"]`);
             if (mainBarBtn) mainBarBtn.classList.add('active'); 
-            else document.getElementById('btn-more-genres').classList.add('active');
+            else document.getElementById('btn-more-genres').classList.add('active'); // Zaznacz "Więcej"
 
             const yearContainer = document.getElementById('discover-year-container');
             if (yearContainer) {
@@ -3996,53 +4053,83 @@ function openAllGenresModal() {
             }
 
             loadDiscoverTab(genreId, true, 1, mediaType);
-            close(); // Modal sam się zamyka po wybraniu gatunku
+            close();
         });
     });
 }
 // ==========================================
 // SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (Z PODZIAŁEM)
 // ==========================================
+// ==========================================
+// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (KAFELKI SPOTIFY)
+// ==========================================
 function openAllGenresModal() {
     toggleAppDepthEffect(true);
     const c = document.getElementById('detailsModalContainer'); 
     
-    // GATUNKI FILMOWE
+    // GATUNKI FILMOWE (Rozbite na ikonę i tekst)
     const movieGenres = [
-        { id: 28, name: "💥 Akcja" }, { id: 12, name: "🗺️ Przygodowy" },
-        { id: 16, name: "🎨 Animacja" }, { id: 35, name: "😂 Komedia" },
-        { id: 80, name: "🕵️ Kryminał" }, { id: 99, name: "🎞️ Dokument" },
-        { id: 18, name: "🎭 Dramat" }, { id: 10751, name: "👨‍👩‍👧 Familijny" },
-        { id: 14, name: "🧙 Fantasy" }, { id: 36, name: "🏛️ Historyczny" },
-        { id: 27, name: "👻 Horror" }, { id: 10402, name: "🎵 Muzyczny" },
-        { id: 9648, name: "🔍 Tajemnica" }, { id: 10749, name: "❤️ Romans" },
-        { id: 878, name: "👽 Sci-Fi" }, { id: 10770, name: "📺 Film TV" },
-        { id: 53, name: "🔪 Thriller" }, { id: 10752, name: "🪖 Wojenny" },
-        { id: 37, name: "🤠 Western" }
+        { id: 28, icon: "💥", name: "Akcja" }, { id: 12, icon: "🗺️", name: "Przygodowy" },
+        { id: 16, icon: "🎨", name: "Animacja" }, { id: 35, icon: "😂", name: "Komedia" },
+        { id: 80, icon: "🕵️", name: "Kryminał" }, { id: 99, icon: "🎞️", name: "Dokument" },
+        { id: 18, icon: "🎭", name: "Dramat" }, { id: 10751, icon: "👨‍👩‍👧", name: "Familijny" },
+        { id: 14, icon: "🧙", name: "Fantasy" }, { id: 36, icon: "🏛️", name: "Historyczny" },
+        { id: 27, icon: "👻", name: "Horror" }, { id: 10402, icon: "🎵", name: "Muzyczny" },
+        { id: 9648, icon: "🔍", name: "Tajemnica" }, { id: 10749, icon: "❤️", name: "Romans" },
+        { id: 878, icon: "👽", name: "Sci-Fi" }, { id: 10770, icon: "📺", name: "Film TV" },
+        { id: 53, icon: "🔪", name: "Thriller" }, { id: 10752, icon: "🪖", name: "Wojenny" },
+        { id: 37, icon: "🤠", name: "Western" }
     ];
 
     // GATUNKI SERIALOWE
     const tvGenres = [
-        { id: 10759, name: "💥 Akcja & Przygoda" }, { id: 16, name: "🎨 Animacja" },
-        { id: 35, name: "😂 Komedia" }, { id: 80, name: "🕵️ Kryminał" },
-        { id: 99, name: "🎞️ Dokument" }, { id: 18, name: "🎭 Dramat" },
-        { id: 10751, name: "👨‍👩‍👧 Familijny" }, { id: 10762, name: "🧸 Dla Dzieci" },
-        { id: 9648, name: "🔍 Tajemnica" }, { id: 10763, name: "📰 Wiadomości" },
-        { id: 10764, name: "🎬 Reality Show" }, { id: 10765, name: "👽 Sci-Fi & Fantasy" },
-        { id: 10766, name: "🧼 Opera Mydlana" }, { id: 10767, name: "🎙️ Talk Show" },
-        { id: 10768, name: "🪖 Wojna & Polityka" }, { id: 37, name: "🤠 Western" }
+        { id: 10759, icon: "💥", name: "Akcja & Przygoda" }, { id: 16, icon: "🎨", name: "Animacja" },
+        { id: 35, icon: "😂", name: "Komedia" }, { id: 80, icon: "🕵️", name: "Kryminał" },
+        { id: 99, icon: "🎞️", name: "Dokument" }, { id: 18, icon: "🎭", name: "Dramat" },
+        { id: 10751, icon: "👨‍👩‍👧", name: "Familijny" }, { id: 10762, icon: "🧸", name: "Dla Dzieci" },
+        { id: 9648, icon: "🔍", name: "Tajemnica" }, { id: 10763, icon: "📰", name: "Wiadomości" },
+        { id: 10764, icon: "🎬", name: "Reality Show" }, { id: 10765, icon: "👽", name: "Sci-Fi & Fantasy" },
+        { id: 10766, icon: "🧼", name: "Opera Mydlana" }, { id: 10767, icon: "🎙️", name: "Talk Show" },
+        { id: 10768, icon: "🪖", name: "Wojna & Polityka" }, { id: 37, icon: "🤠", name: "Western" }
     ];
 
-    const mHTML = movieGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="movie">${g.name}</button>`).join('');
-    const tHTML = tvGenres.map(g => `<button class="discover-pill genre-pill modal-genre-btn" data-genre="${g.id}" data-media-type="tv">${g.name}</button>`).join('');
+    const generateGrid = (genres, mediaType) => {
+        return genres.map(g => `
+            <div class="genre-block-card modal-genre-btn" data-genre="${g.id}" data-media-type="${mediaType}">
+                <span class="genre-block-emoji">${g.icon}</span>
+                <span class="genre-block-name">${g.name}</span>
+            </div>
+        `).join('');
+    };
 
-    c.innerHTML = `<div class="modal-overlay" id="allGenresOverlay"><div class="modern-modal-wrapper" style="max-height: 90vh;"><div class="modal-drag-handle"></div><div style="padding: 20px 24px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);"><h3 style="margin: 0; font-size: 1.2rem;">Wybierz gatunek</h3><button class="icon-button close-genres-btn" style="background: var(--card-color);">${ICONS.close}</button></div><div class="modern-modal-scroll">
-        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">🎬 Filmy</h4>
-        <div class="all-genres-grid" style="padding-top: 8px; padding-bottom: 16px;">${mHTML}</div>
-        <div style="height: 1px; background: var(--border-color); margin: 0 24px;"></div>
-        <h4 style="margin: 20px 24px 8px; color: var(--text-color); font-size: 1rem;">📺 Seriale</h4>
-        <div class="all-genres-grid" style="padding-top: 8px;">${tHTML}</div>
-    </div></div></div>`;
+    c.innerHTML = `
+    <div class="modal-overlay" id="allGenresOverlay">
+        <div class="modern-modal-wrapper" style="max-height: 90vh; background: var(--bg-color);">
+            <div class="modal-drag-handle"></div>
+            
+            <div style="padding: 24px 24px 16px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.4rem; font-weight: 800;">Odkrywaj</h3>
+                <button class="icon-button close-genres-btn" style="background: var(--card-color);">${ICONS.close}</button>
+            </div>
+
+            <!-- Zakładki Filmy / Seriale -->
+            <div class="modal-tabs-wrapper">
+                <div class="segmented-control" style="max-width: 100%;">
+                    <button class="seg-btn active" id="btn-show-movies">🎬 Filmy</button>
+                    <button class="seg-btn" id="btn-show-tv">📺 Seriale</button>
+                </div>
+            </div>
+
+            <div class="modern-modal-scroll" style="padding-top: 0;">
+                <div id="grid-movies-genres" class="genre-block-grid active">
+                    ${generateGrid(movieGenres, 'movie')}
+                </div>
+                <div id="grid-tv-genres" class="genre-block-grid">
+                    ${generateGrid(tvGenres, 'tv')}
+                </div>
+            </div>
+        </div>
+    </div>`;
 
     const overlay = c.querySelector('#allGenresOverlay');
     const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
@@ -4051,6 +4138,29 @@ function openAllGenresModal() {
     c.querySelector('.close-genres-btn').addEventListener('click', close);
     setupSwipeToClose(overlay, close);
 
+    // --- Logika przełączania zakładek ---
+    const btnMovies = c.querySelector('#btn-show-movies');
+    const btnTv = c.querySelector('#btn-show-tv');
+    const gridMovies = c.querySelector('#grid-movies-genres');
+    const gridTv = c.querySelector('#grid-tv-genres');
+
+    btnMovies.addEventListener('click', () => {
+        triggerHaptic('light');
+        btnTv.classList.remove('active');
+        btnMovies.classList.add('active');
+        gridTv.classList.remove('active');
+        gridMovies.classList.add('active');
+    });
+
+    btnTv.addEventListener('click', () => {
+        triggerHaptic('light');
+        btnMovies.classList.remove('active');
+        btnTv.classList.add('active');
+        gridMovies.classList.remove('active');
+        gridTv.classList.add('active');
+    });
+
+    // --- Logika kliknięcia w kafelek ---
     c.querySelectorAll('.modal-genre-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             triggerHaptic('light');
@@ -4059,10 +4169,10 @@ function openAllGenresModal() {
             
             document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
             
-            // Szukamy, czy ten gatunek jest na głównym pasku
+            // Szukamy, czy ten gatunek jest na głównym pasku podążającym
             const mainBarBtn = document.querySelector(`.discover-categories #discover-genres .discover-pill[data-genre="${genreId}"][data-media-type="${mediaType}"]`);
             if (mainBarBtn) mainBarBtn.classList.add('active'); 
-            else document.getElementById('btn-more-genres').classList.add('active');
+            else document.getElementById('btn-more-genres').classList.add('active'); // Zaznacz "Więcej"
 
             const yearContainer = document.getElementById('discover-year-container');
             if (yearContainer) {
