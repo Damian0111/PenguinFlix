@@ -181,6 +181,8 @@ async function init() {
 
         refreshStaleSeries(); // Odświeża daty seriali
         checkSmartBackup();
+        // --- NOWOŚĆ: Prośba o trwałą pamięć ---
+        requestPersistentStorage();
 
 
 
@@ -1379,78 +1381,101 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
         discoverObserver.observe(sentinel);
     }
 }
+// ==========================================
+// ZOPTYMALIZOWANE STATYSTYKI GŁÓWNEGO PROFILU
+// ==========================================
 function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
-    let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
-    let runtime = 0; let gCounts = {}; let sumRat = 0; let ratCount = 0;
-    let dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }; let decades = {};
-    let tCol = data.moviesToWatch.length + tMovies + data.seriesToWatch.length + tSeries; let tComp = tMovies + tSeries;
-
-    data.moviesWatched.forEach(m => {
-        if (m.runtime) runtime += m.runtime;
-        if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if(b>0 && b<=5) dist[b]++; }
-        if (m.year) { let d = Math.floor(parseInt(m.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
-        if (m.genres) m.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; });
-    });
-
-    [...data.seriesWatched, ...data.seriesToWatch].forEach(s => {
-        if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if(b>0 && b<=5) dist[b]++; }
-        if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
-    });
-    data.seriesWatched.forEach(s => { if(s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
-
-    let timeStr = '0h';
-    if (runtime > 0) { const hrs = Math.floor(runtime / 60); const days = Math.floor(hrs / 24); if (days > 0) timeStr = `<span class="highlight">${days}d</span> ${hrs % 24}h`; else timeStr = `<span class="highlight">${hrs}h</span>`; }
-
-    let topDec = "Brak"; let maxDec = 0;
-    for (const [dec, count] of Object.entries(decades)) { if(count > maxDec) { maxDec = count; topDec = dec + "s"; } }
-
-    let compRate = tCol > 0 ? Math.round((tComp / tCol) * 100) : 0;
-    const avgRat = ratCount > 0 ? (sumRat / ratCount).toFixed(1) : '-';
-    const topG = Object.entries(gCounts).sort((a,b) => b[1] - a[1]).slice(0, 3);
-    const topGHTML = topG.length > 0 ? `<div class="top-genres-list">${topG.map(g => `<span class="profile-genre-tag"><strong style="color: var(--primary-color);">${g[1]}</strong> ${escapeHTML(g[0])}</span>`).join('')}</div>` : '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">Brak danych</div>';
-
-    let maxRat = Math.max(...Object.values(dist)); if(maxRat === 0) maxRat = 1;
-    let chart = `<div class="rating-bars">`;
-    for(let i=1; i<=5; i++) { let hPct = (dist[i] / maxRat) * 100; chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="height: ${hPct}%;"></div></div>`; }
-    chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
-
-    // --- CZYSTY PROFIL + NOWY POTĘŻNY GUZIK ---
+    
+    // 1. NATYCHMIASTOWY RENDER SZKIELETU (Szkielet nie blokuje wątku)
     c.innerHTML = `
         <div style="grid-column: 1/-1; margin-bottom: 8px;">
-            <button id="btn-open-advanced-stats" style="width: 100%; background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); color: var(--text-color); border-radius: var(--radius-lg); padding: 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-                <div style="display:flex; align-items:center; gap:16px;">
-                    <div style="width:48px; height:48px; border-radius:50%; background:color-mix(in srgb, var(--primary-color) 15%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2;"><path d="M18 20V10M12 20V4M6 20v-6"></path></svg>
-                    </div>
-                    <div style="text-align:left;">
-                        <div style="font-size:1.1rem; font-weight:800; margin-bottom:4px;">Centrum Statystyk</div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">Miesięczne raporty, dni tygodnia i więcej</div>
-                    </div>
-                </div>
-                <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
+            <div class="skeleton-box" style="height: 88px; width: 100%; border-radius: var(--radius-lg);"></div>
         </div>
-        
-        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div>
-        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div>
-        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div>
-        <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><div class="label">Śr. Ocen</div><div class="value">${avgRat}</div></div>
-        <div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div>
-        <div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div>
-        <div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div>
-        <div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>
+        <div class="stat-card skeleton-box" style="height: 80px;"></div>
+        <div class="stat-card skeleton-box" style="height: 80px;"></div>
+        <div class="stat-card skeleton-box" style="height: 80px;"></div>
+        <div class="stat-card skeleton-box" style="height: 80px;"></div>
+        <div style="grid-column: 1/-1; text-align:center; padding: 20px; color: var(--text-secondary); font-size: 0.85rem;">
+            Analizowanie biblioteki...
+        </div>
     `;
 
-    // Aktywacja nowego guzika
-    const advBtn = document.getElementById('btn-open-advanced-stats');
-    if (advBtn) {
-        advBtn.addEventListener('click', () => {
-            triggerHaptic('medium');
-            advBtn.style.transform = 'scale(0.96)';
-            setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150);
+    // 2. OPÓŹNIENIE OBLICZEŃ (Czekamy, aż animacja przełączania zakładki się skończy)
+    setTimeout(() => {
+        let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
+        let runtime = 0; let gCounts = {}; let sumRat = 0; let ratCount = 0;
+        let dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }; let decades = {};
+        let tCol = data.moviesToWatch.length + tMovies + data.seriesToWatch.length + tSeries; let tComp = tMovies + tSeries;
+
+        data.moviesWatched.forEach(m => {
+            if (m.runtime) runtime += m.runtime;
+            if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if(b>0 && b<=5) dist[b]++; }
+            if (m.year) { let d = Math.floor(parseInt(m.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
+            if (m.genres) m.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; });
         });
-    }
+
+        [...data.seriesWatched, ...data.seriesToWatch].forEach(s => {
+            if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if(b>0 && b<=5) dist[b]++; }
+            if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
+        });
+        data.seriesWatched.forEach(s => { if(s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
+
+        let timeStr = '0h';
+        if (runtime > 0) { const hrs = Math.floor(runtime / 60); const days = Math.floor(hrs / 24); if (days > 0) timeStr = `<span class="highlight">${days}d</span> ${hrs % 24}h`; else timeStr = `<span class="highlight">${hrs}h</span>`; }
+
+        let topDec = "Brak"; let maxDec = 0;
+        for (const [dec, count] of Object.entries(decades)) { if(count > maxDec) { maxDec = count; topDec = dec + "s"; } }
+
+        let compRate = tCol > 0 ? Math.round((tComp / tCol) * 100) : 0;
+        const avgRat = ratCount > 0 ? (sumRat / ratCount).toFixed(1) : '-';
+        const topG = Object.entries(gCounts).sort((a,b) => b[1] - a[1]).slice(0, 3);
+        const topGHTML = topG.length > 0 ? `<div class="top-genres-list">${topG.map(g => `<span class="profile-genre-tag"><strong style="color: var(--primary-color);">${g[1]}</strong> ${escapeHTML(g[0])}</span>`).join('')}</div>` : '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px;">Brak danych</div>';
+
+        let maxRat = Math.max(...Object.values(dist)); if(maxRat === 0) maxRat = 1;
+        let chart = `<div class="rating-bars">`;
+        for(let i=1; i<=5; i++) { 
+            let scalePct = dist[i] / maxRat; // Zmiana z procentów na skalę od 0 do 1
+            // Zmiana style="height:..." na style="transform: scaleY(...)"
+            chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i]} ocen</div><div class="chart-bar" style="transform: scaleY(${scalePct});"></div></div>`; 
+        }
+        chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
+
+        c.innerHTML = `
+            <div style="grid-column: 1/-1; margin-bottom: 8px;">
+                <button id="btn-open-advanced-stats" style="width: 100%; background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); color: var(--text-color); border-radius: var(--radius-lg); padding: 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div style="width:48px; height:48px; border-radius:50%; background:color-mix(in srgb, var(--primary-color) 15%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2;"><path d="M18 20V10M12 20V4M6 20v-6"></path></svg>
+                        </div>
+                        <div style="text-align:left;">
+                            <div style="font-size:1.1rem; font-weight:800; margin-bottom:4px;">Centrum Statystyk</div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Miesięczne raporty, dni tygodnia i więcej</div>
+                        </div>
+                    </div>
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+            
+            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${tMovies}</div></div>
+            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div>
+            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${tSeries}</div></div>
+            <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><div class="label">Śr. Ocen</div><div class="value">${avgRat}</div></div>
+            <div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div>
+            <div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div>
+            <div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div>
+            <div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>
+        `;
+
+        const advBtn = document.getElementById('btn-open-advanced-stats');
+        if (advBtn) {
+            advBtn.addEventListener('click', () => {
+                triggerHaptic('medium');
+                advBtn.style.transform = 'scale(0.96)';
+                setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150);
+            });
+        }
+    }, 250); // Czas opóźnienia
 }
 // ==========================================
 // 9. LOGIKA POBIERANIA SZCZEGÓŁÓW API
@@ -2001,7 +2026,7 @@ function showInfoModal() {
     toggleAppDepthEffect(true);
     const checkIcon = `<svg class="info-feature-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
     const strengthsHTML = `<h3 style="text-align: left; margin-top: 24px; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Mocne strony aplikacji</h3><div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;"><div style="background: color-mix(in srgb, var(--success-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--success-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;"><svg style="width:24px; height:24px; fill:none; stroke:var(--success-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><div><strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">100% Prywatności</strong><span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Brak kont, logowania i śledzenia. Twoje dane są przypisane tylko do Twojego urządzenia.</span></div></div><div style="background: color-mix(in srgb, var(--info-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;"><svg style="width:24px; height:24px; fill:none; stroke:var(--info-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg><div><strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Szybkość i niezależność</strong><span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Działa jako PWA. Ładuje się błyskawicznie i nie zużywa niepotrzebnie baterii w tle.</span></div></div><div style="background: color-mix(in srgb, var(--primary-color) 10%, transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; gap: 12px; align-items: flex-start;"><svg style="width:24px; height:24px; fill:none; stroke:var(--primary-color); stroke-width:2; flex-shrink:0;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg><div><strong style="display:block; color:var(--text-color); font-size:0.95rem; margin-bottom:4px;">Czysty interfejs</strong><span style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">Bez reklam, bez abonamentu. Stworzone z myślą o prostocie.</span></div></div></div>`;
-    const infoHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 32px 24px;"><h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;"><svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg><span>PenguinFlix</span></h2><p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik filmów i seriali.</p><h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3><ul class="info-feature-list"><li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie tagów i ręcznych wpisów.</span></li><li class="info-feature-item">${checkIcon} <span>Śledzenie odcinków (z kalendarzem premier).</span></li><li class="info-feature-item">${checkIcon} <span>Panel powiadomień.</span></li><li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li><li class="info-feature-item">${checkIcon} <span>Zaawansowane filtry VOD (Netflix, HBO itp.).</span></li></ul>${strengthsHTML}<div class="important-note"><strong>Ważne:</strong> Z racji pełnej prywatności i braku chmury, aby uniknąć utraty danych, <strong>regularnie twórz kopię zapasową</strong> w zakładce Profil!</div><p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z API The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p></div></div></div>`;
+    const infoHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 32px 24px;"><h2 style="margin: 0 0 8px; display: flex; align-items: center; gap: 12px; font-size: 1.6rem;"><svg class="app-logo-icon" style="width:36px; height:36px;" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M401.7,144.2C382.4,106.6,343.3,80,299.7,80c-48.5,0-88.7,35.5-96.8,81.4c-42.5,0-76.8,34.4-76.8,76.8 c0,35.1,22.4,64.8,53.2,73.8c-7.3,4.4-15.6,6.9-24.4,6.9c-32.1,0-58.1,26-58.1,58.1h29.1c0-16,13-29.1,29.1-29.1 s29.1,13,29.1,29.1h29.1h29.1h29.1c0-16,13-29.1,29.1-29.1s29.1,13,29.1,29.1h29.1c0-32.1-26-58.1-58.1-58.1 c-8.8,0-17.1,2.5-24.4-6.9c30.8-9,53.2-38.7,53.2-73.8C478.5,178.6,444.2,144.2,401.7,144.2z M241.6,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S253.6,220.3,241.6,220.3z M358.4,220.3 c-12,0-21.8-9.8-21.8-21.8s9.8-21.8,21.8-21.8s21.8,9.8,21.8,21.8S370.4,220.3,358.4,220.3z"/></svg><span>PenguinFlix</span></h2><p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1.05rem;">Twój osobisty dziennik filmów i seriali.</p><h3 style="text-align: left; margin-bottom: 16px; font-size: 1.1rem; color: var(--text-color);">Kluczowe Funkcje</h3><ul class="info-feature-list"><li class="info-feature-item">${checkIcon} <span>Oceny, recenzje, dodawanie tagów i ręcznych wpisów.</span></li><li class="info-feature-item">${checkIcon} <span>Śledzenie odcinków (z kalendarzem premier).</span></li><li class="info-feature-item">${checkIcon} <span>Panel powiadomień.</span></li><li class="info-feature-item">${checkIcon} <span>Centrum statystyk.</span></li><li class="info-feature-item">${checkIcon} <span>Odkrywanie trendów, trailerów i pełnej obsady.</span></li><li class="info-feature-item">${checkIcon} <span>Zaawansowane filtry VOD (Netflix, HBO itp.).</span></li></ul>${strengthsHTML}<div class="important-note"><strong>Ważne:</strong> Z racji pełnej prywatności i braku chmury, aby uniknąć utraty danych, <strong>regularnie twórz kopię zapasową</strong> w zakładce Profil!</div><p style="font-size: 0.8rem; color: var(--text-secondary);">Ta aplikacja korzysta z API The Movie Database (TMDb).<br><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDb Logo" class="tmdb-logo"></p></div></div></div>`;
     const c = document.getElementById('customAlertContainer'); c.innerHTML = infoHTML;
     const modal = c.querySelector('.modal-overlay'); const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
     modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
@@ -3537,254 +3562,252 @@ function openFullStatsPage() {
     
     const firstBtn = page.querySelector('.seg-btn[data-fptab="months"]');
     if (firstBtn) firstBtn.classList.add('active');
-    const firstTab = document.getElementById('fp-tab-months');
-    if (firstTab) firstTab.classList.add('active');
-
-    // 1. ZBIERANIE DANYCH (Rozbudowane o plakaty i dni)
-    const daysOfWeek = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 }; 
-    const monthlyData = {}; const yearlyData = {}; 
-
-    const processItemDate = (dateTs, item) => {
-        const d = new Date(dateTs);
-        daysOfWeek[d.getDay()]++;
-        const year = d.getFullYear(); 
-        const mKey = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const dayStr = d.toISOString().split('T')[0]; // Format np. 2023-11-14
-        
-        // Inicjalizacja struktury
-        if (!monthlyData[mKey]) monthlyData[mKey] = { mCount: 0, sCount: 0, runtime: 0, highestRated: null, longestMovie: null, genres: {}, sumRat: 0, ratCount: 0, daysMap: {}, posters: [] };
-        if (!yearlyData[year]) yearlyData[year] = { mCount: 0, sCount: 0, runtime: 0, highestRated: null, longestMovie: null, genres: {}, sumRat: 0, ratCount: 0, daysMap: {}, posters: [] };
-        
-        const processData = (target) => {
-            // Statystyki dzienne (do wyliczania Binge-Day)
-            target.daysMap[dayStr] = (target.daysMap[dayStr] || 0) + 1;
-            
-            // Zbieranie plakatów (max 20 do wyświetlenia, żeby nie zamulać)
-            if (item.poster && target.posters.length < 20 && !target.posters.some(p => p.id === item.id)) {
-                target.posters.push({ id: item.id, type: item.type, url: item.poster.replace('w500', 'w154'), title: item.title });
-            }
-
-            if (item.type === 'movie') {
-                target.mCount++;
-                if (item.runtime) { target.runtime += item.runtime; if (!target.longestMovie || item.runtime > target.longestMovie.runtime) target.longestMovie = item; }
-            } else target.sCount++; 
-            
-            if (item.genres) item.genres.forEach(g => { target.genres[g] = (target.genres[g] || 0) + 1; });
-            if (item.rating > 0) { target.sumRat += item.rating; target.ratCount++; if (!target.highestRated || item.rating > target.highestRated.rating) target.highestRated = item; }
-        };
-
-        processData(monthlyData[mKey]); processData(yearlyData[year]);
-    };
-
-    data.moviesWatched.forEach(m => { if (m.watchDates) m.watchDates.forEach(ts => processItemDate(ts, m)); });
-    data.seriesWatched.forEach(s => { if (s.dateAdded) processItemDate(s.dateAdded, s); });
-
-    // 2. FUNKCJA BUDUJĄCA KARTĘ MIESIĄCA/ROKU (Teraz przyjmuje też prevData do trendów!)
-    const buildReportCard = (title, rData, isYearly = false, prevData = null) => {
-        const hrs = Math.floor(rData.runtime / 60); const mins = rData.runtime % 60;
-        const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-        const avgR = rData.ratCount > 0 ? (rData.sumRat / rData.ratCount).toFixed(1) : '-';
-        const sortedGenres = Object.entries(rData.genres).sort((a,b) => b[1] - a[1]);
-        const topGenre = sortedGenres.length > 0 ? sortedGenres[0] : null;
-
-        // --- IDEAS 2: STRZAŁKI TRENDÓW ---
-        const getTrendHTML = (curr, prev) => {
-            if (!prev) return '';
-            const diff = curr - prev;
-            if (diff > 0) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${diff}</span>`;
-            if (diff < 0) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.abs(diff)}</span>`;
-            return '';
-        };
-        const getTrendTimeHTML = (curr, prev) => {
-            if (!prev) return '';
-            const diff = curr - prev;
-            if (diff > 60) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${Math.floor(diff/60)}h</span>`;
-            if (diff < -60) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.floor(Math.abs(diff)/60)}h</span>`;
-            return '';
-        };
-
-        const mTrend = prevData ? getTrendHTML(rData.mCount, prevData.mCount) : '';
-        const sTrend = prevData ? getTrendHTML(rData.sCount, prevData.sCount) : '';
-        const tTrend = prevData ? getTrendTimeHTML(rData.runtime, prevData.runtime) : '';
-
-        // --- IDEAS 3: DZIEŃ MARATONU (Binge-Day) ---
-        let bingeHTML = '';
-        if (Object.keys(rData.daysMap).length > 0) {
-            const topDay = Object.entries(rData.daysMap).sort((a,b) => b[1] - a[1])[0];
-            if (topDay && topDay[1] > 1) { // Pokazujemy tylko jeśli w dany dzień obejrzano > 1 tytuł
-                const dateObj = new Date(topDay[0]);
-                const niceDate = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
-                bingeHTML = `<div class="binge-day-badge">
-                    <span style="font-size:0.8rem; color:var(--text-secondary);">🔥 Szczytowy dzień (${niceDate})</span>
-                    <strong style="color:#ff4b2b; font-size:0.9rem;">${topDay[1]} tytuły</strong>
-                </div>`;
-            }
-        }
-
-        // --- IDEAS 1: ŚCIANA PLAKATÓW ---
-        let postersHTML = '';
-        if (rData.posters && rData.posters.length > 0) {
-            postersHTML = `<div class="stats-poster-wall">` + 
-                rData.posters.map(p => `<img src="${p.url}" data-id="${p.id}" data-type="${p.type}" title="${escapeHTML(p.title)}" onerror="this.style.display='none'">`).join('') + 
-            `</div>`;
-        }
-
-        let extendedInfoHTML = '';
-        if (rData.highestRated) extendedInfoHTML += `<div style="margin-top:16px; padding-top:16px; border-top:1px dashed color-mix(in srgb, var(--border-color) 50%, transparent); display:flex; align-items:center; gap:12px;"><img src="${rData.highestRated.poster || POSTER_PLACEHOLDER}" style="width:40px; height:60px; object-fit:cover; border-radius:4px; flex-shrink:0;"><div style="min-width: 0; flex-grow: 1;"><div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">Tytuł ${isYearly ? 'Roku' : 'Miesiąca'}</div><div class="month-movie-title" style="font-size:0.95rem; font-weight:800; color:var(--text-color); margin-bottom:4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block;">${escapeHTML(rData.highestRated.title)}</div><span style="font-size:0.75rem; font-weight:800; color:#000; background:var(--warning-color); padding:2px 6px; border-radius:4px;">⭐ ${rData.highestRated.rating}</span></div></div>`;
-        if (rData.longestMovie) extendedInfoHTML += `<div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px; border-radius: var(--radius-sm);"><span style="font-size:0.8rem; color:var(--text-secondary);">Najdłuższy seans:</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-color); max-width:60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHTML(rData.longestMovie.title)} (${rData.longestMovie.runtime}m)</span></div>`;
-        if (topGenre) extendedInfoHTML += `<div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px; border-radius: var(--radius-sm);"><span style="font-size:0.8rem; color:var(--text-secondary);">Ulubiony gatunek:</span><span style="font-size:0.85rem; font-weight:800; color:var(--primary-color);">${escapeHTML(topGenre[0])}</span></div>`;
-
-        const cardStyle = isYearly ? `background: linear-gradient(135deg, color-mix(in srgb, var(--warning-color) 8%, var(--card-color)), var(--card-color)); border:1px solid color-mix(in srgb, var(--warning-color) 25%, transparent);` : `background:var(--card-color); border:1px solid var(--border-color);`;
-        const headerStyle = isYearly ? `background: transparent;` : `background:color-mix(in srgb, var(--bg-color) 50%, transparent);`;
-
-        return `<div class="month-card" style="${cardStyle} border-radius:var(--radius-md); margin-bottom:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);"><div class="month-header" style="padding:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; ${headerStyle} flex-wrap: wrap; gap: 8px;"><div style="font-size:1.1rem; font-weight:800; color:var(--text-color); text-transform:capitalize; display:flex; align-items:center; gap:8px;">${isYearly ? '🏆' : '📅'} ${title}</div><div style="display:flex; gap:8px; align-items:center;"><span style="background:color-mix(in srgb, ${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'} 15%, transparent); color:${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'}; font-size:0.8rem; font-weight:700; padding:4px 8px; border-radius:20px;">${rData.mCount + rData.sCount} Tytułów</span><svg class="month-chevron" viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5; transition:transform 0.3s;"><polyline points="6 9 12 15 18 9"></polyline></svg></div></div><div class="month-content" style="display:none; padding:0 16px 16px 16px; animation:fadeIn 0.3s;"><div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-top:16px;"><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Filmy</div><div style="font-size:1.1rem; font-weight:800;">${rData.mCount}${mTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Seriale</div><div style="font-size:1.1rem; font-weight:800;">${rData.sCount}${sTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Czas (F)</div><div style="font-size:1.1rem; font-weight:800; color:var(--primary-color);">${timeStr}${tTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Średnia</div><div style="font-size:1.1rem; font-weight:800; color:var(--warning-color);">${avgR}</div></div></div>${bingeHTML}${extendedInfoHTML}${postersHTML}</div></div>`;
-    };
-
-    // Wypełnianie Miesięcy (Z TRENDAMI)
-    const sortedMonths = Object.keys(monthlyData).sort().reverse();
-    document.getElementById('fp-tab-months').innerHTML = sortedMonths.length === 0 ? `<div style="text-align:center; padding:40px;">Brak danych.</div>` : sortedMonths.map((mKey, index) => { 
-        const [y, m] = mKey.split('-'); 
-        const prevKey = sortedMonths[index + 1]; // Bierzemy dane z poprzedniego chronologicznie miesiąca
-        return buildReportCard(new Date(y, m - 1).toLocaleString('pl-PL', { month: 'long', year: 'numeric' }), monthlyData[mKey], false, prevKey ? monthlyData[prevKey] : null); 
-    }).join('');
     
-    // Wypełnianie Lat (Z TRENDAMI)
-    const sortedYears = Object.keys(yearlyData).sort().reverse();
-    document.getElementById('fp-tab-years').innerHTML = sortedYears.length === 0 ? `<div style="text-align:center; padding:40px;">Brak danych.</div>` : sortedYears.map((year, index) => {
-        const prevYear = sortedYears[index + 1];
-        return buildReportCard(`Podsumowanie Roku ${year}`, yearlyData[year], true, prevYear ? yearlyData[prevYear] : null);
-    }).join('');
-
-    // Dni tygodnia
-    const dayNames = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
-    const maxDayVal = Math.max(...Object.values(daysOfWeek), 1); 
-    const sortedDays = [1, 2, 3, 4, 5, 6, 0].map(dIdx => ({ index: dIdx, name: dayNames[dIdx], count: daysOfWeek[dIdx] })).sort((a, b) => b.count - a.count);
-    let daysChartHTML = `<div style="display:flex; flex-direction:column; gap:14px; margin-top: 8px;">`;
-    sortedDays.forEach((day, i) => {
-        if (day.count === 0 && i > 3) return; 
-        const hPct = (day.count / maxDayVal) * 100; const isMax = day.count === maxDayVal && day.count > 0;
-        daysChartHTML += `<div style="display:flex; align-items:center; gap:12px;"><div style="width: 95px; font-size: 0.85rem; font-weight: ${isMax ? '800' : '600'}; color: ${isMax ? 'var(--primary-color)' : 'var(--text-secondary)'}; text-align:right; flex-shrink: 0;">${day.name}</div><div style="flex-grow: 1; height: 12px; background: color-mix(in srgb, var(--border-color) 40%, transparent); border-radius: 6px; overflow: hidden; display: flex; align-items:center;"><div style="height: 100%; width: ${hPct}%; background: ${isMax ? 'linear-gradient(90deg, var(--primary-color) 0%, #ff4b2b 100%)' : 'var(--text-secondary)'}; border-radius: 6px; transition: width 0.5s ease-out;"></div></div><div style="width: 35px; font-size: 0.95rem; font-weight: 800; color: var(--text-color); flex-shrink: 0;">${day.count}</div></div>`;
-    });
-    daysChartHTML += `</div>`;
-    document.getElementById('fp-tab-rhythm').innerHTML = `<div class="analysis-card"><h4 class="analysis-title">Kiedy najczęściej oglądasz?</h4><p style="font-size:0.85rem; color:var(--text-secondary); margin:0 0 24px; line-height:1.4;">Zestawienie dni, w które odhaczasz najwięcej tytułów.</p>${daysChartHTML}</div>`;
-
-
-    // ==========================================
-    // 3. ZAKŁADKA: ANALIZA
-    // ==========================================
-    let analysisHTML = '';
-    const allWatched = [...data.moviesWatched, ...data.seriesWatched];
-
-    // --- 1. PROFIL KRYTYKA ---
-    let diffSum = 0, diffCount = 0;
-    let gpItem = null, maxGpDiff = -99; 
-    let uoItem = null, maxUoDiff = -99; 
-
-    allWatched.forEach(item => {
-        if (item.rating > 0 && item.tmdbRating > 0 && !String(item.id).startsWith('custom_')) {
-            const tmdbConv = item.tmdbRating / 2; 
-            const diff = item.rating - tmdbConv;
-            diffSum += diff; diffCount++;
-            if (diff > maxGpDiff) { maxGpDiff = diff; gpItem = item; }
-            if (-diff > maxUoDiff) { maxUoDiff = -diff; uoItem = item; }
-        }
-    });
-
-    if (diffCount > 0) {
-        const avgDiff = diffSum / diffCount;
-        let criticTitle = "Obiektywny Widz"; let criticColor = "var(--info-color)"; let criticDesc = "Twoje oceny pokrywają się z resztą świata niemal idealnie!";
-        if (avgDiff <= -0.5) { criticTitle = "Surowy Krytyk"; criticColor = "var(--primary-color)"; criticDesc = "Oceniasz filmy znacznie surowiej niż ogół widowni."; }
-        else if (avgDiff >= 0.5) { criticTitle = "Entuzjasta Kina"; criticColor = "var(--success-color)"; criticDesc = "Jesteś bardziej łaskawy dla twórców niż reszta świata!"; }
-
-        analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Twój Profil Krytyka</h4><div style="background: color-mix(in srgb, ${criticColor} 15%, transparent); border: 1px solid color-mix(in srgb, ${criticColor} 30%, transparent); padding: 16px; border-radius: var(--radius-md); text-align:center;"><div style="font-size: 1.2rem; font-weight: 900; color: ${criticColor};">${criticTitle}</div><div style="font-size: 0.85rem; color: var(--text-color); margin-top: 4px;">${criticDesc}</div><div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">Średnia różnica: ${avgDiff > 0 ? '+' : ''}${avgDiff.toFixed(2)} gwiazdki w stosunku do ocen TMDb.</div></div>`;
-        if (gpItem && maxGpDiff > 0.5) analysisHTML += `<div style="margin-top: 20px; font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Twoje "Guilty Pleasure"</div><div class="movie-versus-card"><img src="${gpItem.poster || POSTER_PLACEHOLDER}"><div class="movie-versus-info"><div class="movie-versus-title">${escapeHTML(gpItem.title)}</div><div class="movie-versus-ratings"><span class="rat-user">Ty: ⭐ ${gpItem.rating}</span><span class="rat-tmdb">Świat: ⭐ ${(gpItem.tmdbRating/2).toFixed(1)}</span></div></div></div>`;
-        if (uoItem && maxUoDiff > 0.5) analysisHTML += `<div style="margin-top: 20px; font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Niepopularna Opinia</div><div class="movie-versus-card"><img src="${uoItem.poster || POSTER_PLACEHOLDER}"><div class="movie-versus-info"><div class="movie-versus-title">${escapeHTML(uoItem.title)}</div><div class="movie-versus-ratings"><span class="rat-user">Ty: ⭐ ${uoItem.rating}</span><span class="rat-tmdb">Świat: ⭐ ${(uoItem.tmdbRating/2).toFixed(1)}</span></div></div></div>`;
-        analysisHTML += `</div>`;
+    // 1. NATYCHMIAST POKAŻ SPINNER ŁADOWANIA
+    const firstTab = document.getElementById('fp-tab-months');
+    if (firstTab) {
+        firstTab.classList.add('active');
+        firstTab.innerHTML = `<div style="text-align:center; padding:60px 20px; color:var(--text-secondary); display:flex; flex-direction:column; align-items:center; gap:16px;">
+            <svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--primary-color);animation:spin 1s linear infinite;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            Kalkulowanie danych...
+        </div>`;
     }
 
-    // --- 2. PRAWDZIWY POSTĘP KOLEKCJI ---
-    const colls = {};
-    data.moviesWatched.forEach(m => {
-        if (m.collectionName && m.collectionName !== 'none') colls[m.collectionName] = (colls[m.collectionName] || 0) + 1;
-    });
-    const topColls = Object.entries(colls).filter(c => c[1] > 1).sort((a,b) => b[1]-a[1]).slice(0, 5);
-    
-    if (topColls.length > 0) {
-        analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Postęp Kolekcji</h4><p id="colls-desc-text" style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Sprawdzam bazę TMDB w poszukiwaniu brakujących części...</p><div id="dynamic-collections-container"><div style="text-align:center; padding: 20px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:var(--primary-color);animation:spin 1s linear infinite;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></div></div></div>`;
-        setTimeout(async () => {
-            const container = document.getElementById('dynamic-collections-container'); if (!container) return;
-            let builtHTML = '';
-            const watchedIds = new Set(data.moviesWatched.map(m => String(m.id)));
-            const toWatchIds = new Set(data.moviesToWatch.map(m => String(m.id)));
+    // 2. PRZESUNIĘCIE OBLICZEŃ W CZASIE (Czekamy, aż karta płynnie wyjedzie)
+    setTimeout(() => {
+        const daysOfWeek = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 }; 
+        const monthlyData = {}; const yearlyData = {}; 
 
-            for (const [cName, wCount] of topColls) {
-                let collectionParts = []; let total = wCount; 
-                try {
-                    const cacheKey = `coll_full_${cName.replace(/\s+/g, '_')}`;
-                    let cachedData = await db.getCache(cacheKey, 7); 
-                    if (cachedData) collectionParts = cachedData;
-                    else {
-                        const sRes = await fetchFromTMDB('/search/collection', { query: cName });
-                        if (sRes && sRes.results && sRes.results.length > 0) {
-                            const cDetails = await fetchFromTMDB(`/collection/${sRes.results[0].id}`);
-                            if (cDetails && cDetails.parts) {
-                                collectionParts = cDetails.parts.sort((a,b) => new Date(a.release_date || '9999') - new Date(b.release_date || '9999'));
-                                await db.setCache(cacheKey, collectionParts);
+        const processItemDate = (dateTs, item) => {
+            const d = new Date(dateTs);
+            daysOfWeek[d.getDay()]++;
+            const year = d.getFullYear(); 
+            const mKey = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const dayStr = d.toISOString().split('T')[0];
+            
+            if (!monthlyData[mKey]) monthlyData[mKey] = { mCount: 0, sCount: 0, runtime: 0, highestRated: null, longestMovie: null, genres: {}, sumRat: 0, ratCount: 0, daysMap: {}, posters: [] };
+            if (!yearlyData[year]) yearlyData[year] = { mCount: 0, sCount: 0, runtime: 0, highestRated: null, longestMovie: null, genres: {}, sumRat: 0, ratCount: 0, daysMap: {}, posters: [] };
+            
+            const processData = (target) => {
+                target.daysMap[dayStr] = (target.daysMap[dayStr] || 0) + 1;
+                
+                if (item.poster && target.posters.length < 20 && !target.posters.some(p => p.id === item.id)) {
+                    target.posters.push({ id: item.id, type: item.type, url: item.poster.replace('w500', 'w154'), title: item.title });
+                }
+
+                if (item.type === 'movie') {
+                    target.mCount++;
+                    if (item.runtime) { target.runtime += item.runtime; if (!target.longestMovie || item.runtime > target.longestMovie.runtime) target.longestMovie = item; }
+                } else target.sCount++; 
+                
+                if (item.genres) item.genres.forEach(g => { target.genres[g] = (target.genres[g] || 0) + 1; });
+                if (item.rating > 0) { target.sumRat += item.rating; target.ratCount++; if (!target.highestRated || item.rating > target.highestRated.rating) target.highestRated = item; }
+            };
+
+            processData(monthlyData[mKey]); processData(yearlyData[year]);
+        };
+
+        data.moviesWatched.forEach(m => { if (m.watchDates) m.watchDates.forEach(ts => processItemDate(ts, m)); });
+        data.seriesWatched.forEach(s => { if (s.dateAdded) processItemDate(s.dateAdded, s); });
+
+        const buildReportCard = (title, rData, isYearly = false, prevData = null) => {
+            const hrs = Math.floor(rData.runtime / 60); const mins = rData.runtime % 60;
+            const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+            const avgR = rData.ratCount > 0 ? (rData.sumRat / rData.ratCount).toFixed(1) : '-';
+            const sortedGenres = Object.entries(rData.genres).sort((a,b) => b[1] - a[1]);
+            const topGenre = sortedGenres.length > 0 ? sortedGenres[0] : null;
+
+            const getTrendHTML = (curr, prev) => {
+                if (!prev) return '';
+                const diff = curr - prev;
+                if (diff > 0) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${diff}</span>`;
+                if (diff < 0) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.abs(diff)}</span>`;
+                return '';
+            };
+            const getTrendTimeHTML = (curr, prev) => {
+                if (!prev) return '';
+                const diff = curr - prev;
+                if (diff > 60) return `<span style="color:var(--success-color); font-size:0.75rem; margin-left:4px;">↑${Math.floor(diff/60)}h</span>`;
+                if (diff < -60) return `<span style="color:var(--primary-color); font-size:0.75rem; margin-left:4px;">↓${Math.floor(Math.abs(diff)/60)}h</span>`;
+                return '';
+            };
+
+            const mTrend = prevData ? getTrendHTML(rData.mCount, prevData.mCount) : '';
+            const sTrend = prevData ? getTrendHTML(rData.sCount, prevData.sCount) : '';
+            const tTrend = prevData ? getTrendTimeHTML(rData.runtime, prevData.runtime) : '';
+
+            let bingeHTML = '';
+            if (Object.keys(rData.daysMap).length > 0) {
+                const topDay = Object.entries(rData.daysMap).sort((a,b) => b[1] - a[1])[0];
+                if (topDay && topDay[1] > 1) { 
+                    const dateObj = new Date(topDay[0]);
+                    const niceDate = dateObj.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
+                    bingeHTML = `<div class="binge-day-badge">
+                        <span style="font-size:0.8rem; color:var(--text-secondary);">🔥 Szczytowy dzień (${niceDate})</span>
+                        <strong style="color:#ff4b2b; font-size:0.9rem;">${topDay[1]} tytuły</strong>
+                    </div>`;
+                }
+            }
+
+            let postersHTML = '';
+            if (rData.posters && rData.posters.length > 0) {
+                postersHTML = `<div class="stats-poster-wall">` + 
+                    rData.posters.map(p => `<img src="${p.url}" data-id="${p.id}" data-type="${p.type}" title="${escapeHTML(p.title)}" onerror="this.style.display='none'">`).join('') + 
+                `</div>`;
+            }
+
+            let extendedInfoHTML = '';
+            if (rData.highestRated) extendedInfoHTML += `<div style="margin-top:16px; padding-top:16px; border-top:1px dashed color-mix(in srgb, var(--border-color) 50%, transparent); display:flex; align-items:center; gap:12px;"><img src="${rData.highestRated.poster || POSTER_PLACEHOLDER}" style="width:40px; height:60px; object-fit:cover; border-radius:4px; flex-shrink:0;"><div style="min-width: 0; flex-grow: 1;"><div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">Tytuł ${isYearly ? 'Roku' : 'Miesiąca'}</div><div class="month-movie-title" style="font-size:0.95rem; font-weight:800; color:var(--text-color); margin-bottom:4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block;">${escapeHTML(rData.highestRated.title)}</div><span style="font-size:0.75rem; font-weight:800; color:#000; background:var(--warning-color); padding:2px 6px; border-radius:4px;">⭐ ${rData.highestRated.rating}</span></div></div>`;
+            if (rData.longestMovie) extendedInfoHTML += `<div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px; border-radius: var(--radius-sm);"><span style="font-size:0.8rem; color:var(--text-secondary);">Najdłuższy seans:</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-color); max-width:60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHTML(rData.longestMovie.title)} (${rData.longestMovie.runtime}m)</span></div>`;
+            if (topGenre) extendedInfoHTML += `<div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px; border-radius: var(--radius-sm);"><span style="font-size:0.8rem; color:var(--text-secondary);">Ulubiony gatunek:</span><span style="font-size:0.85rem; font-weight:800; color:var(--primary-color);">${escapeHTML(topGenre[0])}</span></div>`;
+
+            const cardStyle = isYearly ? `background: linear-gradient(135deg, color-mix(in srgb, var(--warning-color) 8%, var(--card-color)), var(--card-color)); border:1px solid color-mix(in srgb, var(--warning-color) 25%, transparent);` : `background:var(--card-color); border:1px solid var(--border-color);`;
+            const headerStyle = isYearly ? `background: transparent;` : `background:color-mix(in srgb, var(--bg-color) 50%, transparent);`;
+
+            return `<div class="month-card" style="${cardStyle} border-radius:var(--radius-md); margin-bottom:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);"><div class="month-header" style="padding:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; ${headerStyle} flex-wrap: wrap; gap: 8px;"><div style="font-size:1.1rem; font-weight:800; color:var(--text-color); text-transform:capitalize; display:flex; align-items:center; gap:8px;">${isYearly ? '🏆' : '📅'} ${title}</div><div style="display:flex; gap:8px; align-items:center;"><span style="background:color-mix(in srgb, ${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'} 15%, transparent); color:${isYearly ? 'var(--warning-color)' : 'var(--primary-color)'}; font-size:0.8rem; font-weight:700; padding:4px 8px; border-radius:20px;">${rData.mCount + rData.sCount} Tytułów</span><svg class="month-chevron" viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5; transition:transform 0.3s;"><polyline points="6 9 12 15 18 9"></polyline></svg></div></div><div class="month-content" style="display:none; padding:0 16px 16px 16px; animation:fadeIn 0.3s;"><div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-top:16px;"><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Filmy</div><div style="font-size:1.1rem; font-weight:800;">${rData.mCount}${mTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Seriale</div><div style="font-size:1.1rem; font-weight:800;">${rData.sCount}${sTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Czas (F)</div><div style="font-size:1.1rem; font-weight:800; color:var(--primary-color);">${timeStr}${tTrend}</div></div><div style="background: color-mix(in srgb, var(--bg-color) 40%, transparent); padding: 10px 4px; border-radius: var(--radius-sm); text-align: center; border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);"><div style="font-size:0.7rem; color:var(--text-secondary);">Średnia</div><div style="font-size:1.1rem; font-weight:800; color:var(--warning-color);">${avgR}</div></div></div>${bingeHTML}${extendedInfoHTML}${postersHTML}</div></div>`;
+        };
+
+        const sortedMonths = Object.keys(monthlyData).sort().reverse();
+        document.getElementById('fp-tab-months').innerHTML = sortedMonths.length === 0 ? `<div style="text-align:center; padding:40px;">Brak danych.</div>` : sortedMonths.map((mKey, index) => { 
+            const [y, m] = mKey.split('-'); 
+            const prevKey = sortedMonths[index + 1];
+            return buildReportCard(new Date(y, m - 1).toLocaleString('pl-PL', { month: 'long', year: 'numeric' }), monthlyData[mKey], false, prevKey ? monthlyData[prevKey] : null); 
+        }).join('');
+        
+        const sortedYears = Object.keys(yearlyData).sort().reverse();
+        document.getElementById('fp-tab-years').innerHTML = sortedYears.length === 0 ? `<div style="text-align:center; padding:40px;">Brak danych.</div>` : sortedYears.map((year, index) => {
+            const prevYear = sortedYears[index + 1];
+            return buildReportCard(`Podsumowanie Roku ${year}`, yearlyData[year], true, prevYear ? yearlyData[prevYear] : null);
+        }).join('');
+
+        const dayNames = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota'];
+        const maxDayVal = Math.max(...Object.values(daysOfWeek), 1); 
+        const sortedDays = [1, 2, 3, 4, 5, 6, 0].map(dIdx => ({ index: dIdx, name: dayNames[dIdx], count: daysOfWeek[dIdx] })).sort((a, b) => b.count - a.count);
+        let daysChartHTML = `<div style="display:flex; flex-direction:column; gap:14px; margin-top: 8px;">`;
+        sortedDays.forEach((day, i) => {
+            if (day.count === 0 && i > 3) return; 
+            const hPct = (day.count / maxDayVal) * 100; const isMax = day.count === maxDayVal && day.count > 0;
+            daysChartHTML += `<div style="display:flex; align-items:center; gap:12px;"><div style="width: 95px; font-size: 0.85rem; font-weight: ${isMax ? '800' : '600'}; color: ${isMax ? 'var(--primary-color)' : 'var(--text-secondary)'}; text-align:right; flex-shrink: 0;">${day.name}</div><div style="flex-grow: 1; height: 12px; background: color-mix(in srgb, var(--border-color) 40%, transparent); border-radius: 6px; overflow: hidden; display: flex; align-items:center;"><div style="height: 100%; width: ${hPct}%; background: ${isMax ? 'linear-gradient(90deg, var(--primary-color) 0%, #ff4b2b 100%)' : 'var(--text-secondary)'}; border-radius: 6px; transition: width 0.5s ease-out;"></div></div><div style="width: 35px; font-size: 0.95rem; font-weight: 800; color: var(--text-color); flex-shrink: 0;">${day.count}</div></div>`;
+        });
+        daysChartHTML += `</div>`;
+        document.getElementById('fp-tab-rhythm').innerHTML = `<div class="analysis-card"><h4 class="analysis-title">Kiedy najczęściej oglądasz?</h4><p style="font-size:0.85rem; color:var(--text-secondary); margin:0 0 24px; line-height:1.4;">Zestawienie dni, w które odhaczasz najwięcej tytułów.</p>${daysChartHTML}</div>`;
+
+        let analysisHTML = '';
+        const allWatched = [...data.moviesWatched, ...data.seriesWatched];
+
+        let diffSum = 0, diffCount = 0;
+        let gpItem = null, maxGpDiff = -99; 
+        let uoItem = null, maxUoDiff = -99; 
+
+        allWatched.forEach(item => {
+            if (item.rating > 0 && item.tmdbRating > 0 && !String(item.id).startsWith('custom_')) {
+                const tmdbConv = item.tmdbRating / 2; 
+                const diff = item.rating - tmdbConv;
+                diffSum += diff; diffCount++;
+                if (diff > maxGpDiff) { maxGpDiff = diff; gpItem = item; }
+                if (-diff > maxUoDiff) { maxUoDiff = -diff; uoItem = item; }
+            }
+        });
+
+        if (diffCount > 0) {
+            const avgDiff = diffSum / diffCount;
+            let criticTitle = "Obiektywny Widz"; let criticColor = "var(--info-color)"; let criticDesc = "Twoje oceny pokrywają się z resztą świata niemal idealnie!";
+            if (avgDiff <= -0.5) { criticTitle = "Surowy Krytyk"; criticColor = "var(--primary-color)"; criticDesc = "Oceniasz filmy znacznie surowiej niż ogół widowni."; }
+            else if (avgDiff >= 0.5) { criticTitle = "Entuzjasta Kina"; criticColor = "var(--success-color)"; criticDesc = "Jesteś bardziej łaskawy dla twórców niż reszta świata!"; }
+
+            analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Twój Profil Krytyka</h4><div style="background: color-mix(in srgb, ${criticColor} 15%, transparent); border: 1px solid color-mix(in srgb, ${criticColor} 30%, transparent); padding: 16px; border-radius: var(--radius-md); text-align:center;"><div style="font-size: 1.2rem; font-weight: 900; color: ${criticColor};">${criticTitle}</div><div style="font-size: 0.85rem; color: var(--text-color); margin-top: 4px;">${criticDesc}</div><div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">Średnia różnica: ${avgDiff > 0 ? '+' : ''}${avgDiff.toFixed(2)} gwiazdki w stosunku do ocen TMDb.</div></div>`;
+            if (gpItem && maxGpDiff > 0.5) analysisHTML += `<div style="margin-top: 20px; font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Twoje "Guilty Pleasure"</div><div class="movie-versus-card"><img src="${gpItem.poster || POSTER_PLACEHOLDER}"><div class="movie-versus-info"><div class="movie-versus-title">${escapeHTML(gpItem.title)}</div><div class="movie-versus-ratings"><span class="rat-user">Ty: ⭐ ${gpItem.rating}</span><span class="rat-tmdb">Świat: ⭐ ${(gpItem.tmdbRating/2).toFixed(1)}</span></div></div></div>`;
+            if (uoItem && maxUoDiff > 0.5) analysisHTML += `<div style="margin-top: 20px; font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase;">Niepopularna Opinia</div><div class="movie-versus-card"><img src="${uoItem.poster || POSTER_PLACEHOLDER}"><div class="movie-versus-info"><div class="movie-versus-title">${escapeHTML(uoItem.title)}</div><div class="movie-versus-ratings"><span class="rat-user">Ty: ⭐ ${uoItem.rating}</span><span class="rat-tmdb">Świat: ⭐ ${(uoItem.tmdbRating/2).toFixed(1)}</span></div></div></div>`;
+            analysisHTML += `</div>`;
+        }
+
+        const colls = {};
+        data.moviesWatched.forEach(m => {
+            if (m.collectionName && m.collectionName !== 'none') colls[m.collectionName] = (colls[m.collectionName] || 0) + 1;
+        });
+        const topColls = Object.entries(colls).filter(c => c[1] > 1).sort((a,b) => b[1]-a[1]).slice(0, 5);
+        
+        if (topColls.length > 0) {
+            analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Postęp Kolekcji</h4><p id="colls-desc-text" style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Sprawdzam bazę TMDB w poszukiwaniu brakujących części...</p><div id="dynamic-collections-container"><div style="text-align:center; padding: 20px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:var(--primary-color);animation:spin 1s linear infinite;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></div></div></div>`;
+            setTimeout(async () => {
+                const container = document.getElementById('dynamic-collections-container'); if (!container) return;
+                let builtHTML = '';
+                const watchedIds = new Set(data.moviesWatched.map(m => String(m.id)));
+                const toWatchIds = new Set(data.moviesToWatch.map(m => String(m.id)));
+
+                for (const [cName, wCount] of topColls) {
+                    let collectionParts = []; let total = wCount; 
+                    try {
+                        const cacheKey = `coll_full_${cName.replace(/\s+/g, '_')}`;
+                        let cachedData = await db.getCache(cacheKey, 7); 
+                        if (cachedData) collectionParts = cachedData;
+                        else {
+                            const sRes = await fetchFromTMDB('/search/collection', { query: cName });
+                            if (sRes && sRes.results && sRes.results.length > 0) {
+                                const cDetails = await fetchFromTMDB(`/collection/${sRes.results[0].id}`);
+                                if (cDetails && cDetails.parts) {
+                                    collectionParts = cDetails.parts.sort((a,b) => new Date(a.release_date || '9999') - new Date(b.release_date || '9999'));
+                                    await db.setCache(cacheKey, collectionParts);
+                                }
                             }
                         }
+                    } catch(e) {}
+
+                    if (collectionParts.length > 0) total = collectionParts.length;
+                    if (total < wCount) total = wCount; 
+
+                    const pct = Math.round((wCount / total) * 100); const isCompleted = pct === 100;
+                    const barColor = isCompleted ? 'var(--success-color)' : 'var(--primary-color)';
+
+                    let missingHTML = '';
+                    if (!isCompleted && collectionParts.length > 0) {
+                        const missingParts = collectionParts.filter(p => !watchedIds.has(String(p.id)));
+                        if (missingParts.length > 0) {
+                            const missingList = missingParts.map(p => {
+                                const year = p.release_date ? p.release_date.substring(0,4) : 'Brak daty';
+                                const isInToWatch = toWatchIds.has(String(p.id));
+                                const toWatchBadge = isInToWatch ? `<span style="color:var(--info-color); font-size:0.7rem; border:1px solid var(--info-color); padding:1px 4px; border-radius:4px; margin-left:6px;">W planach</span>` : '';
+                                return `<div class="missing-collection-item" data-id="${p.id}" data-type="movie" style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent); cursor:pointer;"><span style="font-size:0.85rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px;">${escapeHTML(p.title)}</span><span style="font-size:0.75rem; color:var(--text-secondary); flex-shrink:0;">${year}${toWatchBadge}</span></div>`;
+                            }).join('');
+                            missingHTML = `<div class="collection-missing-wrap" style="margin-top: 8px;"><button class="toggle-missing-btn" style="background:transparent; border:none; color:var(--text-secondary); font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; padding:4px 0;">Brakuje Ci ${missingParts.length} filmów <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5;transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg></button><div class="missing-list-content" style="display:none; padding-top:4px; animation:fadeIn 0.3s;">${missingList}</div></div>`;
+                        }
                     }
-                } catch(e) {}
-
-                if (collectionParts.length > 0) total = collectionParts.length;
-                if (total < wCount) total = wCount; 
-
-                const pct = Math.round((wCount / total) * 100); const isCompleted = pct === 100;
-                const barColor = isCompleted ? 'var(--success-color)' : 'var(--primary-color)';
-
-                let missingHTML = '';
-                if (!isCompleted && collectionParts.length > 0) {
-                    const missingParts = collectionParts.filter(p => !watchedIds.has(String(p.id)));
-                    if (missingParts.length > 0) {
-                        const missingList = missingParts.map(p => {
-                            const year = p.release_date ? p.release_date.substring(0,4) : 'Brak daty';
-                            const isInToWatch = toWatchIds.has(String(p.id));
-                            const toWatchBadge = isInToWatch ? `<span style="color:var(--info-color); font-size:0.7rem; border:1px solid var(--info-color); padding:1px 4px; border-radius:4px; margin-left:6px;">W planach</span>` : '';
-                            return `<div class="missing-collection-item" data-id="${p.id}" data-type="movie" style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent); cursor:pointer;"><span style="font-size:0.85rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px;">${escapeHTML(p.title)}</span><span style="font-size:0.75rem; color:var(--text-secondary); flex-shrink:0;">${year}${toWatchBadge}</span></div>`;
-                        }).join('');
-                        missingHTML = `<div class="collection-missing-wrap" style="margin-top: 8px;"><button class="toggle-missing-btn" style="background:transparent; border:none; color:var(--text-secondary); font-size:0.75rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; padding:4px 0;">Brakuje Ci ${missingParts.length} filmów <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5;transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg></button><div class="missing-list-content" style="display:none; padding-top:4px; animation:fadeIn 0.3s;">${missingList}</div></div>`;
-                    }
+                    builtHTML += `<div style="margin-bottom:16px;"><div style="display:flex; justify-content:space-between; align-items:flex-end; font-size:0.85rem; font-weight:600; margin-bottom:6px;"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:75%; ${isCompleted ? 'color: var(--success-color);' : ''}">${isCompleted ? '🏆 ' : ''}${escapeHTML(cName)}</span><span style="color:var(--text-secondary); font-size:0.8rem; flex-shrink:0;"><strong style="color: ${barColor}; font-size:0.95rem;">${wCount}</strong> / ${total}</span></div><div style="height:8px; background:color-mix(in srgb, var(--border-color) 40%, transparent); border-radius:4px; overflow:hidden; display: flex;"><div style="height:100%; width:${pct}%; background:${barColor}; border-radius:4px; transition: width 1s cubic-bezier(0.2, 0.8, 0.2, 1);"></div></div>${missingHTML}</div>`;
                 }
-                builtHTML += `<div style="margin-bottom:16px;"><div style="display:flex; justify-content:space-between; align-items:flex-end; font-size:0.85rem; font-weight:600; margin-bottom:6px;"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:75%; ${isCompleted ? 'color: var(--success-color);' : ''}">${isCompleted ? '🏆 ' : ''}${escapeHTML(cName)}</span><span style="color:var(--text-secondary); font-size:0.8rem; flex-shrink:0;"><strong style="color: ${barColor}; font-size:0.95rem;">${wCount}</strong> / ${total}</span></div><div style="height:8px; background:color-mix(in srgb, var(--border-color) 40%, transparent); border-radius:4px; overflow:hidden; display: flex;"><div style="height:100%; width:${pct}%; background:${barColor}; border-radius:4px; transition: width 1s cubic-bezier(0.2, 0.8, 0.2, 1);"></div></div>${missingHTML}</div>`;
-            }
-            container.innerHTML = builtHTML;
-            const desc = document.getElementById('colls-desc-text'); if (desc) desc.textContent = "Prawdziwy postęp względem oficjalnej bazy danych TMDB.";
-        }, 350);
-    }
-
-    // --- 3. WEHIKUŁ CZASU (Epoki) ---
-    const decades = {};
-    allWatched.forEach(i => {
-        if (i.year) {
-            const dec = Math.floor(parseInt(i.year)/10)*10;
-            if(dec >= 1950 && dec <= 2020) decades[dec] = (decades[dec] || 0) + 1;
+                container.innerHTML = builtHTML;
+                const desc = document.getElementById('colls-desc-text'); if (desc) desc.textContent = "Prawdziwy postęp względem oficjalnej bazy danych TMDB.";
+            }, 350);
         }
-    });
-    const decKeys = Object.keys(decades).sort();
-    if (decKeys.length > 0) {
-        const minD = parseInt(decKeys[0]); const maxD = parseInt(decKeys[decKeys.length-1]);
-        for(let d=minD; d<=maxD; d+=10) { if(!decades[d]) decades[d] = 0; }
-        const finalDecs = Object.entries(decades).sort((a,b) => a[0]-b[0]);
-        const maxDecVal = Math.max(...Object.values(decades), 1);
-        const chartHTML = finalDecs.map(d => `<div class="era-bar-wrapper"><div class="era-count">${d[1] > 0 ? d[1] : ''}</div><div class="era-bar" style="height:${(d[1] / maxDecVal) * 100}%;"></div><div class="era-label">${d[0]}s</div></div>`).join('');
-        analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Kinowy Wehikuł Czasu</h4><p style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Z których lat najczęściej pochodzą Twoje filmy i seriale?</p><div class="era-chart-container">${chartHTML}</div></div>`;
-    }
 
-    if(analysisHTML === '') analysisHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);">Obejrzyj i oceń więcej filmów, aby odblokować analizę profilu!</div>`;
-    document.getElementById('fp-tab-analysis').innerHTML = analysisHTML;
+        const decades = {};
+        allWatched.forEach(i => {
+            if (i.year) {
+                const dec = Math.floor(parseInt(i.year)/10)*10;
+                if(dec >= 1950 && dec <= 2020) decades[dec] = (decades[dec] || 0) + 1;
+            }
+        });
+        const decKeys = Object.keys(decades).sort();
+        if (decKeys.length > 0) {
+            const minD = parseInt(decKeys[0]); const maxD = parseInt(decKeys[decKeys.length-1]);
+            for(let d=minD; d<=maxD; d+=10) { if(!decades[d]) decades[d] = 0; }
+            const finalDecs = Object.entries(decades).sort((a,b) => a[0]-b[0]);
+            const maxDecVal = Math.max(...Object.values(decades), 1);
+            
+            // Zmiana style="height:..." na style="transform: scaleY(...)"
+            const chartHTML = finalDecs.map(d => {
+                let scalePct = d[1] / maxDecVal;
+                return `<div class="era-bar-wrapper"><div class="era-count">${d[1] > 0 ? d[1] : ''}</div><div class="era-bar" style="transform: scaleY(${scalePct});"></div><div class="era-label">${d[0]}s</div></div>`
+            }).join('');
+            
+            analysisHTML += `<div class="analysis-card"><h4 class="analysis-title">Kinowy Wehikuł Czasu</h4><p style="font-size:0.8rem; color:var(--text-secondary); margin:-8px 0 16px;">Z których lat najczęściej pochodzą Twoje filmy i seriale?</p><div class="era-chart-container">${chartHTML}</div></div>`;
+        }
 
-    // ==========================================
-    // 4. OBSŁUGA INTERFEJSU (Gesty i Kliknięcia)
-    // ==========================================
+        if(analysisHTML === '') analysisHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);">Obejrzyj i oceń więcej filmów, aby odblokować analizę profilu!</div>`;
+        document.getElementById('fp-tab-analysis').innerHTML = analysisHTML;
+
+    }, 350); // Czekamy ułamek sekundy aż animacja okna się skończy
+
+    // Reszta starych listenerów dla 'page'... (Zostają bez zmian)
     let isClosingStats = false;
     
     const closePage = () => {
@@ -3817,7 +3840,6 @@ function openFullStatsPage() {
         };
 
         page.addEventListener('click', (e) => {
-            // Obsługa kliknięć w nagłówki miesięcy (Akordeony)
             const header = e.target.closest('.month-header');
             if (header) {
                 triggerHaptic('light');
@@ -3828,7 +3850,6 @@ function openFullStatsPage() {
                 return;
             }
             
-            // Kliknięcie w plakat na osi czasu (Miesiące/Lata)
             if (e.target.tagName === 'IMG' && e.target.closest('.stats-poster-wall')) {
                 triggerHaptic('light');
                 const mId = e.target.dataset.id;
@@ -3838,7 +3859,6 @@ function openFullStatsPage() {
                 return;
             }
 
-            // Rozwijanie brakujących filmów z kolekcji
             const missingToggle = e.target.closest('.toggle-missing-btn');
             if (missingToggle) {
                 triggerHaptic('light');
@@ -3849,7 +3869,6 @@ function openFullStatsPage() {
                 return;
             }
 
-            // Kliknięcie w konkretny brakujący film z kolekcji
             const missingItem = e.target.closest('.missing-collection-item');
             if (missingItem) {
                 triggerHaptic('light');
@@ -3862,16 +3881,13 @@ function openFullStatsPage() {
             }
         });
 
-        // GESTY PRZESUWANIA (SWIPE)
         const statsContentArea = page.querySelector('.fp-content');
         const tabsOrder = ['months', 'years', 'rhythm', 'analysis']; 
         
         let startX = 0; let currentX = 0; let startY = 0; let isDragging = false; let swipeStartTime = 0;
 
         statsContentArea.addEventListener('touchstart', (e) => {
-            // Blokujemy gesty jeśli użytkownik próbuje przewinąć karuzelę z plakatami!
             if (e.target.closest('.stats-poster-wall')) return;
-            
             startX = e.touches[0].clientX; startY = e.touches[0].clientY; swipeStartTime = Date.now();
             isDragging = true; page.style.transition = 'none';
         }, { passive: true });
@@ -3903,6 +3919,7 @@ function openFullStatsPage() {
         });
     }
 }
+
 // ==========================================
 // SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB
 // ==========================================
@@ -4126,3 +4143,19 @@ document.addEventListener('click', (e) => {
         e.stopPropagation();
     }
 }, true);
+// ==========================================
+// TARCZA 1: OCHRONA PRZED USUNIĘCIEM PRZEZ SYSTEM
+// ==========================================
+async function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        if (!isPersisted) {
+            const granted = await navigator.storage.persist();
+            if (granted) {
+                console.log("Storage is now persistent. System won't clear it to free up space.");
+            } else {
+                console.log("Storage is NOT persistent. Might be cleared if device is full.");
+            }
+        }
+    }
+}
