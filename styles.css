@@ -5160,3 +5160,19 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
 #allGenresOverlay .close-genres-btn {
     display: none !important;
 }
+/* ==========================================
+   KURSOCHWYT DLA LIST POZIOMYCH NA PC
+========================================== */
+.discover-categories-wrapper,
+.cast-scroller, 
+.known-for-scroller, 
+.recommendations-scroller, 
+.reviews-scroller, 
+.stats-poster-wall {
+    cursor: grab;
+}
+
+/* Gdy użytkownik "trzyma" myszkę wciśniętą */
+.active-drag {
+    cursor: grabbing !important;
+}
