@@ -9,7 +9,6 @@ let hapticsEnabled = localStorage.getItem('hapticsEnabled') !== 'false';
 let API_KEY = localStorage.getItem('tmdbApiKey') || '';
 let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
 let fullSearchResults = [];
-let sortableInstance = null;
 
 let viewState = {
     activeMainTab: 'movies', moviesSubTab: 'toWatch', seriesSubTab: 'toWatch', globalViewMode: 'list',
@@ -1020,25 +1019,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
     }
 }
 
-function initializeSortable(listId, listEl, viewMode) {
-    if (!listEl || listEl.children.length < 2) return;
-    sortableInstance = new Sortable(listEl, {
-        animation: 150, delay: 200, delayOnTouchOnly: true,
-        handle: viewMode === 'grid' ? '.grid-item' : '.list-item',
-        ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen',
-        onEnd: async (evt) => {
-            const oldList = data[listId];
-            oldList.sort((a, b) => (a.customOrder || 0) - (b.customOrder || 0));
-            const newDOMOrderInfo = Array.from(evt.target.children).map(li => ({ id: li.dataset.id, type: li.dataset.type }));
-            const visibleItemsReordered = newDOMOrderInfo.map(info => oldList.find(i => String(i.id) === String(info.id) && i.type === info.type)).filter(Boolean);
-            const invisibleItems = oldList.filter(item => !newDOMOrderInfo.some(info => String(item.id) === String(info.id) && item.type === info.type));
-            const newList = [...visibleItemsReordered, ...invisibleItems];
-            newList.forEach((item, index) => { item.customOrder = index; });
-            data[listId] = newList;
-            await saveData();
-        }
-    });
-}
+
 
 function handleListItemClick(e) {
     const itemElement = e.target.closest('.list-item') || e.target.closest('.grid-item');
@@ -1814,35 +1795,7 @@ const getListAndItem = (id, type) => { for (const listName in data) { if (Array.
 
 const showMainContent = () => { document.getElementById('configSection').style.display = 'none'; document.getElementById('mainContent').style.display = 'flex'; };
 
-// OBLICZANIE CZASU POZOSTAŁEGO DO ZAKOŃCZENIA SERIALU (BINGE CALCULATOR)
-function getRemainingSeriesRuntimeHTML(item) {
-    if (item.type !== 'tv' || !item.seasons || item.seasons.length === 0) return '';
-    
-    let totalAiredEpisodes = 0;
-    item.seasons.forEach(s => { if(s.season_number > 0) totalAiredEpisodes += s.episode_count; });
-    
-    let totalWatched = 0;
-    if (item.progress) {
-        totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
-    }
-    
-    const episodesLeft = totalAiredEpisodes - totalWatched;
-    if (episodesLeft <= 0) return ''; 
 
-    // NAPRAWA: Jeśli TMDB nie dało nam czasu odcinka, "w ciemno" zakładamy 45 minut, żeby licznik działał.
-    const avgRuntime = item.runtime && item.runtime > 0 ? item.runtime : 45; 
-    
-    const minutesLeft = episodesLeft * avgRuntime;
-    const h = Math.floor(minutesLeft / 60); 
-    const m = minutesLeft % 60;
-    const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
-
-    if (episodesLeft === 1) {
-        return `<span style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); color: var(--primary-color); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 2px 8px; border-radius: 50px; font-weight: 800; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" style="width:12px; height:12px; fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> Finał: ${timeStr}</span>`;
-    }
-    
-    return `<span style="background: color-mix(in srgb, var(--info-color) 15%, transparent); color: var(--info-color); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); padding: 2px 8px; border-radius: 50px; font-weight: 700; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;"><svg viewBox="0 0 24 24" style="width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2.5;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Zostało: ${timeStr}</span>`;
-}
 function setupSwipeToClose(modalElement, closeCallback) {
     const wrapper = modalElement.querySelector('.modern-modal-wrapper'); if (!wrapper) return;
     let startY = 0; let currentY = 0; let isDragging = false;
@@ -3924,143 +3877,6 @@ function openFullStatsPage() {
     }
 }
 
-// ==========================================
-// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB
-// ==========================================
-// ==========================================
-// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (Z PODZIAŁEM)
-// ==========================================
-// ==========================================
-// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (KAFELKI SPOTIFY)
-// ==========================================
-function openAllGenresModal() {
-    toggleAppDepthEffect(true);
-    const c = document.getElementById('detailsModalContainer'); 
-    
-    // GATUNKI FILMOWE (Rozbite na ikonę i tekst)
-    const movieGenres = [
-        { id: 28, icon: "💥", name: "Akcja" }, { id: 12, icon: "🗺️", name: "Przygodowy" },
-        { id: 16, icon: "🎨", name: "Animacja" }, { id: 35, icon: "😂", name: "Komedia" },
-        { id: 80, icon: "🕵️", name: "Kryminał" }, { id: 99, icon: "🎞️", name: "Dokument" },
-        { id: 18, icon: "🎭", name: "Dramat" }, { id: 10751, icon: "👨‍👩‍👧", name: "Familijny" },
-        { id: 14, icon: "🧙", name: "Fantasy" }, { id: 36, icon: "🏛️", name: "Historyczny" },
-        { id: 27, icon: "👻", name: "Horror" }, { id: 10402, icon: "🎵", name: "Muzyczny" },
-        { id: 9648, icon: "🔍", name: "Tajemnica" }, { id: 10749, icon: "❤️", name: "Romans" },
-        { id: 878, icon: "👽", name: "Sci-Fi" }, { id: 10770, icon: "📺", name: "Film TV" },
-        { id: 53, icon: "🔪", name: "Thriller" }, { id: 10752, icon: "🪖", name: "Wojenny" },
-        { id: 37, icon: "🤠", name: "Western" }
-    ];
-
-    // GATUNKI SERIALOWE
-    const tvGenres = [
-        { id: 10759, icon: "💥", name: "Akcja & Przygoda" }, { id: 16, icon: "🎨", name: "Animacja" },
-        { id: 35, icon: "😂", name: "Komedia" }, { id: 80, icon: "🕵️", name: "Kryminał" },
-        { id: 99, icon: "🎞️", name: "Dokument" }, { id: 18, icon: "🎭", name: "Dramat" },
-        { id: 10751, icon: "👨‍👩‍👧", name: "Familijny" }, { id: 10762, icon: "🧸", name: "Dla Dzieci" },
-        { id: 9648, icon: "🔍", name: "Tajemnica" }, { id: 10763, icon: "📰", name: "Wiadomości" },
-        { id: 10764, icon: "🎬", name: "Reality Show" }, { id: 10765, icon: "👽", name: "Sci-Fi & Fantasy" },
-        { id: 10766, icon: "🧼", name: "Opera Mydlana" }, { id: 10767, icon: "🎙️", name: "Talk Show" },
-        { id: 10768, icon: "🪖", name: "Wojna & Polityka" }, { id: 37, icon: "🤠", name: "Western" }
-    ];
-
-    const generateGrid = (genres, mediaType) => {
-        return genres.map(g => `
-            <div class="genre-block-card modal-genre-btn" data-genre="${g.id}" data-media-type="${mediaType}">
-                <span class="genre-block-emoji">${g.icon}</span>
-                <span class="genre-block-name">${g.name}</span>
-            </div>
-        `).join('');
-    };
-
-    c.innerHTML = `
-    <div class="modal-overlay" id="allGenresOverlay">
-        <div class="modern-modal-wrapper" style="max-height: 90vh; background: var(--bg-color);">
-            <div class="modal-drag-handle"></div>
-            
-            <div style="padding: 24px 24px 16px; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0; font-size: 1.4rem; font-weight: 800;">Odkrywaj</h3>
-                <button class="icon-button close-genres-btn" style="background: var(--card-color);">${ICONS.close}</button>
-            </div>
-
-            <!-- Zakładki Filmy / Seriale -->
-            <div class="modal-tabs-wrapper">
-                <div class="segmented-control" style="max-width: 100%;">
-                    <button class="seg-btn active" id="btn-show-movies">🎬 Filmy</button>
-                    <button class="seg-btn" id="btn-show-tv">📺 Seriale</button>
-                </div>
-            </div>
-
-            <div class="modern-modal-scroll" style="padding-top: 0;">
-                <div id="grid-movies-genres" class="genre-block-grid active">
-                    ${generateGrid(movieGenres, 'movie')}
-                </div>
-                <div id="grid-tv-genres" class="genre-block-grid">
-                    ${generateGrid(tvGenres, 'tv')}
-                </div>
-            </div>
-        </div>
-    </div>`;
-
-    const overlay = c.querySelector('#allGenresOverlay');
-    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
-    
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-    c.querySelector('.close-genres-btn').addEventListener('click', close);
-    setupSwipeToClose(overlay, close);
-
-    // --- Logika przełączania zakładek ---
-    const btnMovies = c.querySelector('#btn-show-movies');
-    const btnTv = c.querySelector('#btn-show-tv');
-    const gridMovies = c.querySelector('#grid-movies-genres');
-    const gridTv = c.querySelector('#grid-tv-genres');
-
-    btnMovies.addEventListener('click', () => {
-        triggerHaptic('light');
-        btnTv.classList.remove('active');
-        btnMovies.classList.add('active');
-        gridTv.classList.remove('active');
-        gridMovies.classList.add('active');
-    });
-
-    btnTv.addEventListener('click', () => {
-        triggerHaptic('light');
-        btnMovies.classList.remove('active');
-        btnTv.classList.add('active');
-        gridMovies.classList.remove('active');
-        gridTv.classList.add('active');
-    });
-
-    // --- Logika kliknięcia w kafelek ---
-    c.querySelectorAll('.modal-genre-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            triggerHaptic('light');
-            const genreId = e.currentTarget.dataset.genre;
-            const mediaType = e.currentTarget.dataset.mediaType;
-            
-            document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
-            
-            // Szukamy, czy ten gatunek jest na głównym pasku podążającym
-            const mainBarBtn = document.querySelector(`.discover-categories #discover-genres .discover-pill[data-genre="${genreId}"][data-media-type="${mediaType}"]`);
-            if (mainBarBtn) mainBarBtn.classList.add('active'); 
-            else document.getElementById('btn-more-genres').classList.add('active'); // Zaznacz "Więcej"
-
-            const yearContainer = document.getElementById('discover-year-container');
-            if (yearContainer) {
-                yearContainer.style.display = 'block';
-                yearContainer.style.animation = 'none';
-                yearContainer.offsetHeight; 
-                yearContainer.style.animation = 'fadeIn 0.3s ease-out';
-            }
-
-            loadDiscoverTab(genreId, true, 1, mediaType);
-            close();
-        });
-    });
-}
-// ==========================================
-// SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (Z PODZIAŁEM)
-// ==========================================
-// ==========================================
 // SZUFLADA Z PEŁNĄ LISTĄ GATUNKÓW TMDB (KAFELKI SPOTIFY)
 // ==========================================
 function openAllGenresModal() {
