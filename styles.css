@@ -5085,13 +5085,30 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
 
 /* Wykres epok (Pionowe słupki) */
 .era-chart-container {
-    display: flex; align-items: flex-end; justify-content: space-between;
-    height: 140px; margin-top: 20px; padding-bottom: 20px;
+    display: flex; 
+    align-items: flex-end; 
+    justify-content: flex-start; /* Zmiana z space-between */
+    gap: 8px; /* Stały odstęp między słupkami */
+    overflow-x: auto; /* Magia - pozwala na przewijanie! */
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    height: 140px; 
+    margin-top: 20px; 
+    padding-bottom: 20px;
     border-bottom: 2px solid color-mix(in srgb, var(--text-secondary) 20%, transparent);
 }
 .era-bar-wrapper {
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-    flex: 1; height: 100%; position: relative;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: flex-end;
+    flex: 1; 
+    min-width: 45px; /* NAJWAŻNIEJSZE: Słupek nie może być węższy niż 45px */
+    height: 100%; 
+    position: relative;
+}
+.era-chart-container::-webkit-scrollbar {
+    display: none;
 }
 .era-bar {
     width: 70%; 
@@ -5114,76 +5131,141 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
     font-size: 0.75rem; font-weight: 800; color: var(--text-color); margin-bottom: 4px;
 }
 /* ==========================================
-   ROZBUDOWANE STATYSTYKI (Plakaty i Maraton)
+   NOWY WYGLĄD MODALA GATUNKÓW (MIKRO KAFELKI)
 ========================================== */
-.stats-poster-wall {
-    display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; margin-top: 16px;
-    scrollbar-width: none; /* Ukrywa pasek przewijania */
+.genre-block-grid {
+    display: none;
+    /* Zmieniamy na 80px - wejdą 4 obok siebie na standardowym telefonie! */
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 10px; /* Bardzo ciasny układ */
+    padding: 16px 20px 32px;
+    animation: fadeIn 0.2s ease-out;
 }
-.stats-poster-wall::-webkit-scrollbar { display: none; }
-
-.stats-poster-wall img {
-    width: 60px; height: 90px; border-radius: var(--radius-sm); object-fit: cover;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3); border: 1px solid color-mix(in srgb, var(--border-color) 40%, transparent);
-    flex-shrink: 0; transition: transform 0.2s; cursor: pointer;
-}
-.stats-poster-wall img:active { transform: scale(0.95); }
-
-.binge-day-badge {
-    margin-top: 12px; background: linear-gradient(135deg, color-mix(in srgb, #ff4b2b 15%, transparent), transparent);
-    border: 1px solid color-mix(in srgb, #ff4b2b 30%, transparent); border-radius: var(--radius-md);
-    padding: 10px; display: flex; align-items: center; justify-content: space-between;
-}
-/* SIATKA WSZYSTKICH GATUNKÓW W ODKRYWAJ */
-.all-genres-grid {
+.genre-block-grid.active {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
-    padding: 16px 24px 32px;
-}
-.all-genres-grid .discover-pill {
-    width: 100%;
-    text-align: center;
-    justify-content: center;
-    display: flex;
-    font-size: 0.95rem;
-}
-/* ODBLOKOWANIE GESTÓW POZIOMYCH DLA PASKÓW PRZEWIJANIA */
-.discover-categories-wrapper,
-.cast-scroller,
-.known-for-scroller,
-.recommendations-scroller,
-.reviews-scroller,
-.stats-poster-wall {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    touch-action: auto !important;
-    will-change: scroll-position;
 }
 
-/* Upewniamy się, że same pigułki i elementy też reagują naturalnie */
-.discover-categories-wrapper *,
-.stats-poster-wall * {
-    touch-action: auto !important;
+.genre-block-card {
+    position: relative;
+    background: color-mix(in srgb, var(--card-color) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    border-radius: 10px; /* Delikatne zaokrąglenie */
+    height: 64px; /* Ekstremalnie płaskie (było 80px, a wcześniej 110px) */
+    padding: 8px; /* Minimalne marginesy w środku */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-/* Wymuszone ukrycie przycisku X w modalu gatunków (np. gdy JS jest w cache) */
-#allGenresOverlay .modal-top-close-btn,
-#allGenresOverlay .close-genres-btn {
-    display: none !important;
+
+.genre-block-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top right, color-mix(in srgb, var(--primary-color) 12%, transparent), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.genre-block-card:hover,
+.genre-block-card:active {
+    transform: translateY(-2px) scale(1.04);
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+
+.genre-block-card:hover::before,
+.genre-block-card:active::before {
+    opacity: 1;
+}
+
+.genre-block-emoji {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 1.3rem; /* Małe, subtelne emoji */
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.genre-block-card:hover .genre-block-emoji,
+.genre-block-card:active .genre-block-emoji {
+    transform: scale(1.15) rotate(5deg);
+}
+
+.genre-block-name {
+    font-size: 0.7rem; /* Bardzo mały, ale czytelny tekst */
+    font-weight: 700;
+    color: var(--text-color);
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8); /* Mocny cień dla czytelności */
+    line-height: 1.1;
+    /* Zabezpieczenie przed za długim tekstem */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Przełącznik zakładek w modalu gatunków pozostaje bez zmian */
+.modal-tabs-wrapper {
+    padding: 0 24px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 /* ==========================================
-   KURSOCHWYT DLA LIST POZIOMYCH NA PC
+   UKRYWANIE X W MODALU GATUNKÓW NA TELEFONACH
 ========================================== */
-.discover-categories-wrapper,
-.cast-scroller, 
-.known-for-scroller, 
-.recommendations-scroller, 
-.reviews-scroller, 
+@media (max-width: 600px) {
+    #allGenresOverlay .close-genres-btn {
+        display: none !important;
+    }
+    
+    /* Wyśrodkowanie tytułu "Odkrywaj", kiedy zniknie X z prawej strony */
+    #allGenresOverlay > .modern-modal-wrapper > div:first-of-type {
+        justify-content: center !important;
+    }
+}
+/* ==========================================
+   NAPRAWA ŚCIANY PLAKATÓW (Miesiące i Lata)
+========================================== */
 .stats-poster-wall {
-    cursor: grab;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important; /* To zmusza je do trzymania się w 1 linii */
+    gap: 10px !important;
+    overflow-x: auto !important; /* Włącza przewijanie poziome */
+    padding-bottom: 12px !important;
+    margin-top: 16px !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important; /* Płynne przewijanie na iOS */
 }
 
-/* Gdy użytkownik "trzyma" myszkę wciśniętą */
-.active-drag {
-    cursor: grabbing !important;
+.stats-poster-wall::-webkit-scrollbar {
+    display: none !important;
+}
+
+.stats-poster-wall img {
+    width: 60px !important;
+    height: 90px !important;
+    border-radius: var(--radius-sm) !important;
+    object-fit: cover !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+    border: 1px solid color-mix(in srgb, var(--border-color) 40%, transparent) !important;
+    flex-shrink: 0 !important; /* To zabrania im się zgniatać! */
+    display: block !important;
+    transition: transform 0.2s !important;
+    cursor: pointer !important;
+}
+
+.stats-poster-wall img:active {
+    transform: scale(0.9) !important;
 }
