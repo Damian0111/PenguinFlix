@@ -1762,15 +1762,17 @@ body[data-active-tab="profile"] .scroll-to-top {
 .chart-bar {
     width: 100%;
     max-width: 44px;
-    background: linear-gradient(to top,
-            color-mix(in srgb, var(--primary-color) 40%, transparent),
-            var(--primary-color));
+    height: 100%; /* Zawsze 100% kontenera */
+    background: linear-gradient(to top, color-mix(in srgb, var(--primary-color) 40%, transparent), var(--primary-color));
     border-radius: 6px 6px 0 0;
-    transition:
-        height 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275),
-        filter 0.2s;
-    height: 0;
+    
+    /* Magia optymalizacji: Punkt startowy na dole, skala w pionie */
+    transform-origin: bottom;
+    transform: scaleY(0); 
+    
+    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s;
     box-shadow: 0 -4px 12px color-mix(in srgb, var(--primary-color) 25%, transparent);
+    will-change: transform; /* Informuje przeglądarkę, że ten element używa GPU */
 }
 
 .chart-labels {
@@ -5092,9 +5094,18 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
     flex: 1; height: 100%; position: relative;
 }
 .era-bar {
-    width: 70%; max-width: 30px;
+    width: 70%; 
+    max-width: 30px;
+    height: 100%; /* Zawsze 100% kontenera */
     background: linear-gradient(to top, color-mix(in srgb, var(--primary-color) 30%, transparent), var(--primary-color));
-    border-radius: 4px 4px 0 0; transition: height 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border-radius: 4px 4px 0 0; 
+    
+    /* Magia optymalizacji */
+    transform-origin: bottom;
+    transform: scaleY(0);
+    
+    transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: transform;
 }
 .era-label {
     position: absolute; bottom: -22px; font-size: 0.7rem; font-weight: 700; color: var(--text-secondary);
