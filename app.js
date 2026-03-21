@@ -1673,6 +1673,78 @@ function getNextEpisodeInfo(item) {
     } 
     return null; 
 }
+// OBLICZANIE DOKŁADNEGO CZASU Z POZOSTAŁYCH ODCINKÓW
+async function updateExactRemainingTime(item) {
+    const timeTextEl = document.getElementById('series-time-text');
+    if (!timeTextEl) return;
+
+    let exactMinutesLeft = 0;
+    let needsEstimation = false; // Zapali się, jeśli TMDB nie ma wpisanego czasu dla konkretnego odcinka
+    const td = new Date(); td.setHours(0,0,0,0);
+    const globalAvgRuntime = item.runtime && item.runtime > 0 ? item.runtime : 45;
+
+    for (const s of item.seasons) {
+        if (s.season_number === 0) continue; // Pomijamy odcinki specjalne
+        const sNum = s.season_number;
+        const watched = (item.progress && item.progress[sNum]) ? item.progress[sNum] : [];
+
+        // Jeśli obejrzeliśmy cały sezon, szkoda czasu na pytania do API
+        if (watched.length >= s.episode_count) continue;
+
+        // Ustalenie blokady na odcinki z przyszłości (zapowiedzi)
+        let blockFrom = 9999;
+        if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === sNum) {
+            const ad = new Date(item.nextEpisodeToAir.date);
+            ad.setHours(0,0,0,0);
+            if (ad > td) blockFrom = item.nextEpisodeToAir.episode;
+        }
+
+        // Pobieramy dane sezonu (z naszego szybkiego cache w IndexedDB lub z TMDB)
+        const seasonData = await getSeasonDetails(item.id, sNum);
+
+        if (seasonData && seasonData.episodes) {
+            for (const ep of seasonData.episodes) {
+                // Jeśli odcinek NIE jest obejrzany i NIE jest "zablokowany" w przyszłości
+                if (!watched.includes(ep.episode_number) && ep.episode_number < blockFrom) {
+                    
+                    let epDate = null;
+                    if (ep.air_date) {
+                        epDate = new Date(ep.air_date);
+                        epDate.setDate(epDate.getDate() + 1); // Korekta strefy EU
+                        epDate.setHours(0,0,0,0);
+                    }
+
+                    // Jeśli odcinek miał już premierę
+                    if (!epDate || epDate <= td) {
+                        if (ep.runtime && ep.runtime > 0) {
+                            exactMinutesLeft += ep.runtime; // Dodajemy DOKŁADNY CZAS!
+                        } else {
+                            exactMinutesLeft += globalAvgRuntime; // Fallback tylko dla wybrakowanych wpisów na TMDB
+                            needsEstimation = true; 
+                        }
+                    }
+                }
+            }
+        } else {
+            // Fail-safe w przypadku błędu API
+            const unwatchedCount = s.episode_count - watched.length;
+            exactMinutesLeft += (unwatchedCount * globalAvgRuntime);
+            needsEstimation = true;
+        }
+    }
+
+    if (exactMinutesLeft <= 0) {
+        timeTextEl.innerHTML = 'Jesteś na bieżąco!';
+        return;
+    }
+
+    const h = Math.floor(exactMinutesLeft / 60);
+    const m = exactMinutesLeft % 60;
+    const prefix = needsEstimation ? '~' : ''; // Tylda oznacza, że np. 1 z 50 odcinków nie miał wpisanego czasu w bazie TMDB
+    const timeStr = h > 0 ? `${prefix}${h}h ${m}m` : `${prefix}${m}m`;
+
+    timeTextEl.innerHTML = `Pozostało do obejrzenia: <strong style="color: var(--info-color);">${timeStr}</strong>`;
+}
 function getNextEpisodeStr(item) { const info = getNextEpisodeInfo(item); return info ? info.string : null; }
 
 function getStatusBadge(status) {
@@ -2192,12 +2264,13 @@ async function openDetailsModal(id, type) {
     const isToWatch = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
     
     let fHTML = '';
+    let isTimeCalc = false; // <-- Zmienna pomocnicza wyciągnięta wyżej!
+
     if (isWatched) { 
         fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; 
     } else {
         let cw = true; 
         let wMsg = '';
-        let isTimeCalc = false;
 
         if (item.type === 'tv') {
             let totalAiredEpisodes = 0;
@@ -2215,7 +2288,7 @@ async function openDetailsModal(id, type) {
                 const minutesLeft = episodesLeft * avgRuntime;
                 const h = Math.floor(minutesLeft / 60); 
                 const m = minutesLeft % 60;
-                wMsg = h > 0 ? `Zostało do obejrzenia: ${h}h ${m}m` : `Zostało do obejrzenia: ${m}m`;
+                wMsg = h > 0 ? `Zostało: ~${h}h ${m}m` : `Zostało: ~${m}m`; // <-- Dodana tylda ~
             } else if (!isSeriesFinished(item)) {
                 cw = false; 
                 wMsg = 'Czekasz na nowe odcinki...'; 
@@ -2237,9 +2310,9 @@ async function openDetailsModal(id, type) {
                 
             fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;">
                 <span style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 600; display:flex; align-items:center; gap:8px;">
-                    ${iconSvg} <span>${wMsg}</span>
+                    ${iconSvg} <span id="series-time-text">${wMsg}</span>
                 </span>
-            </div>`;
+            </div>`; // <-- Dodane ID 'series-time-text'
         } else {
             fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
         }
@@ -2287,7 +2360,6 @@ async function openDetailsModal(id, type) {
     
     let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     
-    // --- NOWOŚĆ: PRZYCISK NOTATKI ---
     const hasNote = item.privateNote && item.privateNote.trim() !== '';
     let noteBtnHTML = `<button id="modal-note-btn" class="${hasNote ? 'note-btn-active' : ''}" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-secondary); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Prywatna Notatka">
         <svg viewBox="0 0 24 24" style="width:16px;height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;">
@@ -2300,7 +2372,6 @@ async function openDetailsModal(id, type) {
     
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:8px;">${noteBtnHTML}${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
-    // --- NOWOŚĆ: KONTENER NOTATKI (Z wstrzykniętym tekstem) ---
     const savedNote = item.privateNote ? escapeHTML(item.privateNote) : '';
     let privateNoteAreaHTML = `
     <div id="private-note-wrapper" class="private-note-container ${hasNote ? 'active' : ''}">
@@ -2311,7 +2382,6 @@ async function openDetailsModal(id, type) {
 
     const modal = dModal.querySelector('.modal-overlay');
     
-    // --- NOWOŚĆ: LOGIKA ZAPISU NOTATKI ---
     const noteBtn = modal.querySelector('#modal-note-btn');
     const noteWrapper = modal.querySelector('#private-note-wrapper');
     const noteTextarea = modal.querySelector('#private-note-textarea');
@@ -2325,19 +2395,16 @@ async function openDetailsModal(id, type) {
             }
         });
 
-        // Autozapis po kliknięciu poza pole
         noteTextarea.addEventListener('blur', async (e) => {
             const newVal = e.target.value.trim();
-            // Zapisujemy tylko jeśli tekst się zmienił, żeby oszczędzać bazę!
             if (item.privateNote !== newVal) {
                 item.privateNote = newVal;
                 await saveData();
-                
                 if (newVal !== '') {
                     noteBtn.classList.add('note-btn-active');
                 } else {
                     noteBtn.classList.remove('note-btn-active');
-                    noteWrapper.classList.remove('active'); // Chowa puste pole
+                    noteWrapper.classList.remove('active'); 
                 }
             }
         });
@@ -2415,6 +2482,11 @@ async function openDetailsModal(id, type) {
     } else {
         const mv = document.getElementById('moveToWatchedBtn');
         if (mv) mv.onclick = async () => { await handleMoveItem(id, type); close(); };
+    }
+
+    // --- NOWOŚĆ: Uruchomienie dokładnego obliczania czasu w tle ---
+    if (isToWatch && item.type === 'tv' && isTimeCalc) {
+        updateExactRemainingTime(item);
     }
 }
 
@@ -3988,3 +4060,69 @@ function openAllGenresModal() {
         });
     });
 }
+// ==========================================
+// PC MOUSE DRAG-TO-SCROLL (Przeciąganie myszką list poziomych)
+// ==========================================
+let isMouseDragging = false;
+let dragStartX;
+let initialScrollLeft;
+let dragContainer = null;
+let didMoveWhileDragging = false; // Flaga blokująca przypadkowe kliknięcie
+
+document.addEventListener('mousedown', (e) => {
+    // Sprawdzamy czy kliknięto w element, który ma być przewijany poziomo
+    const scroller = e.target.closest('.discover-categories-wrapper, .cast-scroller, .known-for-scroller, .recommendations-scroller, .reviews-scroller, .stats-poster-wall');
+    if (!scroller) return;
+    
+    isMouseDragging = true;
+    didMoveWhileDragging = false;
+    dragContainer = scroller;
+    dragContainer.classList.add('active-drag');
+    
+    // Zapisujemy pozycję startową myszki i paska
+    dragStartX = e.pageX - dragContainer.offsetLeft;
+    initialScrollLeft = dragContainer.scrollLeft;
+});
+
+document.addEventListener('mouseleave', () => {
+    if (!isMouseDragging) return;
+    isMouseDragging = false;
+    if (dragContainer) dragContainer.classList.remove('active-drag');
+});
+
+document.addEventListener('mouseup', () => {
+    if (!isMouseDragging) return;
+    isMouseDragging = false;
+    if (dragContainer) {
+        dragContainer.classList.remove('active-drag');
+        // Zdejmujemy blokadę kliknięcia z opóźnieniem, by wyłapać event "click"
+        setTimeout(() => { didMoveWhileDragging = false; dragContainer = null; }, 50);
+    }
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isMouseDragging || !dragContainer) return;
+    
+    const x = e.pageX - dragContainer.offsetLeft;
+    const walk = (x - dragStartX) * 1.5; // Prędkość przewijania (1.5x)
+    
+    // Uznajemy za "przesunięcie", dopiero gdy kursor przejedzie > 5 pikseli
+    if (Math.abs(walk) > 5) {
+        didMoveWhileDragging = true;
+    }
+    
+    // Jeśli użytkownik przesuwa, przewijamy pasek i blokujemy zaznaczanie tekstu
+    if (didMoveWhileDragging) {
+        e.preventDefault(); 
+        dragContainer.scrollLeft = initialScrollLeft - walk;
+    }
+});
+
+// Przechwytujemy kliknięcie "na twardo" (faza Capture) 
+// Jeśli nastąpiło po przeciągnięciu, anulujemy je, żeby nie aktywować przycisku/filmu
+document.addEventListener('click', (e) => {
+    if (didMoveWhileDragging) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+}, true);
