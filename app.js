@@ -4085,3 +4085,136 @@ async function requestPersistentStorage() {
         }
     }
 }
+// ==========================================
+// ZDJĘCIE PROFILOWE (EXTREME COMPRESSION & DELETE)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const avatarInput = document.getElementById('avatar-upload');
+    const customImg = document.getElementById('custom-avatar-img');
+    const defaultSvg = document.getElementById('default-avatar-svg');
+    const avatarLabel = document.querySelector('.avatar-container'); // Nasz kontener z awatarem
+
+    // 1. Ładowanie zapisanego zdjęcia po uruchomieniu aplikacji
+    const loadAvatar = () => {
+        const savedAvatar = localStorage.getItem('penguinAvatar');
+        if (savedAvatar) {
+            customImg.src = savedAvatar;
+            customImg.style.display = 'block';
+            defaultSvg.style.display = 'none';
+        } else {
+            customImg.style.display = 'none';
+            defaultSvg.style.display = 'block';
+            customImg.src = '';
+        }
+    };
+    loadAvatar();
+
+    // 2. Obsługa wgrania nowego zdjęcia
+    if (avatarInput) {
+        avatarInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            triggerHaptic('light');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const MAX_SIZE = 150;
+                    canvas.width = MAX_SIZE;
+                    canvas.height = MAX_SIZE;
+
+                    const minDim = Math.min(img.width, img.height);
+                    const startX = (img.width - minDim) / 2;
+                    const startY = (img.height - minDim) / 2;
+
+                    ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, MAX_SIZE, MAX_SIZE);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+                    localStorage.setItem('penguinAvatar', compressedBase64);
+                    loadAvatar(); // Aktualizuje widok na górze
+                    updateBottomNavAvatar(); // Aktualizuje ikonkę na dolnym pasku
+                    
+                    showCustomAlert('Świetnie!', 'Zaktualizowano zdjęcie profilowe.', 'success');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        });
+    }
+
+    // 3. Usuwanie zdjęcia (Long Press na telefonie / Prawy Przycisk na PC)
+    if (avatarLabel) {
+        let pressTimer;
+
+        // Telefon: Długie przytrzymanie palcem
+        avatarLabel.addEventListener('touchstart', (e) => {
+            if (!localStorage.getItem('penguinAvatar')) return; // Reaguj tylko jak masz zdjęcie
+            pressTimer = setTimeout(async () => {
+                triggerHaptic('heavy');
+                e.preventDefault(); // Blokujemy otwarcie galerii
+                if (await showCustomConfirm('Usunąć zdjęcie?', 'Czy chcesz powrócić do domyślnego avatara?')) {
+                    removeAvatar();
+                }
+            }, 600);
+        }, { passive: true });
+
+        avatarLabel.addEventListener('touchend', () => clearTimeout(pressTimer));
+        avatarLabel.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+        // PC: Kliknięcie prawym przyciskiem myszy
+        avatarLabel.addEventListener('contextmenu', async (e) => {
+            if (!localStorage.getItem('penguinAvatar')) return;
+            e.preventDefault(); // Blokujemy domyślne menu przeglądarki
+            if (await showCustomConfirm('Usunąć zdjęcie?', 'Czy chcesz powrócić do domyślnego avatara?')) {
+                removeAvatar();
+            }
+        });
+    }
+
+    function removeAvatar() {
+        localStorage.removeItem('penguinAvatar');
+        loadAvatar(); // Ukrywa customowe zdjęcie na górze
+        
+        // Resetowanie ikonki w dolnym pasku
+        const profileNavItem = document.querySelector('.nav-item[data-maintab="profile"]');
+        if (profileNavItem) {
+            const svg = profileNavItem.querySelector('svg');
+            const img = profileNavItem.querySelector('.nav-mini-avatar');
+            if (svg) svg.style.display = 'block'; // Przywraca ikonę ludzika
+            if (img) img.remove(); // Usuwa img tag
+        }
+        
+        showCustomAlert('Usunięto', 'Przywrócono domyślny wygląd.', 'info');
+    }
+});
+// ==========================================
+// AWATAR W DOLNEJ NAWIGACJI (MICRO-DELIGHT)
+// ==========================================
+function updateBottomNavAvatar() {
+    const savedAvatar = localStorage.getItem('penguinAvatar');
+    const profileNavItem = document.querySelector('.nav-item[data-maintab="profile"]');
+    
+    if (savedAvatar && profileNavItem) {
+        // Szukamy SVG
+        const svg = profileNavItem.querySelector('svg');
+        if (svg) svg.style.display = 'none'; // Chowamy starą ikonę
+        
+        // Tworzymy lub aktualizujemy małe zdjęcie
+        let img = profileNavItem.querySelector('.nav-mini-avatar');
+        if (!img) {
+            img = document.createElement('img');
+            img.className = 'nav-mini-avatar';
+            profileNavItem.insertBefore(img, profileNavItem.firstChild);
+        }
+        img.src = savedAvatar;
+    }
+}
+
+// Dodaj ten kod do nasłuchiwacza na dole app.js (tam gdzie obsługujesz wgrywanie avatara)
+// Wystarczy wywołać to po załadowaniu i po wgraniu nowego zdjęcia:
+document.addEventListener('DOMContentLoaded', updateBottomNavAvatar);
