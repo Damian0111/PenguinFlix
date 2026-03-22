@@ -1,12 +1,17 @@
-const CACHE_NAME = 'penguinflix-cache-v4'; // Podbite do v4 po rozbiciu na pliki CSS i JS
+const CACHE_NAME = 'penguinflix-cache-v5'; // Wymusza pobranie nowego manifestu i nowych grafik!
 const URLS_TO_CACHE = [
   './',
   './index.html',
-  './styles.css',      // NOWOŚĆ: Dodany plik CSS
-  './app.js',          // NOWOŚĆ: Dodany plik JS
+  './styles.css',
+  './app.js',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  // NOWE PLIKI GRAFICZNE DLA PWA (Richer UI)
+  './icon-maskable-192.png',
+  './icon-maskable-512.png',
+  './screen-mobile-1.png',   // Zrzut ekranu 1
+  './screen-mobile-2.png'    // Zrzut ekranu 2
 ];
 
 self.addEventListener('install', event => {
