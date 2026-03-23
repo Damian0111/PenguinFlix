@@ -15,7 +15,6 @@
   <link rel="manifest" href="manifest.json?v=6" />
   <link rel="apple-touch-icon" href="icon-192.png" />
 
-
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -28,7 +27,6 @@
     </svg>
   </div>
 
- 
   <div id="smart-backup-container"></div>
   <div id="toast-container"></div>
 
@@ -196,14 +194,11 @@
           <label class="avatar-container" title="Zmień zdjęcie">
             <input type="file" id="avatar-upload" accept="image/png, image/jpeg, image/webp" style="display: none;">
             
-            
             <svg id="default-avatar-svg" class="avatar-icon" viewBox="0 0 24 24">
               <path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
             </svg>
             
-            
             <img id="custom-avatar-img" src="" style="display: none;">
-            
             
             <div class="avatar-overlay">
                 <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
@@ -248,9 +243,12 @@
         </div>
 
         <div id="ptab-settings" class="profile-sub-section">
+          
           <div class="settings-section">
             <div class="settings-section-title">Wygląd i działanie</div>
             <div class="settings-group">
+              
+              <!-- Przycisk Motywu -->
               <button class="settings-item" id="btn-theme-toggle">
                 <svg class="icon" viewBox="0 0 24 24">
                   <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -261,25 +259,35 @@
                 </svg>
               </button>
 
-              <label class="settings-item modern-toggle-row">
+              <!-- NOWOŚĆ: Przycisk wysuwający okno kolorów -->
+              <button class="settings-item" id="btn-avatar-color-modal">
+                <svg class="icon" viewBox="0 0 24 24" style="stroke: currentColor; fill: none;">
+                  <path d="M12 2.69l5.66 4.2c.86.64 1.34 1.66 1.34 2.74v8.28c0 1.76-1.43 3.19-3.2 3.19H8.2c-1.77 0-3.2-1.43-3.2-3.19v-8.28c0-1.08.48-2.1 1.34-2.74L12 2.69z"></path>
+                  <path d="M12 11v6"></path>
+                  <path d="M9 14h6"></path>
+                </svg>
+                <span class="text">Kolor domyślnego awatara</span>
+                
+                <!-- Kółeczko pokazujące obecny kolor -->
+                <div id="avatar-color-preview" style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>
+              </button>
+
+              <!-- Przycisk Wibracji -->
+              <label class="settings-item modern-toggle-row" style="margin-bottom: 0; border-bottom: 1px solid var(--border-color) !important; border-radius: 0;">
                 <div style="display: flex; align-items: center; gap: 16px">
-                  <svg class="icon" viewBox="0 0 24 24" style="
-                        stroke: currentColor;
-                        fill: none;
-                        width: 24px;
-                        height: 24px;
-                      ">
+                  <svg class="icon" viewBox="0 0 24 24" style="stroke: currentColor; fill: none; width: 24px; height: 24px;">
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
                   </svg>
                   <span class="text">Wibracje</span>
                 </div>
-
                 <div class="toggle-switch">
                   <input type="checkbox" id="haptics-checkbox" />
                   <div class="slider"></div>
                 </div>
               </label>
-              <label class="settings-item modern-toggle-row">
+              
+              <!-- Przycisk Powiadomień -->
+              <label class="settings-item modern-toggle-row" style="margin-bottom: 0; border-bottom: none !important; border-radius: 0;">
                 <div style="display: flex; align-items: center; gap: 16px">
                   <svg class="icon" viewBox="0 0 24 24">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -294,6 +302,7 @@
                   <div class="slider"></div>
                 </div>
               </label>
+
             </div>
           </div>
 
@@ -413,7 +422,8 @@
       <span>Odkrywaj</span>
     </button>
     <button class="nav-item" data-maintab="profile">
-      <svg viewBox="0 0 24 24">
+      <!-- DODANA KLASA penguin-nav-icon -->
+      <svg class="penguin-nav-icon" viewBox="0 0 24 24">
         <path
           d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
       </svg>
@@ -439,26 +449,21 @@
     </svg>
   </button>
 
- 
   <div id="notificationPanelContainer"></div>
 
   <script src="app.js"></script>
    
-     <div id="full-stats-page" class="full-page-view">
-      
+  <div id="full-stats-page" class="full-page-view">
         <div class="drawer-swipe-handle"></div>
-        
-       
         <div class="fp-header" style="justify-content: center;">
             <h2 class="fp-title">Centrum Statystyk</h2>
         </div>
         
-             <div class="fp-tabs">
+        <div class="fp-tabs">
             <div class="segmented-control" style="margin: 0 16px 12px; max-width: 100%;">
                 <button class="seg-btn active" data-fptab="months">Miesiące</button>
                 <button class="seg-btn" data-fptab="years">Lata</button>
                 <button class="seg-btn" data-fptab="rhythm">Rytm</button>
-                
                 <button class="seg-btn" data-fptab="analysis">Analiza</button>
             </div>
         </div>
@@ -467,10 +472,8 @@
             <div id="fp-tab-months" class="fp-tab-content active"></div>
             <div id="fp-tab-years" class="fp-tab-content"></div>
             <div id="fp-tab-rhythm" class="fp-tab-content"></div>
-           
             <div id="fp-tab-analysis" class="fp-tab-content"></div>
         </div>
     </div>
 </body>
-
 </html>
