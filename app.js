@@ -242,27 +242,29 @@ function setupEventListeners() {
             if (hapticsEnabled) triggerHaptic('success');
         });
     }
-          // --- ŻELAZNA TARCZA: BLOKADA SYSTEMOWEGO MENU KONTEKSTOWEGO (TYLKO MOBILE) ---
+           // --- ŻELAZNA TARCZA 2.0: BLOKADA SYSTEMOWEGO MENU KONTEKSTOWEGO (TYLKO MOBILE) ---
+    
+    // 1. Blokada głównego menu "Zapisz obraz / Kopiuj" (Android / Prawy klik)
     window.addEventListener('contextmenu', (e) => {
         // Sprawdzamy, czy to jest telefon/tablet (ekran dotykowy bez myszki)
         const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
         
-        // Jeśli to komputer (myszka), natychmiast przerywamy i pozwalamy na normalny prawy przycisk!
+        // Jeśli to komputer (myszka), natychmiast przerywamy i pozwalamy na wszystko!
         if (!isTouchDevice) return;
 
         const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        // Zostawiamy wyjątek dla awatara, żeby działało jego usuwanie!
         const isAvatar = e.target.closest('.avatar-container');
         
         if (!isInput && !isAvatar) {
             e.preventDefault();
+            e.stopPropagation(); // NOWOŚĆ: Brutalne ubicie eventu dla przeglądarki
         }
-    });
+    }, { passive: false });
 
-    // Zabezpieczenie specyficzne dla Safari na iOS (tzw. lupa i "select-to-copy")
+    // 2. Blokada systemowej "lupy" i zaznaczania tekstu (Szczególnie iOS Safari)
     document.addEventListener('selectstart', (e) => {
         const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-        
-        // Na PC pozwalamy na normalne zaznaczanie tekstu kursorem!
         if (!isTouchDevice) return;
 
         const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
@@ -270,6 +272,23 @@ function setupEventListeners() {
             e.preventDefault();
         }
     });
+
+    // 3. NOWOŚĆ: Najmocniejsza blokada dla iOS Safari reagująca na sam dotyk
+    document.addEventListener('touchstart', (e) => {
+        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+        if (!isTouchDevice) return;
+
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        const isAvatar = e.target.closest('.avatar-container');
+
+        if (!isInput && !isAvatar) {
+            // Natychmiastowe odcięcie systemowych okienek od elementu dotykanego
+            document.documentElement.style.webkitTouchCallout = 'none';
+        } else {
+            // Przywrócenie zachowania dla pół tekstowych
+            document.documentElement.style.webkitTouchCallout = 'default';
+        }
+    }, { passive: true });
     // --- UX: AUTO-CHOWANIE KLAWIATURY PRZY PRZEWIJANIU ---
     document.getElementById('mainContent').addEventListener('touchmove', () => {
         const activeEl = document.activeElement;
@@ -2100,6 +2119,11 @@ async function openFilterModal() {
             const v = parseInt(e.target.value);
             if (v >= 200) display.textContent = 'Bez limitu';
             else { const h = Math.floor(v / 60); const m = v % 60; display.textContent = h > 0 ? `${h}h ${m}m` : `${m}m`; }
+             // FIZYKA: Jeśli wartość przeskoczyła na "ząbku" (co 10 minut), wywołaj ultra-krótką wibrację
+            if (v !== lastHapticValue) {
+                triggerHaptic('light'); 
+                lastHapticValue = v;
+            }
         });
     }
 
@@ -4637,3 +4661,90 @@ function updateBottomNavAvatar() {
 // Dodaj ten kod do nasłuchiwacza na dole app.js (tam gdzie obsługujesz wgrywanie avatara)
 // Wystarczy wywołać to po załadowaniu i po wgraniu nowego zdjęcia:
 document.addEventListener('DOMContentLoaded', updateBottomNavAvatar);
+// ==========================================
+// 18. SYSTEM INTEGRACJI Z URZĄDZENIEM
+// ==========================================
+
+// --- A. Detektor Sieci (Offline/Online Monitor) ---
+document.addEventListener('DOMContentLoaded', () => {
+    const offlineBanner = document.createElement('div');
+    offlineBanner.id = 'offline-banner';
+    document.body.appendChild(offlineBanner);
+
+    window.addEventListener('offline', () => {
+        offlineBanner.className = 'offline';
+        offlineBanner.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;margin-right:8px;"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path><path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg> <span>Brak połączenia z siecią</span>`;
+        triggerHaptic('error');
+    });
+
+    window.addEventListener('online', () => {
+        offlineBanner.className = 'online';
+        offlineBanner.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;margin-right:8px;stroke-linecap:round;stroke-linejoin:round;"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Znowu online!</span>`;
+        triggerHaptic('success');
+        setTimeout(() => { offlineBanner.className = ''; }, 3000); // Chowa się po 3s
+    });
+});
+
+// --- B. Proaktywny Panel Instalacji (PWA) ---
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // Blokujemy domyślny, brzydki pasek przeglądarki
+    deferredPrompt = e;
+    
+    // Pokazujemy nasz piękny natywny panel, jeśli użytkownik go wcześniej nie odrzucił
+    if(localStorage.getItem('installPromptDismissed') !== 'true') {
+        showCustomInstallPrompt();
+    }
+});
+
+function showCustomInstallPrompt() {
+    let overlay = document.getElementById('installPromptOverlay');
+    if(!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'installPromptOverlay';
+        overlay.className = 'install-prompt-overlay';
+        overlay.innerHTML = `
+            <div class="install-prompt-sheet">
+                <div style="display:flex; gap:16px; align-items:center; margin-bottom:24px;">
+                    <div style="width:64px; height:64px; background:linear-gradient(135deg, var(--primary-color), #ff4b2b); border-radius:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px color-mix(in srgb, var(--primary-color) 40%, transparent); flex-shrink:0;">
+                        <svg viewBox="0 0 24 24" style="width:36px; height:36px; fill:none; stroke:#fff; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin:0 0 6px; font-size:1.3rem; color:var(--text-color); font-weight:800;">Zainstaluj Aplikację</h3>
+                        <p style="margin:0; font-size:0.9rem; color:var(--text-secondary); line-height:1.4;">Dodaj PenguinFlix do ekranu głównego. Działa szybciej, na pełnym ekranie i zużywa mniej baterii.</p>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <button id="btn-install-dismiss" style="flex:1; padding:16px; border-radius:var(--radius-pill); border:none; background:color-mix(in srgb, var(--bg-color) 60%, transparent); color:var(--text-color); font-weight:700; font-size:1rem; cursor:pointer;">Później</button>
+                    <button id="btn-install-accept" style="flex:2; padding:16px; border-radius:var(--radius-pill); border:none; background:var(--primary-color); color:#fff; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 16px rgba(229,9,20,0.3);">Zainstaluj</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        document.getElementById('btn-install-dismiss').onclick = () => {
+            localStorage.setItem('installPromptDismissed', 'true');
+            overlay.classList.remove('visible');
+        };
+        
+        document.getElementById('btn-install-accept').onclick = async () => {
+            triggerHaptic('success');
+            overlay.classList.remove('visible');
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    localStorage.setItem('installPromptDismissed', 'true');
+                }
+                deferredPrompt = null;
+            }
+        };
+    }
+    
+    // Wysuwamy panel po 2 sekundach od wejścia do aplikacji, by nie był zbyt agresywny
+    setTimeout(() => { 
+        overlay.classList.add('visible'); 
+        triggerHaptic('heavy'); 
+    }, 2000);
+}
