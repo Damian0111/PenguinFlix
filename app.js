@@ -2111,15 +2111,20 @@ async function openFilterModal() {
     const modalContainer = document.getElementById('detailsModalContainer');
     modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Filtruj</h3><div class="control-modal-options">${filterOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Wyczyść</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
 
-    // --- 4. Interakcje (Suwak Czasu) ---
+     // --- 4. Interakcje (Suwak Czasu) ---
     if (isMovies) {
         const slider = document.getElementById('runtime-slider');
         const display = document.getElementById('runtime-display');
+        
+        // NAPRAWA: Deklarujemy zmienną przed nasłuchiwaczem!
+        let lastHapticValue = parseInt(slider.value); 
+        
         slider.addEventListener('input', (e) => {
             const v = parseInt(e.target.value);
             if (v >= 200) display.textContent = 'Bez limitu';
             else { const h = Math.floor(v / 60); const m = v % 60; display.textContent = h > 0 ? `${h}h ${m}m` : `${m}m`; }
-             // FIZYKA: Jeśli wartość przeskoczyła na "ząbku" (co 10 minut), wywołaj ultra-krótką wibrację
+            
+            // FIZYKA: Wywołaj wibrację tylko gdy przeskoczymy na nowy "ząbek"
             if (v !== lastHapticValue) {
                 triggerHaptic('light'); 
                 lastHapticValue = v;
@@ -4671,18 +4676,34 @@ document.addEventListener('DOMContentLoaded', () => {
     offlineBanner.id = 'offline-banner';
     document.body.appendChild(offlineBanner);
 
-    window.addEventListener('offline', () => {
+    const showOfflineStatus = () => {
         offlineBanner.className = 'offline';
         offlineBanner.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;margin-right:8px;"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path><path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg> <span>Brak połączenia z siecią</span>`;
-        triggerHaptic('error');
+    };
+
+    const showOnlineStatus = () => {
+        // Pokazujemy powiadomienie "Znowu online" TYLKO jeśli wcześniej apka była offline
+        if (offlineBanner.classList.contains('offline')) {
+            offlineBanner.className = 'online';
+            offlineBanner.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;margin-right:8px;stroke-linecap:round;stroke-linejoin:round;"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Znowu online!</span>`;
+            setTimeout(() => { offlineBanner.className = ''; }, 3000); // Chowa się po 3s
+        }
+    };
+
+    window.addEventListener('offline', () => { 
+        showOfflineStatus(); 
+        triggerHaptic('error'); 
     });
 
-    window.addEventListener('online', () => {
-        offlineBanner.className = 'online';
-        offlineBanner.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;margin-right:8px;stroke-linecap:round;stroke-linejoin:round;"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Znowu online!</span>`;
-        triggerHaptic('success');
-        setTimeout(() => { offlineBanner.className = ''; }, 3000); // Chowa się po 3s
+    window.addEventListener('online', () => { 
+        showOnlineStatus(); 
+        triggerHaptic('success'); 
     });
+
+    // NAPRAWA: Inicjalne sprawdzenie sieci przy starcie/odświeżeniu aplikacji
+    if (!navigator.onLine) {
+        showOfflineStatus();
+    }
 });
 
 // --- B. Proaktywny Panel Instalacji (PWA) ---
