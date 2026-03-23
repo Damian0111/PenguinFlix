@@ -318,21 +318,47 @@ function setupEventListeners() {
         });
     }
 
-    // --- NAWIGACJA ZAKŁADEK ---
+     // --- NAWIGACJA ZAKŁADEK (Ulepszona o Scroll-To-Top) ---
     document.querySelector('.bottom-nav').addEventListener('click', (e) => {
         const navItem = e.target.closest('.nav-item');
-        if (navItem && !navItem.classList.contains('active')) switchMainTab(navItem.dataset.maintab);
+        if (navItem) {
+            if (!navItem.classList.contains('active')) {
+                switchMainTab(navItem.dataset.maintab);
+            } else {
+                // Jeśli kliknięto w aktywną zakładkę -> Przewiń na samą górę!
+                triggerHaptic('light');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
     });
 
-    document.querySelector('.segmented-control').addEventListener('click', (e) => {
-        const btn = e.target.closest('.seg-btn');
-        if (btn && !btn.classList.contains('active')) switchSubTab(btn.dataset.subtab);
-    });
+    const segmentedControl = document.querySelector('.segmented-control');
+    if (segmentedControl) {
+        segmentedControl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.seg-btn');
+            if (btn) {
+                if (!btn.classList.contains('active')) {
+                    switchSubTab(btn.dataset.subtab);
+                } else {
+                    // Jeśli kliknięto w aktywną podzakładkę -> Przewiń na samą górę!
+                    triggerHaptic('light');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
+        });
+    }
 
     document.querySelectorAll('.ptab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const targetBtn = e.target.closest('.ptab-btn');
-            if (targetBtn && !targetBtn.classList.contains('active')) switchProfileTab(targetBtn.dataset.ptab);
+            if (targetBtn) {
+                if (!targetBtn.classList.contains('active')) {
+                    switchProfileTab(targetBtn.dataset.ptab);
+                } else {
+                    triggerHaptic('light');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
         });
     });
 
@@ -379,13 +405,14 @@ function setupEventListeners() {
         });
     }
     // --- TWARDY RESET FILMÓW ---
+      // --- TWARDY RESET FILMÓW (TERAZ NAPRAWIA TEŻ OCENY TMDB) ---
     const hardRefreshMoviesBtn = document.getElementById('btn-hard-refresh-movies');
     if (hardRefreshMoviesBtn) {
         hardRefreshMoviesBtn.addEventListener('click', async () => {
             triggerHaptic('medium');
             const confirm = await showCustomConfirm(
                 'Naprawić bazę filmów?', 
-                'Sprawdzę każdy stary film pod kątem przynależności do serii (kolekcji) oraz czasu trwania. To zajmie dłuższą chwilę.'
+                'Sprawdzę każdą pozycję pod kątem brakujących danych: czasu trwania, kolekcji oraz zaginionych ocen TMDb. To zajmie chwilę.'
             );
             
             if (confirm) {
@@ -394,48 +421,52 @@ function setupEventListeners() {
                 hardRefreshMoviesBtn.style.pointerEvents = 'none';
                 hardRefreshMoviesBtn.style.opacity = '0.7';
 
-                const listsToCheck = ['moviesToWatch', 'moviesWatched'];
+                const listsToCheck = ['moviesToWatch', 'moviesWatched', 'seriesToWatch', 'seriesWatched']; // Sprawdzamy wszystkie bazy!
                 let needsSave = false;
                 let itemsHealed = 0;
                 
-                const totalMovies = (data.moviesToWatch?.length || 0) + (data.moviesWatched?.length || 0);
-                let currentMovie = 0;
+                const totalItems = listsToCheck.reduce((acc, list) => acc + (data[list] ? data[list].length : 0), 0);
+                let currentItem = 0;
 
                 for (const listName of listsToCheck) {
                     if (!data[listName]) continue;
 
                     for (let i = 0; i < data[listName].length; i++) {
-                        currentMovie++;
+                        currentItem++;
                         const item = data[listName][i];
                         
-                        if (currentMovie % 3 === 0) { 
-                            hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Pobieranie... ${currentMovie} / ${totalMovies}</span>`;
+                        if (currentItem % 3 === 0) { 
+                            hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Pobieranie... ${currentItem} / ${totalItems}</span>`;
                         }
 
                         if (String(item.id).startsWith('custom_')) continue;
                         
-                        if (item.runtime !== undefined && item.runtime !== null && item.collectionName !== undefined) {
-                            continue; 
+                        // ZMIANA: Sprawdzamy, czy brakuje nam również tmdbRating
+                        let isHealthy = true;
+                        if (item.type === 'movie' && (item.runtime === undefined || item.runtime === null)) isHealthy = false;
+                        if (item.collectionName === undefined) isHealthy = false;
+                        if (item.tmdbRating === undefined || item.tmdbRating === null) isHealthy = false;
+
+                        if (!isHealthy) {
+                            try {
+                                const details = await getItemDetails(item.id, item.type);
+                                if (details) {
+                                    if (item.type === 'movie' && details.runtime !== undefined) item.runtime = details.runtime;
+                                    if (details.tmdbRating !== undefined) item.tmdbRating = details.tmdbRating;
+                                    item.collectionName = details.collectionName || 'none';
+                                    needsSave = true;
+                                    itemsHealed++;
+                                }
+                            } catch (e) {}
+                            await new Promise(resolve => setTimeout(resolve, 250)); // Pauza by nie dostać bana na API
                         }
-
-                        try {
-                            const details = await getItemDetails(item.id, 'movie');
-                            if (details) {
-                                if (details.runtime !== undefined) item.runtime = details.runtime;
-                                item.collectionName = details.collectionName || 'none';
-                                needsSave = true;
-                                itemsHealed++;
-                            }
-                        } catch (e) {}
-
-                        await new Promise(resolve => setTimeout(resolve, 300)); 
                     }
                 }
 
                 if (needsSave) {
                     await saveData();
                     const activeList = getActiveListId();
-                    if (activeList && activeList.includes('movies')) renderList(data[activeList], activeList, true);
+                    if (activeList) renderList(data[activeList], activeList, true);
                 }
 
                 hardRefreshMoviesBtn.innerHTML = prevIcon;
@@ -443,9 +474,9 @@ function setupEventListeners() {
                 hardRefreshMoviesBtn.style.opacity = '1';
                 
                 if (itemsHealed > 0) {
-                    showCustomAlert('Sukces!', `Naprawiono dane dla ${itemsHealed} filmów.`, 'success');
+                    showCustomAlert('Sukces!', `Naprawiono dane dla ${itemsHealed} pozycji (w tym oceny TMDB).`, 'success');
                 } else {
-                    showCustomAlert('Gotowe', 'Wszystkie Twoje filmy są już w 100% aktualne!', 'info');
+                    showCustomAlert('Gotowe', 'Wszystkie Twoje pozycje są już w 100% aktualne!', 'info');
                 }
             }
         });
@@ -873,7 +904,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
         const titleA = (a.title || '').toLowerCase(); const titleB = (b.title || '').toLowerCase();
         const yearA = parseInt(a.year) || 0; const yearB = parseInt(b.year) || 0;
 
-        switch (sortBy) { 
+             switch (sortBy) { 
             case 'title': {
                 let sortTitleA = titleA; let sortTitleB = titleB;
                 if (a.collectionName && a.collectionName !== 'none' && collectionTitles[a.collectionName]) sortTitleA = collectionTitles[a.collectionName].title;
@@ -883,11 +914,22 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 if (yearA !== yearB) return (yearA - yearB) * dir;
                 return titleA.localeCompare(titleB, 'pl') * dir;
             }
-            case 'year': { if (yearA !== yearB) return (yearA - yearB) * dir; return titleA.localeCompare(titleB, 'pl'); }
+            case 'year': { 
+                if (yearA !== yearB) return (yearA - yearB) * dir; 
+                return titleA.localeCompare(titleB, 'pl'); 
+            }
             case 'rating': 
             case 'dateAdded': {
                 const valA = a[sortBy] || 0; const valB = b[sortBy] || 0; 
                 if (valA !== valB) return (valA - valB) * dir;
+                return titleA.localeCompare(titleB, 'pl');
+            }
+            // --- NOWOŚĆ: Logika sortowania po ocenach z serwerów TMDB ---
+            case 'tmdb': {
+                const valA = parseFloat(a.tmdbRating) || 0; 
+                const valB = parseFloat(b.tmdbRating) || 0; 
+                if (valA !== valB) return (valA - valB) * dir;
+                // W przypadku takich samych ocen (np. 8.2 i 8.2), sortujemy alfabetycznie
                 return titleA.localeCompare(titleB, 'pl');
             }
             default: return 0; 
@@ -1187,7 +1229,7 @@ async function addItemToList(id, type, list) {
 
     // KOMPRESJA: Tworzymy "lekki" obiekt tylko do wyświetlania na liście. 
     // Odcinamy ciężkie dane: backdrop, vod, pełny overview (zostawiamy max 120 znaków dla widoku listy)
-        const liteItem = {
+           const liteItem = {
         id: fullDetails.id,
         title: fullDetails.title,
         type: fullDetails.type,
@@ -1199,8 +1241,9 @@ async function addItemToList(id, type, list) {
         isFavorite: false,
         customTags: [],
         dateAdded: Date.now(),
-        // ZMIANA: Przepisujemy nazwę kolekcji do lekkiej bazy
-        collectionName: fullDetails.collectionName || null 
+        collectionName: fullDetails.collectionName || null,
+        // --- NOWOŚĆ: Zapisywanie oceny globalnej do szybkiego dostępu ---
+        tmdbRating: fullDetails.tmdbRating || 0
     };
 
     if (type === 'movie') {
@@ -1829,15 +1872,28 @@ async function openSortModal() {
     toggleAppDepthEffect(true);
     const listId = getActiveListId(); const state = viewState[listId]; const isWatched = listId.includes('Watched');
     const isCustom = listId === 'moviesToWatch' || listId === 'seriesToWatch';
+    
+    // Podstawowe opcje sortowania (Dla każdej zakładki)
     const opts = [
         { value: 'dateAdded_desc', label: 'Najnowsze na liście', icon: '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>' },
         { value: 'dateAdded_asc', label: 'Najstarsze na liście', icon: '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 8 14"></polyline>' },
         { value: 'title_asc', label: 'Tytuł (A-Z)', icon: '<path d="M4 15l4 4 4-4M8 4v15M20 4h-8M20 8h-6M20 12h-4" />' },
         { value: 'title_desc', label: 'Tytuł (Z-A)', icon: '<path d="M4 9l4-4 4 4M8 20V5M20 4h-8M20 8h-6M20 12h-4" />' },
         { value: 'year_desc', label: 'Rok (najnowsze)', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>' },
-        { value: 'year_asc', label: 'Rok (najstarsze)', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>' }
+        { value: 'year_asc', label: 'Rok (najstarsze)', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>' },
+        
+        // NOWOŚĆ: Sortowanie po ocenie społeczności TMDB
+        { value: 'tmdb_desc', label: 'Ocena TMDb (najwyższa)', icon: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>' },
+        { value: 'tmdb_asc', label: 'Ocena TMDb (najniższa)', icon: '<path d="M12 17.75l-6.17 3.12 1.18-7.03L2 9.1l7.15-.61L12 2l2.85 6.49 7.15.61-5.01 4.74 1.18 7.03z"></path>' }
     ];
-    if (isWatched) { opts.push({ value: 'rating_desc', label: 'Ocena (najwyższa)', icon: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>' }, { value: 'rating_asc', label: 'Ocena (najniższa)', icon: '<path d="M12 17.75l-6.17 3.12 1.18-7.03L2 9.1l7.15-.61L12 2l2.85 6.49 7.15.61-5.01 4.74 1.18 7.03z"></path>' }); }
+    
+    // Twoje własne oceny (Tylko dla zakładki Obejrzane)
+    if (isWatched) { 
+        opts.push(
+            { value: 'rating_desc', label: 'Twoja ocena (najwyższa)', icon: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>' }, 
+            { value: 'rating_asc', label: 'Twoja ocena (najniższa)', icon: '<path d="M12 17.75l-6.17 3.12 1.18-7.03L2 9.1l7.15-.61L12 2l2.85 6.49 7.15.61-5.01 4.74 1.18 7.03z"></path>' }
+        ); 
+    }
 
     const optsHTML = opts.map(o => `<label class="modern-radio-row"><input type="radio" name="sort" value="${o.value}" ${state.sortBy === o.value ? 'checked' : ''}><svg class="icon" viewBox="0 0 24 24">${o.icon}</svg><span class="label-text">${o.label}</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>`).join('');
     const modal = document.getElementById('detailsModalContainer');
