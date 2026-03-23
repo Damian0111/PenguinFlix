@@ -183,7 +183,8 @@ async function init() {
         // --- NOWOŚĆ: Prośba o trwałą pamięć ---
         requestPersistentStorage();
 
-
+if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.runEngine();}
 
     } else { showConfig(); }
     setupEventListeners();
@@ -2489,20 +2490,147 @@ function populateAndRenderSeriesSections(item, container) {
 }
 
 function renderSeasonsProgress(item, container) {
-    if (!item.seasons || item.seasons.length === 0) { container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Brak sezonów.</p></div>`; return; }
+    if (!item.seasons || item.seasons.length === 0) { 
+        container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3><p style="color: var(--text-secondary);">Brak sezonów.</p></div>`; 
+        return; 
+    }
     if (!item.progress) item.progress = {};
+
+    // 1. OBLICZANIE STANU "NA ŻYWO" (Zanim wyrenderujemy przycisk)
+    const today = new Date(); today.setHours(0,0,0,0);
+    let limitSeason = 9999;
+    let limitEpisode = 9999;
+
+    // Ustalamy granicę "przyszłości"
+    if (item.nextEpisodeToAir) {
+        const ad = new Date(item.nextEpisodeToAir.date);
+        ad.setHours(0,0,0,0);
+        if (ad > today) {
+            limitSeason = item.nextEpisodeToAir.season;
+            limitEpisode = item.nextEpisodeToAir.episode;
+        }
+    }
+
+    let totalReleased = 0;
+    let totalWatched = 0;
+
+    // Liczymy ile wyszło i ile obejrzałeś
+    item.seasons.forEach(s => {
+        const sNum = s.season_number;
+        if (sNum === 0) return; // Ignorujemy odcinki specjalne
+
+        let maxToMark = 0;
+        if (sNum < limitSeason) maxToMark = s.episode_count;
+        else if (sNum === limitSeason) maxToMark = limitEpisode - 1;
+
+        totalReleased += maxToMark;
+        totalWatched += (item.progress[sNum] ? item.progress[sNum].length : 0);
+    });
+
+    // Czy obejrzeliśmy absolutnie wszystko, co wyszło?
+    const isAllReleasedWatched = totalReleased > 0 && totalWatched >= totalReleased;
+
+    // 2. BUDOWANIE PRZYCISKU NA PODSTAWIE STANU
+    const btnText = isAllReleasedWatched ? 'Odznacz cały postęp oglądania' : 'Oznacz całą wydaną historię jako obejrzaną';
+    const btnColor = isAllReleasedWatched ? 'var(--text-secondary)' : 'var(--primary-color)';
+    const btnBg = isAllReleasedWatched ? 'transparent' : 'color-mix(in srgb, var(--primary-color) 10%, transparent)';
+    const btnIcon = isAllReleasedWatched 
+        ? `<svg viewBox="0 0 24 24" style="width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.5;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+        : `<svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M.41 13.41L6 19l1.41-1.42L1.83 12m20.41-6.42L11.66 16.17 7.5 12l-1.43 1.41L11.66 19l12-12M18 7l-1.41-1.41-6.61 6.61 1.41 1.41 6.61-6.61z"/></svg>`;
+
+    const globalMarkBtnHTML = `
+        <button id="global-mark-watched-btn" style="width: 100%; background: ${btnBg}; border: 1px dashed color-mix(in srgb, ${btnColor} 40%, transparent); color: ${btnColor}; font-weight: 700; font-size: 0.9rem; padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
+            ${btnIcon}
+            ${btnText}
+        </button>
+    `;
+
+    // 3. BUDOWANIE KART SEZONÓW
     const sHTML = item.seasons.map(s => `<div class="season-details" data-season-number="${s.season_number}"><div class="season-summary"><h4>${escapeHTML(s.name)}</h4><span class="season-progress">${item.progress[s.season_number]?.length || 0} / ${s.episode_count}</span></div><div class="episodes-list"><div class="loading-episodes">Ładowanie...</div></div></div>`).join('');
-    container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3>${sHTML}</div>`;
+    
+    container.innerHTML = `<div class="seasons-section" style="margin-top:0; padding-top:0; border:none;"><h3>Postęp oglądania</h3>${globalMarkBtnHTML}${sHTML}</div>`;
+    
+    // 4. LOGIKA KLIKNIĘCIA DLA GŁÓWNEGO PRZYCISKU
+    const globalBtn = container.querySelector('#global-mark-watched-btn');
+    if (globalBtn) {
+        globalBtn.addEventListener('click', async () => {
+            if (isAllReleasedWatched) {
+                // TRYB ODZNACZANIA
+                if (await showCustomConfirm('Odznaczyć wszystko?', 'Czy chcesz wyzerować cały postęp i zacząć ten serial od nowa?')) {
+                    triggerHaptic('medium');
+                    globalBtn.textContent = 'Czyszczenie...';
+                    globalBtn.style.pointerEvents = 'none';
+
+                    item.seasons.forEach(s => {
+                        if (s.season_number > 0) item.progress[s.season_number] = [];
+                    });
+
+                    await saveData();
+                    openDetailsModal(item.id, item.type);
+                    showCustomAlert('Wyzerowano', 'Postęp serialu został usunięty.', 'info');
+                }
+            } else {
+                // TRYB ZAZNACZANIA
+                if (await showCustomConfirm('Zaznaczyć wszystko?', 'Czy chcesz odhaczyć WSZYSTKIE odcinki, które miały już premierę na świecie?')) {
+                    triggerHaptic('success');
+                    globalBtn.textContent = 'Przetwarzanie...';
+                    globalBtn.style.pointerEvents = 'none';
+
+                    let changed = false;
+                    item.seasons.forEach(s => {
+                        const sNum = s.season_number;
+                        if (sNum === 0) return;
+
+                        let maxToMark = 0;
+                        if (sNum < limitSeason) maxToMark = s.episode_count;
+                        else if (sNum === limitSeason) maxToMark = limitEpisode - 1;
+
+                        if (maxToMark > 0) {
+                            item.progress[sNum] = Array.from({length: maxToMark}, (_, i) => i + 1);
+                            changed = true;
+                        }
+                    });
+
+                    if (changed) {
+                        await saveData();
+                        openDetailsModal(item.id, item.type);
+                        
+                        const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
+                        if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { 
+                            setTimeout(async () => { 
+                                if(await showCustomConfirm('Ukończono! 🎉', 'Obejrzałeś wszystko. Przenieść do obejrzanych?')) { 
+                                    await handleMoveItem(item.id, 'tv'); 
+                                    document.getElementById('detailsModalContainer').innerHTML = ''; 
+                                    toggleAppDepthEffect(false); 
+                                } 
+                            }, 500); 
+                        } else {
+                            showCustomAlert('Gotowe!', 'Zaznaczono całą wydaną historię.', 'success');
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 5. LOGIKA ROZWIJANIA POJEDYNCZYCH SEZONÓW
     container.querySelectorAll('.season-summary').forEach(s => {
         s.addEventListener('click', async (e) => {
-            const sDiv = e.currentTarget.parentElement; const epDiv = sDiv.querySelector('.episodes-list'); const sNum = sDiv.dataset.seasonNumber;
-            if (epDiv.style.display === 'block') epDiv.style.display = 'none';
-            else {
+            const sDiv = e.currentTarget.parentElement; 
+            const epDiv = sDiv.querySelector('.episodes-list'); 
+            const sNum = sDiv.dataset.seasonNumber;
+            if (epDiv.style.display === 'block') {
+                epDiv.style.display = 'none';
+            } else {
                 epDiv.style.display = 'block';
                 if (!epDiv.dataset.loaded) {
                     const sd = await getSeasonDetails(item.id, sNum);
-                    if (sd && sd.episodes) { renderEpisodes(item, sd, epDiv); epDiv.dataset.loaded = 'true'; }
-                    else epDiv.innerHTML = `<div class="loading-episodes" style="color: var(--primary-color)">Błąd.</div>`;
+                    if (sd && sd.episodes) { 
+                        renderEpisodes(item, sd, epDiv); 
+                        epDiv.dataset.loaded = 'true'; 
+                    } else {
+                        epDiv.innerHTML = `<div class="loading-episodes" style="color: var(--primary-color)">Błąd ładowania.</div>`;
+                    }
                 }
             }
         });
@@ -2596,12 +2724,38 @@ function renderEpisodes(item, seasonData, container) {
             if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if(await showCustomConfirm('Gratulacje! 🎉', 'Obejrzałeś cały serial. Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); }
         }
     });
-
     container.querySelector('.season-toggle-all-btn').addEventListener('click', async e => {
-        if (allW) { item.progress[sNum] = []; container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); }
-        else { item.progress[sNum] = avEps.map(ep => ep.episode_number); container.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true); }
-        await saveData(); updateSeasonProgressUI(item, sNum); e.target.textContent = allW ? 'Zaznacz wydane' : 'Odznacz obejrzane'; renderList(data['seriesToWatch'], 'seriesToWatch', true);
-        if(!allW) { const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0); if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { setTimeout(async () => { if(await showCustomConfirm('Ukończono! 🎉', 'Przenieść do obejrzanych?')) { await handleMoveItem(item.id, 'tv'); document.getElementById('detailsModalContainer').innerHTML = ''; toggleAppDepthEffect(false); } }, 400); } }
+        // NA ŻYWO sprawdzamy, czy w tym ułamku sekundy wszystko jest zaznaczone
+        const isCurrentlyAllWatched = item.progress[sNum].length >= avEps.length && avEps.length > 0;
+
+        if (isCurrentlyAllWatched) { 
+            item.progress[sNum] = []; 
+            container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); 
+        } else { 
+            item.progress[sNum] = avEps.map(ep => ep.episode_number); 
+            container.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true); 
+        }
+        
+        await saveData(); 
+        updateSeasonProgressUI(item, sNum); 
+        
+        // Odwracamy tekst przycisku na podstawie STAREGO stanu (przed kliknięciem)
+        e.target.textContent = isCurrentlyAllWatched ? 'Zaznacz wydane' : 'Odznacz obejrzane'; 
+        renderList(data['seriesToWatch'], 'seriesToWatch', true);
+        
+        // Logika ukończenia serialu (odpala się tylko gdy właśnie zaznaczyliśmy odcinki)
+        if(!isCurrentlyAllWatched) { 
+            const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0); 
+            if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { 
+                setTimeout(async () => { 
+                    if(await showCustomConfirm('Ukończono! 🎉', 'Przenieść do obejrzanych?')) { 
+                        await handleMoveItem(item.id, 'tv'); 
+                        document.getElementById('detailsModalContainer').innerHTML = ''; 
+                        toggleAppDepthEffect(false); 
+                    } 
+                }, 400); 
+            } 
+        }
     });
 }
 function updateSeasonProgressUI(item, sNum) { const sd = document.querySelector(`.season-details[data-season-number="${sNum}"]`); if (sd) { const p = sd.querySelector('.season-progress'); const tot = p.textContent.split('/')[1].trim(); p.textContent = `${item.progress[sNum]?.length || 0} / ${tot}`; } }
