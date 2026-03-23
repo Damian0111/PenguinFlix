@@ -205,9 +205,6 @@ body {
     touch-action: pan-y;
 }
 
-body.header-hidden {
-    padding-top: calc(16px + var(--safe-top)) !important;
-}
 
 /* EFEKT GŁĘBI iOS W TLE */
 body.modal-active #fixed-header,
