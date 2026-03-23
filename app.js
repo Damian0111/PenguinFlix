@@ -814,7 +814,10 @@ function updateToolbarUI(mainTabId) {
     localSearchInput.value = state.localSearch || ''; clearLocalSearch.style.display = state.localSearch ? 'flex' : 'none';
     const isCustomSortActive = state.sortBy === 'custom_asc'; let sortOptionsActive = state.sortBy !== 'dateAdded_desc';
     if (isCustomSortActive && (listId === 'moviesToWatch' || listId === 'seriesToWatch')) { sortOptionsActive = false; }
-    const filterOptionsActive = (state.filterByGenre !== 'all' || state.filterFavoritesOnly || (state.filterByCustomTag && state.filterByCustomTag !== 'all') || (state.filterByVod && state.filterByVod !== 'all'));
+    
+    // --- ZMIANA: Dodano state.hideTBA do warunków zapalenia ikonki filtra ---
+    const filterOptionsActive = (state.filterByGenre !== 'all' || state.filterFavoritesOnly || (state.filterByCustomTag && state.filterByCustomTag !== 'all') || (state.filterByVod && state.filterByVod !== 'all') || state.hideTBA);
+    
     parentTab.querySelector('.btn-sort').classList.toggle('active', sortOptionsActive);
     parentTab.querySelector('.btn-filter').classList.toggle('active', filterOptionsActive);
     parentTab.querySelector('.btn-view-toggle').innerHTML = viewState.globalViewMode === 'grid' ? ICONS.list : ICONS.grid;
@@ -830,6 +833,14 @@ function renderList(originalItems, listId, preserveLimit = false) {
     // --- FILTROWANIE ---
     if (state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies')) {
         itemsToRender = itemsToRender.filter(item => item.runtime && item.runtime <= state.maxRuntime);
+    }
+    // --- NOWOŚĆ: Ukrywanie seriali w zawieszeniu ---
+    if (state.hideTBA && listId === 'seriesToWatch') {
+        itemsToRender = itemsToRender.filter(item => {
+            if (getNextEpisodeInfo(item)) return true; // Zostaw, jeśli jest coś do obejrzenia teraz
+            if (item.nextEpisodeToAir && item.nextEpisodeToAir.date) return true; // Zostaw, jeśli znamy datę kolejnej premiery
+            return false; // Ukryj, jeśli jesteśmy na bieżąco, a TMDB nie ma nowej daty
+        });
     }
     if (state.localSearch) { const query = state.localSearch.toLowerCase(); itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query))); }
     if (state.filterFavoritesOnly) itemsToRender = itemsToRender.filter(item => item.isFavorite);
@@ -1870,20 +1881,20 @@ async function openFilterModal() {
     toggleAppDepthEffect(true);
     const listId = getActiveListId(); const state = viewState[listId];
 
-    // Zabezpieczenie stanu startowego
+    // Zabezpieczenie stanu początkowego
     if (state.filterByVod === undefined) state.filterByVod = 'all';
-    if (state.maxRuntime === undefined) state.maxRuntime = 240; // 240 to "Bez limitu"
+    if (state.maxRuntime === undefined) state.maxRuntime = 240; 
+    if (state.hideTBA === undefined) state.hideTBA = false;
 
-    const isMovies = listId.includes('movies'); // Sprawdzamy czy to zakładka filmów
+    const isMovies = listId.includes('movies'); 
+    const isSeriesToWatch = listId === 'seriesToWatch';
     const uniqueGenres = [...new Set((data[listId] || []).flatMap(item => item.genres || []))].sort();
     const uniqueTags = [...new Set((data[listId] || []).flatMap(item => item.customTags || []))].sort();
     const topVodProviders = ['Netflix', 'Max', 'Amazon Prime Video', 'Disney Plus', 'Apple TV Plus', 'SkyShowtime'];
 
-    // 1. Zbudowanie Suwaka Czasu (Tylko dla filmów)
-       // 1. Zbudowanie Inteligentnego Suwaka Czasu
+    // --- 1. Suwak Czasu (Tylko dla filmów) ---
     let timeFilterHTML = '';
     if (isMovies) {
-        // Zabezpieczenie: jeśli stara wartość to np. 240 (Bez limitu z poprzedniej wersji), zmieniamy na nowy zakres
         if (state.maxRuntime === undefined || state.maxRuntime > 200) state.maxRuntime = 200;
 
         const formatTime = (mins) => {
@@ -1899,7 +1910,6 @@ async function openFilterModal() {
                     <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Maksymalnie:</span>
                     <strong id="runtime-display" style="color: var(--primary-color); font-size: 1.1rem;">${formatTime(state.maxRuntime)}</strong>
                 </div>
-                <!-- Minimum 30 minut, Skok co 10 minut. 200 = Bez Limitu -->
                 <input type="range" id="runtime-slider" min="30" max="200" step="10" value="${state.maxRuntime}" style="width:100%;">
                 <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-secondary); margin-top:8px; font-weight:600;">
                     <span>30 min</span><span>Bez limitu</span>
@@ -1908,10 +1918,35 @@ async function openFilterModal() {
         `;
     }
 
-    // 2. Reszta starych filtrów
-    let filterOptionsHTML = `${timeFilterHTML}<label class="modern-toggle-row"><span>Tylko ulubione</span><div class="toggle-switch"><input type="checkbox" id="filter-favorites-checkbox" ${state.filterFavoritesOnly ? 'checked' : ''}><div class="slider"></div></div></label><div class="filter-section-title">Gdzie obejrzeć? (VOD)</div><div class="modern-chip-group" style="margin-bottom: 16px;"><label class="modern-chip"><input type="radio" name="vod-filter" value="all" ${state.filterByVod === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
+    // --- 2. Przełącznik Seriale w zawieszeniu (Tylko dla Seriale -> Do obejrzenia) ---
+    let tbaFilterHTML = '';
+    if (isSeriesToWatch) {
+        tbaFilterHTML = `
+            <label class="modern-toggle-row" style="margin-top: 0;">
+                <div style="display:flex; flex-direction:column;">
+                    <span style="font-size: 0.95rem;">Ukryj czekające na datę</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">Schowaj seriale, z którymi jesteś na bieżąco.</span>
+                </div>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="filter-tba-checkbox" ${state.hideTBA ? 'checked' : ''}>
+                    <div class="slider"></div>
+                </div>
+            </label>
+        `;
+    }
+
+    // --- 3. Budowa reszty okna ---
+    let filterOptionsHTML = `${timeFilterHTML}${tbaFilterHTML}
+    <label class="modern-toggle-row"><span>Tylko ulubione</span><div class="toggle-switch"><input type="checkbox" id="filter-favorites-checkbox" ${state.filterFavoritesOnly ? 'checked' : ''}><div class="slider"></div></div></label>
+    <div class="filter-section-title">Gdzie obejrzeć? (VOD)</div>
+    <div class="modern-chip-group" style="margin-bottom: 16px;">
+        <label class="modern-chip"><input type="radio" name="vod-filter" value="all" ${state.filterByVod === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
+    
     filterOptionsHTML += topVodProviders.map(v => `<label class="modern-chip"><input type="radio" name="vod-filter" value="${v}" ${state.filterByVod === v ? 'checked' : ''}><span>${v.replace(' Plus', '+').replace('Amazon ', '')}</span></label>`).join('');
-    filterOptionsHTML += `</div><div style="font-size:0.75rem; color:var(--text-secondary); margin-top:-8px; margin-bottom:12px;">*Aby filtr zadziałał dla starych wpisów, otwórz najpierw ich szczegóły.</div><div class="filter-section-title">Gatunek</div><div class="modern-chip-group"><label class="modern-chip"><input type="radio" name="genre-filter" value="all" ${state.filterByGenre === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
+    filterOptionsHTML += `</div><div style="font-size:0.75rem; color:var(--text-secondary); margin-top:-8px; margin-bottom:12px;">*Aby filtr zadziałał dla starych wpisów, otwórz najpierw ich szczegóły.</div>
+    <div class="filter-section-title">Gatunek</div>
+    <div class="modern-chip-group"><label class="modern-chip"><input type="radio" name="genre-filter" value="all" ${state.filterByGenre === 'all' ? 'checked' : ''}><span>Wszystkie</span></label>`;
+    
     if (uniqueGenres.length > 0) filterOptionsHTML += uniqueGenres.map(g => `<label class="modern-chip"><input type="radio" name="genre-filter" value="${escapeHTML(g)}" ${state.filterByGenre === g ? 'checked' : ''}><span>${escapeHTML(g)}</span></label>`).join('');
     filterOptionsHTML += `</div>`;
 
@@ -1924,24 +1959,28 @@ async function openFilterModal() {
     const modalContainer = document.getElementById('detailsModalContainer');
     modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper control-modal-content"><div class="modal-drag-handle"></div><h3>Filtruj</h3><div class="control-modal-options">${filterOptionsHTML}</div><div class="control-modal-footer"><button class="reset-btn">Wyczyść</button><button class="apply-btn">Zastosuj</button></div></div></div>`;
 
-    // Ożywienie suwaka
+    // --- 4. Interakcje (Suwak Czasu) ---
     if (isMovies) {
         const slider = document.getElementById('runtime-slider');
         const display = document.getElementById('runtime-display');
         slider.addEventListener('input', (e) => {
             const v = parseInt(e.target.value);
-            if (v >= 240) display.textContent = 'Bez limitu';
+            if (v >= 200) display.textContent = 'Bez limitu';
             else { const h = Math.floor(v / 60); const m = v % 60; display.textContent = h > 0 ? `${h}h ${m}m` : `${m}m`; }
         });
     }
 
+    // --- 5. Obsługa Zamknięcia ---
     const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
     modalContainer.querySelector('.modal-overlay').onclick = e => { if (e.target.classList.contains('modal-overlay')) close(); };
     setupSwipeToClose(modalContainer.querySelector('.modal-overlay'), close);
 
+    // --- 6. Zapisywanie ---
     modalContainer.querySelector('.apply-btn').onclick = async () => {
         state.filterFavoritesOnly = document.getElementById('filter-favorites-checkbox').checked;
+        
         if (isMovies) state.maxRuntime = parseInt(document.getElementById('runtime-slider').value);
+        if (isSeriesToWatch) state.hideTBA = document.getElementById('filter-tba-checkbox').checked;
 
         const selGenre = document.querySelector('input[name="genre-filter"]:checked'); if (selGenre) state.filterByGenre = selGenre.value;
         const selTag = document.querySelector('input[name="tag-filter"]:checked'); if (selTag) state.filterByCustomTag = selTag.value;
@@ -1949,9 +1988,12 @@ async function openFilterModal() {
 
         await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close();
     };
+
     modalContainer.querySelector('.reset-btn').onclick = async () => {
         state.filterFavoritesOnly = false; state.filterByGenre = 'all'; state.filterByCustomTag = 'all'; state.filterByVod = 'all';
         if (isMovies) state.maxRuntime = 240;
+        if (isSeriesToWatch) state.hideTBA = false;
+        
         await saveData(); updateToolbarUI(viewState.activeMainTab); renderList(data[listId], listId); close();
     };
 }
