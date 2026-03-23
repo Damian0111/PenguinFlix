@@ -130,14 +130,23 @@ const toggleTheme = () => {
 };
 
 const toggleAppDepthEffect = (isActive) => {
+    const themeMeta = document.getElementById('theme-color-meta');
+    const currentTheme = document.body.dataset.theme || 'dark';
+    // Domyślne kolory z Twojego CSS
+    const defaultColor = currentTheme === 'dark' ? '#101114' : '#f0f2f5';
+
     if (isActive) {
         document.body.classList.add('modal-active');
+        // Kiedy otwiera się modal, górny pasek telefonu staje się czarny (jak tło modala)
+        if (themeMeta) themeMeta.setAttribute('content', '#000000');
     } else {
         setTimeout(() => {
             const isAnyModalOpen = document.getElementById('detailsModalContainer').innerHTML !== '' ||
                 document.getElementById('actorModalContainer').innerHTML !== '';
             if (!isAnyModalOpen) {
                 document.body.classList.remove('modal-active');
+                // Gdy modal się zamknie, pasek telefonu wraca do normalnego koloru
+                if (themeMeta) themeMeta.setAttribute('content', defaultColor);
             }
         }, 50);
     }
@@ -578,17 +587,17 @@ function setupEventListeners() {
         });
     });
 
-    // --- GESTY SWIPE & PULL TO REFRESH ---
-     // --- GESTY SWIPE & PULL TO REFRESH ---
+    // --- GESTY SWIPE (ZAKŁADKI I PTR) - BEZ KONFLIKTÓW ---
     let touchstartX = 0; let touchstartY = 0; let touchendX = 0; let touchendY = 0;
     let ptrCurrentY = 0; let isPulling = false;
+
     const mainContent = document.getElementById('mainContent');
     const ptrContainer = document.getElementById('ptr-container');
     const ptrSpinner = document.getElementById('ptr-spinner');
 
     const handleSwipeGesture = () => {
         const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
             if (viewState.activeMainTab === 'movies' || viewState.activeMainTab === 'series') {
                 const currentSubTab = viewState.activeMainTab === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
                 if (deltaX < 0 && currentSubTab === 'toWatch') { triggerHaptic('light'); switchSubTab('watched'); }
@@ -602,23 +611,15 @@ function setupEventListeners() {
     };
 
     mainContent.addEventListener('touchstart', e => {
-        // KLUCZOWE WYKLUCZENIA: Ignorujemy przeciąganie list z pigułkami, sortable list oraz osi czasu plakatów!
-        if (e.target.closest('.sortable-chosen') || 
-            e.target.closest('.discover-categories-wrapper') || 
-            e.target.closest('.stats-poster-wall')) return;
-            
+        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper') || e.target.closest('.stats-poster-wall')) return;
         touchstartX = e.touches[0].clientX; touchstartY = e.touches[0].clientY;
         if (window.scrollY === 0) isPulling = true;
     }, { passive: true });
 
     mainContent.addEventListener('touchmove', e => {
-        // Ignorujemy przesunięcia po modalach, panelach i paskach przewijanych w poziomie
-        if (e.target.closest('.modal-overlay') || 
-            e.target.closest('.discover-categories-wrapper') || 
-            e.target.closest('.stats-poster-wall')) return;
-            
+        if (e.target.closest('.modal-overlay') || e.target.closest('.discover-categories-wrapper') || e.target.closest('.stats-poster-wall')) return;
         const deltaY = e.touches[0].clientY - touchstartY;
-        // Odblokowanie Pull-to-refresh
+
         if (isPulling && deltaY > 0 && window.scrollY === 0) {
             e.preventDefault(); ptrCurrentY = deltaY;
             if (ptrContainer) {
@@ -629,10 +630,8 @@ function setupEventListeners() {
     }, { passive: false });
 
     mainContent.addEventListener('touchend', async e => {
-        if (e.target.closest('.sortable-chosen') || 
-            e.target.closest('.discover-categories-wrapper') || 
-            e.target.closest('.stats-poster-wall')) return;
-            
+        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper') || e.target.closest('.stats-poster-wall')) return;
+        
         touchendX = e.changedTouches[0].clientX; touchendY = e.changedTouches[0].clientY;
         handleSwipeGesture();
         if (isPulling) {
@@ -776,47 +775,97 @@ function getActiveListId() {
     return null;
 }
 
+// Globalna pamięć scrolla dla każdej z 4 głównych zakładek
+const scrollPositions = { movies: 0, series: 0, discover: 0, profile: 0 };
+
 function switchMainTab(tabId, isGoingBack = false) {
-    if (!isGoingBack) { history.pushState({ mainTab: tabId, subTab: (tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab) }, ''); }
+    // 1. Zapisujemy aktualną pozycję okna ZANIM ukryjemy obecną zakładkę
+    if (viewState.activeMainTab) {
+        scrollPositions[viewState.activeMainTab] = window.scrollY || document.documentElement.scrollTop;
+    }
+
+    if (!isGoingBack) { 
+        history.pushState({ mainTab: tabId, subTab: (tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab) }, ''); 
+    }
 
     viewState.activeMainTab = tabId;
     document.body.setAttribute('data-active-tab', tabId);
 
+    // Zmiana aktywnych ikon na dolnym pasku
     document.querySelectorAll('.bottom-nav .nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.maintab === tabId));
+    
+    // Przełączanie głównych kontenerów
     document.querySelectorAll('.main-tab-content').forEach(container => container.classList.toggle('active', container.id === `tab-${tabId}`));
 
     const subHeader = document.getElementById('sub-header');
     const mainHeader = document.getElementById('fixed-header');
     const fab = document.getElementById('fab-randomize');
 
-    if (fab) { if (tabId === 'discover') fab.classList.add('visible'); else fab.classList.remove('visible'); }
-
-    if (tabId === 'discover' || tabId === 'profile') {
-        mainHeader.style.transform = `translateY(-100%)`; document.body.classList.add('header-hidden');
-    } else {
-        mainHeader.style.transform = `translateY(0)`; document.body.classList.remove('header-hidden');
+    if (fab) { 
+        if (tabId === 'discover') fab.classList.add('visible'); 
+        else fab.classList.remove('visible'); 
     }
 
+    // Ukrywanie górnego paska wyszukiwarki dla Profilu i Odkrywaj
+    if (tabId === 'discover' || tabId === 'profile') {
+        mainHeader.style.transform = `translateY(-100%)`; 
+        document.body.classList.add('header-hidden');
+    } else {
+        mainHeader.style.transform = `translateY(0)`; 
+        document.body.classList.remove('header-hidden');
+    }
+
+    // LOGIKA DLA ZAKŁADEK: FILMY I SERIALE
     if (tabId === 'movies' || tabId === 'series') {
         subHeader.style.display = 'flex';
         const subTab = tabId === 'movies' ? viewState.moviesSubTab : viewState.seriesSubTab;
+        
         document.querySelectorAll('.segmented-control .seg-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.subtab === subTab));
-        const listId = getActiveListId(); const parentTab = document.getElementById(`tab-${tabId}`);
+        
+        const listId = getActiveListId(); 
+        const parentTab = document.getElementById(`tab-${tabId}`);
         if (parentTab) {
             parentTab.querySelectorAll('.list-container').forEach(c => c.classList.remove('active'));
             const targetContainer = document.getElementById(`${listId}ListContainer`);
             if (targetContainer) targetContainer.classList.add('active');
         }
-        updateToolbarUI(tabId); renderList(data[listId] || [], listId);
+        
+        updateToolbarUI(tabId); 
+        renderList(data[listId] || [], listId);
+        
         document.body.style.paddingTop = `calc(var(--header-height) + var(--sub-header-height) + var(--safe-top))`;
+        
+        // 2. Po wyrenderowaniu listy, natychmiast odtwarzamy scrolla
+        setTimeout(() => {
+            window.scrollTo({ top: scrollPositions[tabId] || 0, behavior: 'instant' });
+        }, 0);
+        
     } else {
+        // LOGIKA DLA PROFILU I ODKRYWAJ
         subHeader.style.display = 'none';
+        document.body.style.paddingTop = `calc(16px + var(--safe-top))`; // Reset paddingu
+        
         if (tabId === 'discover') {
             const activePill = document.querySelector('.discover-pill.active');
-            loadDiscoverTab(activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending', activePill ? !!activePill.dataset.genre : false);
+            const targetEndpoint = activePill ? (activePill.dataset.genre || activePill.dataset.endpoint) : 'trending';
+            const isGenre = activePill ? !!activePill.dataset.genre : false;
+            
+            // Renderujemy Odkrywaj i DOPIERO po załadowaniu kart przewijamy w dół!
+            loadDiscoverTab(targetEndpoint, isGenre, currentDiscoverPage, currentDiscoverMediaType).then(() => {
+                setTimeout(() => {
+                    window.scrollTo({ top: scrollPositions[tabId] || 0, behavior: 'instant' });
+                }, 50); // Minimalne opóźnienie, by obrazy rozciągnęły diva
+            });
         }
-        if (tabId === 'profile') renderProfileStats();
+        
+        if (tabId === 'profile') {
+            renderProfileStats();
+            setTimeout(() => {
+                window.scrollTo({ top: scrollPositions[tabId] || 0, behavior: 'instant' });
+            }, 0);
+        }
     }
+    
     saveData();
 }
 
@@ -1363,6 +1412,7 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     }
     
     isDiscoverLoading = false;
+     return true;
 }
 
 function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
