@@ -4627,22 +4627,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function removeAvatar() {
+       function removeAvatar() {
         localStorage.removeItem('penguinAvatar');
-        loadAvatar(); // Ukrywa customowe zdjęcie na górze
-        
-        // Resetowanie ikonki w dolnym pasku
-        const profileNavItem = document.querySelector('.nav-item[data-maintab="profile"]');
-        if (profileNavItem) {
-            const svg = profileNavItem.querySelector('svg');
-            const img = profileNavItem.querySelector('.nav-mini-avatar');
-            if (svg) svg.style.display = 'block'; // Przywraca ikonę ludzika
-            if (img) img.remove(); // Usuwa img tag
-        }
-        
+        loadAvatar(); // Zmienia duży awatar u góry
+        updateBottomNavAvatar(); // Odświeża dolny pasek (resetuje klasy)
         showCustomAlert('Usunięto', 'Przywrócono domyślny wygląd.', 'info');
     }
 });
+// ==========================================
+// AWATAR W DOLNEJ NAWIGACJI (MICRO-DELIGHT)
+// ==========================================
 // ==========================================
 // AWATAR W DOLNEJ NAWIGACJI (MICRO-DELIGHT)
 // ==========================================
@@ -4650,19 +4644,24 @@ function updateBottomNavAvatar() {
     const savedAvatar = localStorage.getItem('penguinAvatar');
     const profileNavItem = document.querySelector('.nav-item[data-maintab="profile"]');
     
-    if (savedAvatar && profileNavItem) {
-        // Szukamy SVG
-        const svg = profileNavItem.querySelector('svg');
-        if (svg) svg.style.display = 'none'; // Chowamy starą ikonę
-        
-        // Tworzymy lub aktualizujemy małe zdjęcie
+    if (profileNavItem) {
         let img = profileNavItem.querySelector('.nav-mini-avatar');
-        if (!img) {
-            img = document.createElement('img');
-            img.className = 'nav-mini-avatar';
-            profileNavItem.insertBefore(img, profileNavItem.firstChild);
+        const svg = profileNavItem.querySelector('svg.penguin-nav-icon');
+        
+        if (savedAvatar) {
+            profileNavItem.classList.add('has-custom-avatar'); // Ukrywa ikonę z zachowaniem CSS
+            if (!img) {
+                img = document.createElement('img');
+                img.className = 'nav-mini-avatar';
+                profileNavItem.insertBefore(img, profileNavItem.firstChild);
+            }
+            img.src = savedAvatar;
+            if (svg) svg.style.display = ''; // Czyści ewentualne konflikty z JavaScriptem
+        } else {
+            profileNavItem.classList.remove('has-custom-avatar'); // Odsłania kolorową ikonę!
+            if (img) img.remove();
+            if (svg) svg.style.display = ''; // Czyści ewentualne konflikty
         }
-        img.src = savedAvatar;
     }
 }
 
@@ -4771,4 +4770,169 @@ function showCustomInstallPrompt() {
         overlay.classList.add('visible'); 
         triggerHaptic('heavy'); 
     }, 2000);
+}
+// ==========================================
+// MODAL Z WYBOREM KOLORU AWATARA (Z PODGLĄDEM NA ŻYWO)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const btnOpenColor = document.getElementById('btn-avatar-color-modal');
+    const colorPreview = document.getElementById('avatar-color-preview');
+    const DEFAULT_COLOR = '#e50914';
+
+    // 12 gotowych, najładniejszych kolorów
+    const PREDEFINED_COLORS = [
+        '#e50914', '#f97316', '#eab308', '#84cc16', 
+        '#22c55e', '#10b981', '#06b6d4', '#0ea5e9', 
+        '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'
+    ];
+
+    // Funkcja zamieniająca kolor z suwaka (HSL) na kod HEX
+    const hslToHex = (h, s, l) => {
+        l /= 100; const a = s * Math.min(l, 1 - l) / 100;
+        const f = n => { const k = (n + h / 30) % 12; const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * color).toString(16).padStart(2, '0'); };
+        return `#${f(0)}${f(8)}${f(4)}`;
+    };
+
+    // Inicjalizacja przy starcie
+    const savedColor = localStorage.getItem('penguinAvatarColor') || DEFAULT_COLOR;
+    document.documentElement.style.setProperty('--custom-avatar-color', savedColor);
+    if(colorPreview) colorPreview.style.backgroundColor = savedColor;
+
+    if (btnOpenColor) {
+        btnOpenColor.addEventListener('click', () => {
+            triggerHaptic('light');
+            toggleAppDepthEffect(true);
+            
+            const modalContainer = document.getElementById('customAlertContainer');
+            let currentColor = localStorage.getItem('penguinAvatarColor') || DEFAULT_COLOR;
+            let tempColor = currentColor; 
+
+            // Renderowanie siatki z gotowcami
+            const gridHTML = PREDEFINED_COLORS.map(color => {
+                const isActive = (color.toLowerCase() === currentColor.toLowerCase());
+                return `
+                <div class="theme-color-swatch ${isActive ? 'active' : ''}" data-color="${color}" style="background-color: ${color};">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>`;
+            }).join('');
+
+            // Budowanie okienka z DUŻYM podglądem pingwina na samej górze
+            modalContainer.innerHTML = `
+                <div class="modern-alert-overlay" id="colorModalOverlay">
+                    <div class="modern-alert-card" style="padding: 24px; max-width: 360px;">
+                        
+                        <!-- NA ŻYWO PODGLĄD PINGWINA -->
+                        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                            <div id="live-penguin-preview" style="width: 80px; height: 80px; border-radius: 50%; background: color-mix(in srgb, var(--custom-avatar-color) 15%, transparent); padding: 16px; transition: background 0.1s;">
+                                <svg viewBox="0 0 24 24" style="width: 100%; height: 100%; fill: var(--custom-avatar-color); transition: fill 0.1s;">
+                                    <path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <h2 style="margin-bottom: 4px; font-size: 1.3rem;">Motyw ikony</h2>
+                        <p style="margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">Wybierz kolor, by spersonalizować profil.</p>
+                        
+                        <div class="theme-color-grid" style="margin-bottom: 8px;">
+                            ${gridHTML}
+                        </div>
+                        
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
+                            <p style="margin: 0 0 8px; font-size: 0.85rem; color: var(--text-secondary); text-align: left;">Lub zmieszaj własny odcień:</p>
+                            <input type="range" min="0" max="360" value="0" class="custom-hue-slider" id="modal-hue-slider">
+                        </div>
+
+                        <div class="modern-alert-actions" style="margin-top: 16px;">
+                            <button class="modern-alert-btn secondary" id="color-cancel-btn">Anuluj</button>
+                            <button class="modern-alert-btn primary" id="color-save-btn">Zapisz</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const overlay = document.getElementById('colorModalOverlay');
+            const colorGrid = overlay.querySelector('.theme-color-grid');
+            const hueSlider = document.getElementById('modal-hue-slider');
+            
+            // Obsługa kliknięć w GOTOWE kolory
+            colorGrid.addEventListener('click', (e) => {
+                const swatch = e.target.closest('.theme-color-swatch');
+                if (!swatch) return;
+
+                triggerHaptic('light');
+                colorGrid.querySelectorAll('.theme-color-swatch').forEach(s => s.classList.remove('active'));
+                swatch.classList.add('active');
+                
+                tempColor = swatch.dataset.color;
+                document.documentElement.style.setProperty('--custom-avatar-color', tempColor);
+            });
+
+            // Obsługa płynnego PRZESUWANIA suwaka (własny kolor)
+            let lastHapticHue = 0;
+            hueSlider.addEventListener('input', (e) => {
+                colorGrid.querySelectorAll('.theme-color-swatch').forEach(s => s.classList.remove('active'));
+                
+                const hue = parseInt(e.target.value);
+                
+                // Mikro wibracja przy przesuwaniu (co 15 stopni)
+                if (Math.abs(hue - lastHapticHue) > 15) {
+                    triggerHaptic('light');
+                    lastHapticHue = hue;
+                }
+
+                // Generowanie żywego koloru i błyskawiczna zmiana zmiennej CSS
+                tempColor = hslToHex(hue, 100, 50);
+                document.documentElement.style.setProperty('--custom-avatar-color', tempColor);
+            });
+
+            const close = () => { 
+                overlay.style.opacity = '0'; 
+                setTimeout(() => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); }, 200); 
+            };
+
+            // ZAPISZ
+            document.getElementById('color-save-btn').onclick = () => {
+                triggerHaptic('success');
+                localStorage.setItem('penguinAvatarColor', tempColor);
+                if(colorPreview) colorPreview.style.backgroundColor = tempColor;
+                close();
+            };
+
+            // ANULUJ (Cofa pokazywany kolor)
+            const revertAndClose = () => {
+                triggerHaptic('medium');
+                document.documentElement.style.setProperty('--custom-avatar-color', currentColor);
+                close();
+            };
+
+            document.getElementById('color-cancel-btn').onclick = revertAndClose;
+            overlay.onclick = (e) => { if (e.target === overlay) revertAndClose(); };
+        });
+    }
+});
+
+// Zabezpieczenie nakładania się zdjęć w panelu nawigacyjnym:
+function updateBottomNavAvatar() {
+    const savedAvatar = localStorage.getItem('penguinAvatar');
+    const profileNavItem = document.querySelector('.nav-item[data-maintab="profile"]');
+    
+    if (profileNavItem) {
+        let img = profileNavItem.querySelector('.nav-mini-avatar');
+        const svg = profileNavItem.querySelector('svg.penguin-nav-icon');
+        
+        if (savedAvatar) {
+            profileNavItem.classList.add('has-custom-avatar');
+            if (!img) {
+                img = document.createElement('img');
+                img.className = 'nav-mini-avatar';
+                profileNavItem.insertBefore(img, profileNavItem.firstChild);
+            }
+            img.src = savedAvatar;
+            if (svg) svg.style.display = '';
+        } else {
+            profileNavItem.classList.remove('has-custom-avatar');
+            if (img) img.remove();
+            if (svg) svg.style.display = '';
+        }
+    }
 }
