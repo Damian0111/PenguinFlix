@@ -5456,3 +5456,159 @@ img {
     user-select: none !important;
     -webkit-tap-highlight-color: transparent !important;
 }
+/* ==========================================
+   PERSONALIZACJA KOLORU AWATARA (V3 - FINAL)
+========================================== */
+:root {
+    --custom-avatar-color: #e50914; /* Domyślny, kinowy czerwony */
+}
+
+/* 1. Kolor dużego awatara w profilu (tylko domyślny SVG!) */
+.profile-header .avatar-icon {
+    fill: var(--custom-avatar-color) !important;
+    background: color-mix(in srgb, var(--custom-avatar-color) 15%, transparent) !important;
+    transition: fill 0.3s, background 0.3s;
+}
+
+/* 2. Kolor ikony Profilu w dolnym pasku nawigacji (tylko stan aktywny!) */
+.nav-item[data-maintab="profile"].active svg.penguin-nav-icon {
+    fill: var(--custom-avatar-color) !important;
+    filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--custom-avatar-color) 40%, transparent));
+}
+
+/* 3. Naprawa nakładania się na dolnym pasku */
+/* Jeśli wgramy zdjęcie, ukrywamy ludzika SVG */
+.nav-item[data-maintab="profile"].has-custom-avatar svg.penguin-nav-icon {
+    display: none !important;
+}
+
+/* 4. Duży, nowoczesny color picker w modalu */
+.big-color-picker {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 100px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    margin: 20px auto;
+    display: block;
+}
+
+.big-color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+.big-color-picker::-webkit-color-swatch {
+    border: 4px solid var(--border-color);
+    border-radius: 50%;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.big-color-picker::-moz-color-swatch {
+    border: 4px solid var(--border-color);
+    border-radius: 50%;
+}
+/* ==========================================
+   NATYWNA SIATKA WYBORU KOLORÓW (MODAL)
+========================================== */
+.theme-color-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px 16px;
+    padding: 16px 0;
+    justify-items: center;
+}
+
+.theme-color-swatch {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid transparent;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Stan zaznaczony (powiększenie, biała obwódka i haczyk) */
+.theme-color-swatch.active {
+    transform: scale(1.15);
+    border-color: #ffffff;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+.theme-color-swatch svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+
+.theme-color-swatch.active svg {
+    opacity: 1;
+    transform: scale(1);
+}
+/* ==========================================
+   TĘCZOWY PRZYCISK DO WŁASNEGO KOLORU
+========================================== */
+.theme-color-swatch.rainbow {
+    background: conic-gradient(
+        #ff0000, #ff7300, #fffb00, #48ff00, 
+        #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000
+    );
+    position: relative;
+    overflow: hidden;
+}
+
+/* Ukrywamy potworka pod spodem, ale pozwalamy mu łapać kliknięcia */
+.theme-color-swatch.rainbow input[type="color"] {
+    position: absolute;
+    top: -20px; left: -20px;
+    width: 100px; height: 100px;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.theme-color-swatch.rainbow svg {
+    position: relative;
+    z-index: 5; /* Żeby haczyk pokazywał się pod ukrytym inputem, ale nad tłem */
+}
+/* ==========================================
+   WŁASNY SUWAK KOLORÓW (HUE SLIDER)
+========================================== */
+.custom-hue-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 16px;
+    border-radius: 10px;
+    background: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+    margin: 8px 0 16px;
+}
+
+.custom-hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 3px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.custom-hue-slider::-webkit-slider-thumb:active {
+    transform: scale(1.15); /* Kółeczko rośnie, gdy je złapiesz */
+}
