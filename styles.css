@@ -5343,28 +5343,60 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
     box-shadow: 0 4px 8px color-mix(in srgb, var(--primary-color) 40%, transparent);
 }
 /* ==========================================
-   TARCZA NATYWNA (Tylko dla urządzeń dotykowych / smartfonów)
+   TARCZA NATYWNA (TYLKO DLA URZĄDZEŃ DOTYKOWYCH)
 ========================================== */
 @media (hover: none) and (pointer: coarse) {
-    body {
-        -webkit-user-select: none !important;
-        user-select: none !important;
-        -webkit-touch-callout: none !important; /* Blokada menu Safari na iOS */
+    /* Blokujemy wywoływanie menu przez przytrzymanie w całej aplikacji */
+    * {
+        -webkit-touch-callout: none !important; /* iOS Safari */
+        -webkit-user-select: none !important; /* Safari */
+        -khtml-user-select: none !important; /* Konqueror HTML */
+        -moz-user-select: none !important; /* Old versions of Firefox */
+        -ms-user-select: none !important; /* Internet Explorer/Edge */
+        user-select: none !important; /* Non-prefixed version */
+        -webkit-tap-highlight-color: transparent !important; /* Usuwa brzydki szary kwadrat przy kliknięciu (Android) */
     }
 
+    /* Zwracamy możliwość interakcji z obrazkami, ale tylko jako tło dla JS */
     img {
         -webkit-user-drag: none !important;
-        -webkit-touch-callout: none !important;
-        pointer-events: none; /* Ignoruje dotyk na warstwie obrazka, przekazując go do rodzica (karty) */
+        pointer-events: none !important; 
     }
 
-    /* Zwracamy możliwość klikania awatarom i zdjęciom obsady, zdejmując z nich blokadę wskaźnika */
-    .avatar-container img, .cast-member img, .recommendation-item img, .stats-poster-wall img {
-        pointer-events: auto;
-    }
-
+    /* Zwracamy wolność tylko dla elementów, w których chcesz pisać z klawiatury! */
     input, textarea {
+        -webkit-touch-callout: default !important;
         -webkit-user-select: auto !important;
+        -khtml-user-select: auto !important;
+        -moz-user-select: auto !important;
+        -ms-user-select: auto !important;
         user-select: auto !important;
     }
 }
+/* ==========================================
+   NATYWNE FUNKCJE (OFFLINE & INSTALACJA)
+========================================== */
+/* 1. Banner Offline/Online */
+#offline-banner {
+    position: fixed; top: 0; left: 0; right: 0; height: max(env(safe-area-inset-top, 0px) + 40px, 40px);
+    padding-top: env(safe-area-inset-top, 0px); display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 0.85rem; font-weight: 700; z-index: 9999;
+    transform: translateY(-100%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+#offline-banner.offline { background-color: #ef4444; transform: translateY(0); }
+#offline-banner.online { background-color: #10b981; transform: translateY(0); }
+
+/* 2. Proaktywny panel instalacji */
+.install-prompt-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    z-index: 10000; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.install-prompt-overlay.visible { opacity: 1; pointer-events: auto; }
+
+.install-prompt-sheet {
+    background: var(--card-color); width: 100%; border-radius: 24px 24px 0 0; padding: 24px 24px calc(24px + var(--safe-bottom));
+    transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.5); border-top: 1px solid rgba(255,255,255,0.1);
+}
+.install-prompt-overlay.visible .install-prompt-sheet { transform: translateY(0); }
