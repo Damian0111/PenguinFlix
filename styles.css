@@ -5423,3 +5423,36 @@ img {
     -webkit-user-select: none !important;
     user-select: none !important;
 }
+/* ==========================================
+   TARCZA 3.0: BLOKADA WIDMOWYCH KLIKNIĘĆ W OBRAZKI
+========================================== */
+.list-item img, 
+.grid-item img, 
+.discover-item img, 
+.search-item img,
+.hero-poster-mini {
+    /* Przeglądarka ma traktować obrazek tak, jakby go tam nie było (kliki lecą do rodzica) */
+    pointer-events: none !important; 
+    
+    /* Wyłączanie zaznaczania na wszystkich silnikach */
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+    
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+}
+
+/* Upewnienie się, że same karty też blokują menu */
+.list-item, 
+.grid-item, 
+.discover-item, 
+.search-item {
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
