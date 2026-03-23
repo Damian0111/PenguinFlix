@@ -5342,3 +5342,27 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
     transform: scale(1.15) translateY(-1px);
     box-shadow: 0 4px 8px color-mix(in srgb, var(--primary-color) 40%, transparent);
 }
+/* ==========================================
+   TARCZA NATYWNA (Tylko dla urządzeń dotykowych / smartfonów)
+========================================== */
+@media (hover: none) and (pointer: coarse) {
+    body {
+        /* Blokuje przypadkowe zaznaczanie tekstu na niebiesko przy przesuwaniu */
+        -webkit-user-select: none;
+        user-select: none;
+        
+        /* Blokuje systemowe menu "Zapisz obraz / Kopiuj" przy dłuższym przytrzymaniu */
+        -webkit-touch-callout: none;
+    }
+
+    /* Blokuje efekt "ducha" przy próbie przeciągnięcia obrazka palcem */
+    img {
+        -webkit-user-drag: none;
+    }
+
+    /* Wyjątek! Pola tekstowe wciąż muszą pozwalać na zaznaczanie i edycję tekstu */
+    input, textarea {
+        -webkit-user-select: auto;
+        user-select: auto;
+    }
+}
