@@ -244,48 +244,43 @@ function setupEventListeners() {
     }
            // --- ŻELAZNA TARCZA 2.0: BLOKADA SYSTEMOWEGO MENU KONTEKSTOWEGO (TYLKO MOBILE) ---
     
-    // 1. Blokada głównego menu "Zapisz obraz / Kopiuj" (Android / Prawy klik)
+        // --- ŻELAZNA TARCZA 3.0: TOTALNA BLOKADA MENU KONTEKSTOWEGO ---
+    
+    // 1. Blokada absolutna menu "Zapisz obraz / Wyszukaj"
     window.addEventListener('contextmenu', (e) => {
-        // Sprawdzamy, czy to jest telefon/tablet (ekran dotykowy bez myszki)
-        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-        
-        // Jeśli to komputer (myszka), natychmiast przerywamy i pozwalamy na wszystko!
-        if (!isTouchDevice) return;
-
         const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
-        // Zostawiamy wyjątek dla awatara, żeby działało jego usuwanie!
         const isAvatar = e.target.closest('.avatar-container');
         
+        // Jeśli to nie jest pole tekstowe ani Twój awatar w profilu -> ZABIJ MENU
         if (!isInput && !isAvatar) {
             e.preventDefault();
-            e.stopPropagation(); // NOWOŚĆ: Brutalne ubicie eventu dla przeglądarki
+            e.stopPropagation();
         }
     }, { passive: false });
 
-    // 2. Blokada systemowej "lupy" i zaznaczania tekstu (Szczególnie iOS Safari)
-    document.addEventListener('selectstart', (e) => {
-        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-        if (!isTouchDevice) return;
+    // 2. Blokada drag & drop (przeciągania obrazków po ekranie)
+    document.addEventListener('dragstart', (e) => {
+        if (e.target.tagName === 'IMG') {
+            e.preventDefault();
+        }
+    }, { passive: false });
 
+    // 3. Odcięcie systemowej lupy (selectstart)
+    document.addEventListener('selectstart', (e) => {
         const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
         if (!isInput) {
             e.preventDefault();
         }
     });
 
-    // 3. NOWOŚĆ: Najmocniejsza blokada dla iOS Safari reagująca na sam dotyk
+    // 4. Reset natywnego zachowania na iOS Safari podczas dotyku
     document.addEventListener('touchstart', (e) => {
-        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-        if (!isTouchDevice) return;
-
         const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
         const isAvatar = e.target.closest('.avatar-container');
 
         if (!isInput && !isAvatar) {
-            // Natychmiastowe odcięcie systemowych okienek od elementu dotykanego
             document.documentElement.style.webkitTouchCallout = 'none';
         } else {
-            // Przywrócenie zachowania dla pół tekstowych
             document.documentElement.style.webkitTouchCallout = 'default';
         }
     }, { passive: true });
