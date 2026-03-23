@@ -242,7 +242,34 @@ function setupEventListeners() {
             if (hapticsEnabled) triggerHaptic('success');
         });
     }
+          // --- ŻELAZNA TARCZA: BLOKADA SYSTEMOWEGO MENU KONTEKSTOWEGO (TYLKO MOBILE) ---
+    window.addEventListener('contextmenu', (e) => {
+        // Sprawdzamy, czy to jest telefon/tablet (ekran dotykowy bez myszki)
+        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+        
+        // Jeśli to komputer (myszka), natychmiast przerywamy i pozwalamy na normalny prawy przycisk!
+        if (!isTouchDevice) return;
 
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        const isAvatar = e.target.closest('.avatar-container');
+        
+        if (!isInput && !isAvatar) {
+            e.preventDefault();
+        }
+    });
+
+    // Zabezpieczenie specyficzne dla Safari na iOS (tzw. lupa i "select-to-copy")
+    document.addEventListener('selectstart', (e) => {
+        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+        
+        // Na PC pozwalamy na normalne zaznaczanie tekstu kursorem!
+        if (!isTouchDevice) return;
+
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        if (!isInput) {
+            e.preventDefault();
+        }
+    });
     // --- UX: AUTO-CHOWANIE KLAWIATURY PRZY PRZEWIJANIU ---
     document.getElementById('mainContent').addEventListener('touchmove', () => {
         const activeEl = document.activeElement;
