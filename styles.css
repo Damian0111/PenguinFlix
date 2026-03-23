@@ -5347,22 +5347,24 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
 ========================================== */
 @media (hover: none) and (pointer: coarse) {
     body {
-        /* Blokuje przypadkowe zaznaczanie tekstu na niebiesko przy przesuwaniu */
-        -webkit-user-select: none;
-        user-select: none;
-        
-        /* Blokuje systemowe menu "Zapisz obraz / Kopiuj" przy dłuższym przytrzymaniu */
-        -webkit-touch-callout: none;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+        -webkit-touch-callout: none !important; /* Blokada menu Safari na iOS */
     }
 
-    /* Blokuje efekt "ducha" przy próbie przeciągnięcia obrazka palcem */
     img {
-        -webkit-user-drag: none;
+        -webkit-user-drag: none !important;
+        -webkit-touch-callout: none !important;
+        pointer-events: none; /* Ignoruje dotyk na warstwie obrazka, przekazując go do rodzica (karty) */
     }
 
-    /* Wyjątek! Pola tekstowe wciąż muszą pozwalać na zaznaczanie i edycję tekstu */
+    /* Zwracamy możliwość klikania awatarom i zdjęciom obsady, zdejmując z nich blokadę wskaźnika */
+    .avatar-container img, .cast-member img, .recommendation-item img, .stats-poster-wall img {
+        pointer-events: auto;
+    }
+
     input, textarea {
-        -webkit-user-select: auto;
-        user-select: auto;
+        -webkit-user-select: auto !important;
+        user-select: auto !important;
     }
 }
