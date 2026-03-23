@@ -351,7 +351,7 @@ function setupEventListeners() {
             triggerHaptic('medium');
             const confirm = await showCustomConfirm(
                 'Wymusić odświeżenie?', 
-                'Sprawdzę każdy serial na liście pod kątem nowych dat i sezonów. To może zająć dłuższą chwilę w zależności od liczby tytułów.'
+                'Sprawdzę każdy serial na liście (nawet te w obejrzanych) pod kątem nowych dat i sezonów. To może zająć chwilę.'
             );
             
             if (confirm) {
@@ -361,17 +361,23 @@ function setupEventListeners() {
                 hardRefreshBtn.style.pointerEvents = 'none';
                 hardRefreshBtn.style.opacity = '0.7';
 
-                await refreshStaleSeries(true); 
+                // Odbieramy informacje o ożywionych serialach
+                const resurrected = await refreshStaleSeries(true); 
                 
                 hardRefreshBtn.innerHTML = prevIcon;
                 hardRefreshBtn.style.pointerEvents = 'auto';
                 hardRefreshBtn.style.opacity = '1';
-                showCustomAlert('Gotowe!', 'Baza seriali została w pełni zaktualizowana.', 'success');
+
+                if (resurrected > 0) {
+                    showCustomAlert('Niespodzianka! 🎉', `Zaktualizowano bazę i przeniesiono ${resurrected} wznawianych seriali do "Do obejrzenia"!`, 'success');
+                } else {
+                    showCustomAlert('Gotowe!', 'Baza seriali została w pełni zaktualizowana.', 'success');
+                }
+                
                 if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
             }
         });
     }
-
     // --- TWARDY RESET FILMÓW ---
     const hardRefreshMoviesBtn = document.getElementById('btn-hard-refresh-movies');
     if (hardRefreshMoviesBtn) {
@@ -3049,17 +3055,53 @@ async function restoreData(e) {
 async function refreshStaleSeries(forceAll = false) {
     const today = new Date(); today.setHours(0,0,0,0); 
     let needsSave = false;
+    let resurrectedCount = 0; // Licznik "ożywionych" seriali
+
+    // Pomocnicza funkcja: Odtwarza postęp dla powracającego serialu
+    const fillOldProgress = (item) => {
+        item.progress = {}; // Zaczynamy z czystą kartą
+        let limitSeason = 9999;
+        let limitEpisode = 9999;
+
+        // Szukamy bariery (gdzie zaczyna się przyszłość)
+        if (item.nextEpisodeToAir) {
+            const ad = new Date(item.nextEpisodeToAir.date);
+            ad.setHours(0,0,0,0);
+            if (ad > today) {
+                limitSeason = item.nextEpisodeToAir.season;
+                limitEpisode = item.nextEpisodeToAir.episode;
+            }
+        }
+
+        // Zaznaczamy wszystko co jest PRZED tą barierą
+        if (item.seasons) {
+            item.seasons.forEach(s => {
+                const sNum = s.season_number;
+                if (sNum === 0) return; // Ignorujemy odcinki specjalne
+
+                let maxToMark = 0;
+                if (sNum < limitSeason) maxToMark = s.episode_count;
+                else if (sNum === limitSeason) maxToMark = limitEpisode - 1;
+
+                if (maxToMark > 0) {
+                    item.progress[sNum] = Array.from({length: maxToMark}, (_, i) => i + 1);
+                }
+            });
+        }
+    };
     
     const checkAndRefreshList = async (listName) => {
         if (!data[listName]) return;
-        for (let i = 0; i < data[listName].length; i++) {
+        
+        // Iterujemy od tyłu, bo będziemy "wycinać" elementy z tablicy
+        for (let i = data[listName].length - 1; i >= 0; i--) {
             const item = data[listName][i]; 
             if (String(item.id).startsWith('custom_')) continue;
             
-            // Jeśli pociągnąłeś ekran palcem w dół, FORCE = true (odświeża wszystko bez gadania)
             let needsRefresh = forceAll; 
             
-            if (!needsRefresh) {
+            // Lekkie odświeżanie w tle (tylko na liście ToWatch)
+            if (!needsRefresh && listName === 'seriesToWatch') {
                 if (item.nextEpisodeToAir) { const airDate = new Date(item.nextEpisodeToAir.date); if (airDate <= today) needsRefresh = true; }
                 else if (item.status === 'Returning Series') { needsRefresh = true; }
             }
@@ -3067,23 +3109,60 @@ async function refreshStaleSeries(forceAll = false) {
             if (needsRefresh) {
                 try {
                     const fd = await getItemDetails(item.id, 'tv');
-                    if (fd) { item.status = fd.status; item.nextEpisodeToAir = fd.nextEpisodeToAir; item.seasons = fd.seasons; item.numberOfSeasons = fd.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes; needsSave = true; }
+                    if (fd) { 
+                        item.status = fd.status; 
+                        item.nextEpisodeToAir = fd.nextEpisodeToAir; 
+                        item.seasons = fd.seasons; 
+                        item.numberOfSeasons = fd.numberOfSeasons; 
+                        item.numberOfEpisodes = fd.numberOfEpisodes; 
+                        needsSave = true; 
+
+                        // MAGIA: PANCERNE ZMARTWYCHWSTANIE SERIALU
+                        // Serial żyje, jeśli:
+                        // 1. Zmienił status na Powracający lub W Produkcji
+                        // 2. LUB dostał konkretną datę nowego odcinka
+                        const isAlive = (fd.status === 'Returning Series' || fd.status === 'In Production' || fd.nextEpisodeToAir !== null);
+
+                        if (listName === 'seriesWatched' && isAlive) {
+                            const [resurrectedItem] = data.seriesWatched.splice(i, 1);
+                            
+                            fillOldProgress(resurrectedItem); 
+                            
+                            const mx = data.seriesToWatch.length > 0 ? Math.max(...data.seriesToWatch.map(it => it.customOrder || 0)) : -1;
+                            resurrectedItem.customOrder = mx + 1;
+                            data.seriesToWatch.unshift(resurrectedItem);
+                            
+                            resurrectedCount++;
+
+                            if (typeof NotificationManager !== 'undefined') {
+                                NotificationManager.add({
+                                    id: `resurrect_${resurrectedItem.id}`,
+                                    title: 'Wielki Powrót! 🧟‍♂️',
+                                    desc: `Serial "${resurrectedItem.title}" znów jest aktywny! Przeniesiono do "Do obejrzenia".`,
+                                    image: resurrectedItem.poster,
+                                    targetId: resurrectedItem.id,
+                                    targetType: 'tv'
+                                });
+                            }
+                        }
+                    }
                 } catch(e) {}
                 
-                // Jeśli odświeżasz całą listę na raz, robimy pauzę 300ms, by nie zablokować API
-                if (forceAll) await new Promise(r => setTimeout(r, 300));
+                if (forceAll) await new Promise(r => setTimeout(r, 200)); // Pauza by nie zapchać API
             }
         }
     };
     
     await checkAndRefreshList('seriesToWatch');
-    if (forceAll) await checkAndRefreshList('seriesWatched'); // Przy twardym resecie odświeża też obejrzane
+    if (forceAll) await checkAndRefreshList('seriesWatched');
 
     if (needsSave) { 
         await saveData(); 
         const activeList = getActiveListId(); 
         if (activeList && activeList.includes('series')) renderList(data[activeList], activeList, true); 
     }
+
+    return resurrectedCount; 
 }
 // ==========================================
 // 15. CICHY PRACOWNIK W TLE (Naprawa starych danych)
@@ -3193,7 +3272,7 @@ const NotificationManager = {
         this.updateBadge();
     },
 
-    checkPremieres() {
+       checkPremieres() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayTime = today.getTime();
@@ -3213,51 +3292,58 @@ const NotificationManager = {
             return -1;
         };
 
-        const getTitlePrefix = (days) => {
+        // Ładne teksty dla filmów
+        const getMovieTitlePrefix = (days) => {
             if (days === 0) return 'Premiera Dzisiaj! 🍿';
             if (days === 1) return 'Premiera Jutro! ⏳';
             return `Premiera za ${days} dni 📅`;
         };
 
+        // Ładne teksty dla seriali
+        const getSeriesTitlePrefix = (days) => {
+            if (days === 0) return 'Nowy odcinek dzisiaj! 📺';
+            if (days === 1) return 'Nowy odcinek jutro! ⏳';
+            return `Odcinek za ${days} dni 📺`;
+        };
+
         (data.moviesToWatch || []).forEach(m => {
             const days = getDaysToPremiere(m.releaseDate);
             if (days !== -1) {
-                this.add({ id: `prem_m_${m.id}_${m.releaseDate}`, title: getTitlePrefix(days), desc: `Film "${m.title}" wchodzi na ekrany.`, image: m.poster, targetId: m.id, targetType: 'movie' });
+                this.add({ 
+                    id: `prem_m_${m.id}_${m.releaseDate}`, 
+                    title: getMovieTitlePrefix(days), 
+                    desc: `Film "${m.title}" wchodzi na ekrany.`, 
+                    image: m.poster, targetId: m.id, targetType: 'movie' 
+                });
             }
         });
 
-               // Sprawdzanie seriali "Do obejrzenia" (NAPRAWIONA INTELIGENCJA)
+        // Sprawdzanie seriali "Do obejrzenia"
         (data.seriesToWatch || []).forEach(s => {
             if(s.nextEpisodeToAir) {
                 const days = getDaysToPremiere(s.nextEpisodeToAir.date);
                 if(days !== -1) {
                     
-                    // 1. Ile odcinków użytkownik obejrzał?
                     let totalWatched = 0;
                     if (s.progress) {
                         totalWatched = Object.values(s.progress).reduce((acc, arr) => acc + arr.length, 0);
                     }
                     
-                    // 2. Ile odcinków FAKTYCZNIE wyszło do tej pory? (Matematyka na sezonach)
                     let airedSoFar = 0;
                     if (s.seasons) {
                         s.seasons.forEach(season => {
-                            // Sumujemy wszystkie odcinki z poprzednich sezonów
                             if (season.season_number > 0 && season.season_number < s.nextEpisodeToAir.season) {
                                 airedSoFar += season.episode_count;
                             }
                         });
                     }
-                    // Dodajemy wyemitowane już odcinki z bieżącego sezonu
                     airedSoFar += (s.nextEpisodeToAir.episode - 1);
 
-                    // 3. WARUNEK: Powiadamiamy tylko jeśli masz max 3 odcinki zaległości
-                    // Jeśli to nowość (S01E01), to airedSoFar = 0, więc 0 >= -3 (Prawda -> powiadamia!)
                     if (totalWatched >= airedSoFar - 3) {
                         const epStr = `S${String(s.nextEpisodeToAir.season).padStart(2,'0')}E${String(s.nextEpisodeToAir.episode).padStart(2,'0')}`;
                         this.add({ 
                             id: `prem_s_${s.id}_${s.nextEpisodeToAir.date}`, 
-                            title: days === 0 ? 'Nowy odcinek! 📺' : `Odcinek za ${days} dni 📺`, 
+                            title: getSeriesTitlePrefix(days), // Używamy nowej, ładnej funkcji!
                             desc: `Wychodzi ${epStr} serialu "${s.title}".`, 
                             image: s.poster, targetId: s.id, targetType: 'tv' 
                         });
@@ -3359,12 +3445,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>`;
                 };
 
+                            // Filtrowanie po typach
                 const movieNotifs = notifs.filter(n => String(n.id).startsWith('prem_m_'));
                 const seriesNotifs = notifs.filter(n => String(n.id).startsWith('prem_s_'));
                 const recNotifs = notifs.filter(n => String(n.id).startsWith('rec_'));
+                const resurrectNotifs = notifs.filter(n => String(n.id).startsWith('resurrect_')); // <-- NOWOŚĆ: Wyłapujemy zmartwychwstania
 
+                // Renderowanie grup w panelu
                 if (movieNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🎬 Premiery Filmowe</div>${movieNotifs.map(renderCard).join('')}</div>`;
                 if (seriesNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">📺 Nowe Odcinki</div>${seriesNotifs.map(renderCard).join('')}</div>`;
+                if (resurrectNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🧟‍♂️ Wznowione Seriale</div>${resurrectNotifs.map(renderCard).join('')}</div>`; // <-- NOWOŚĆ: Wyświetlamy je!
                 if (recNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">✨ Polecane Nowości</div>${recNotifs.map(renderCard).join('')}</div>`;
             }
 
