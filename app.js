@@ -1015,14 +1015,22 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 return titleA.localeCompare(titleB, 'pl');
             }
             // --- NOWOŚĆ: Logika sortowania po ocenach z serwerów TMDB ---
-            case 'tmdb': {
+                       case 'tmdb': {
                 const valA = parseFloat(a.tmdbRating) || 0; 
                 const valB = parseFloat(b.tmdbRating) || 0; 
+                
+                // --- MAGIA: Wyrzucamy tytuły bez oceny (0) ZAWSZE na sam dół listy ---
+                if (valA === 0 && valB === 0) return titleA.localeCompare(titleB, 'pl');
+                if (valA === 0) return 1;
+                if (valB === 0) return -1;
+
+                // Normalne sortowanie dla filmów, które mają już oceny
                 if (valA !== valB) return (valA - valB) * dir;
+                
                 // W przypadku takich samych ocen (np. 8.2 i 8.2), sortujemy alfabetycznie
                 return titleA.localeCompare(titleB, 'pl');
             }
-            default: return 0; 
+            default: return 0;  
         } 
     });
 
