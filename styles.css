@@ -5400,3 +5400,26 @@ body.bulk-mode-active .bulk-checkbox { display: flex; }
     box-shadow: 0 -10px 40px rgba(0,0,0,0.5); border-top: 1px solid rgba(255,255,255,0.1);
 }
 .install-prompt-overlay.visible .install-prompt-sheet { transform: translateY(0); }
+/* ==========================================
+   TARCZA 3.0: BLOKADA ARTEFAKTÓW MOBILNYCH
+========================================== */
+img {
+    -webkit-user-drag: none !important;
+    -khtml-user-drag: none !important;
+    -moz-user-drag: none !important;
+    -o-user-drag: none !important;
+    user-drag: none !important;
+    -webkit-touch-callout: none !important;
+}
+
+/* Wyłączamy menu kontekstowe i lupę dla wszystkich elementów klikalnych / przytrzymywanych */
+.list-item, 
+.grid-item, 
+.discover-item, 
+.discover-hero, 
+.hero-poster-mini,
+.search-item {
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+}
