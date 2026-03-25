@@ -5788,3 +5788,50 @@ img {
     height: 18px; /* Odpowiednia wysokość na jeden wiersz tekstu */
     margin-top: 6px;
 }
+/* ==========================================
+   POWIADOMIENIE O AKTUALIZACJI APLIKACJI
+========================================== */
+.pwa-update-toast {
+    position: fixed; 
+    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px);
+    left: 50%; 
+    transform: translateX(-50%) translateY(150px);
+    background: linear-gradient(135deg, var(--success-color), #059669);
+    color: white; 
+    padding: 12px 20px; 
+    border-radius: var(--radius-pill);
+    z-index: 10000; 
+    display: flex; 
+    align-items: center; 
+    gap: 16px;
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); 
+    width: max-content; 
+    max-width: 90%;
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.pwa-update-toast.visible { 
+    transform: translateX(-50%) translateY(0); 
+}
+
+.pwa-update-toast span {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.pwa-update-toast button {
+    background: white; 
+    color: #059669; 
+    border: none; 
+    padding: 8px 16px;
+    border-radius: var(--radius-pill); 
+    font-weight: 800; 
+    font-size: 0.85rem;
+    cursor: pointer; 
+    transition: transform 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.pwa-update-toast button:active { 
+    transform: scale(0.95); 
+}
