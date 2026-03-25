@@ -655,7 +655,20 @@ function setupEventListeners() {
                 const action = btn.dataset.action;
                 if (action === 'open-sort-options') openSortModal();
                 else if (action === 'open-filter-options') openFilterModal();
-                else if (action === 'toggle-view') { viewState.globalViewMode = viewState.globalViewMode === 'grid' ? 'list' : 'grid'; saveData(); switchMainTab(viewState.activeMainTab); }
+               else if (action === 'toggle-view') { 
+    triggerHaptic('light');
+    const toggleLogic = () => {
+        viewState.globalViewMode = viewState.globalViewMode === 'grid' ? 'list' : 'grid'; 
+        saveData(); 
+        switchMainTab(viewState.activeMainTab);
+    };
+    // Magia płynnych przejść View Transitions API
+    if (document.startViewTransition) {
+        document.startViewTransition(() => toggleLogic());
+    } else {
+        toggleLogic();
+    }
+}
             }
         });
     });
@@ -822,23 +835,110 @@ function setupEventListeners() {
                 if (activeCatPill && activeCatPill.dataset.genre) loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
             });
         }
+        
     }
 
-    // --- LOSOWA KOSTKA (FAB) ---
-    document.getElementById('fab-randomize').addEventListener('click', async (e) => {
-        const btn = e.currentTarget; if (btn.disabled) return;
-        triggerHaptic('medium'); btn.disabled = true; btn.classList.add('rolling');
+   
+    // --- LOSOWA KOSTKA (FAB) - INTELIGENTNE GESTY ---
+    const fabBtn = document.getElementById('fab-randomize');
+    let fabPressTimer;
+    let fabLongPressFired = false;
+
+    const playDiceAnim = () => {
+        fabBtn.classList.add('rolling');
+        setTimeout(() => fabBtn.classList.remove('rolling'), 600);
+    };
+
+    // 1. Krótkie kliknięcie (Losowanie z TMDB)
+    const rollFromTMDB = async () => {
+        if (fabBtn.disabled) return;
+        triggerHaptic('medium'); 
+        fabBtn.disabled = true; 
+        playDiceAnim();
+        
         try {
-            const randomPage = Math.floor(Math.random() * 20) + 1; const type = Math.random() > 0.5 ? 'movie' : 'tv';
+            const randomPage = Math.floor(Math.random() * 20) + 1; 
+            const type = Math.random() > 0.5 ? 'movie' : 'tv';
             const res = await fetchFromTMDB(`/${type}/popular`, { page: randomPage });
+            
             if (res && res.results) {
                 const validItems = res.results.filter(i => i.poster_path);
-                if (validItems.length > 0) openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
-                else showCustomAlert('Błąd', 'Nic nie znaleziono.', 'error');
+                if (validItems.length > 0) {
+                    setTimeout(() => {
+                        openPreviewModal(validItems[Math.floor(Math.random() * validItems.length)].id, type);
+                    }, 600);
+                } else showCustomAlert('Błąd', 'Nic nie znaleziono.', 'error');
             }
-        } finally { setTimeout(() => { btn.classList.remove('rolling'); btn.disabled = false; }, 600); }
+        } catch(e) {
+             showCustomAlert('Błąd sieci', 'Nie udało się wylosować.', 'error');
+        } finally { 
+            setTimeout(() => { fabBtn.disabled = false; }, 600); 
+        }
+    };
+
+    // 2. Długie przytrzymanie (Losowanie z Backlogu)
+    const rollFromBacklog = () => {
+        if (fabBtn.disabled) return;
+        triggerHaptic('heavy');
+        fabBtn.disabled = true;
+        playDiceAnim();
+        showCustomAlert('Twoja lista 🎲', 'Losowanie z "Do Obejrzenia"...', 'info');
+
+        setTimeout(() => {
+            const pool = [...(data.moviesToWatch || []), ...(data.seriesToWatch || [])];
+            if (pool.length === 0) {
+                showCustomAlert('Pusto!', 'Twoja lista jest pusta.', 'info');
+                fabBtn.disabled = false;
+                return;
+            }
+            const winner = pool[Math.floor(Math.random() * pool.length)];
+            openDetailsModal(winner.id, winner.type);
+            fabBtn.disabled = false;
+        }, 600);
+    };
+
+    // --- NASŁUCHIWANIE DOTYKU (Urządzenia mobilne) ---
+    fabBtn.addEventListener('touchstart', () => {
+        fabLongPressFired = false;
+        fabPressTimer = setTimeout(() => {
+            fabLongPressFired = true;
+            rollFromBacklog();
+        }, 500); // 500ms przytrzymania palca
+    }, { passive: true });
+
+    fabBtn.addEventListener('touchend', (e) => {
+        clearTimeout(fabPressTimer);
+        // Jeśli odpalono przytrzymanie, blokujemy zwykły klik
+        if (fabLongPressFired && e.cancelable) {
+            e.preventDefault(); 
+        }
     });
-}
+
+    fabBtn.addEventListener('touchmove', () => clearTimeout(fabPressTimer), { passive: true });
+
+    // --- NASŁUCHIWANIE MYSZKI (Komputery PC) ---
+    fabBtn.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Reaguj tylko na lewy przycisk
+        fabLongPressFired = false;
+        fabPressTimer = setTimeout(() => {
+            fabLongPressFired = true;
+            rollFromBacklog();
+        }, 500);
+    });
+
+    fabBtn.addEventListener('mouseup', () => clearTimeout(fabPressTimer));
+    fabBtn.addEventListener('mouseleave', () => clearTimeout(fabPressTimer));
+
+    // Zwykłe kliknięcie
+    fabBtn.addEventListener('click', (e) => {
+        if (fabLongPressFired) {
+            e.preventDefault();
+            return; // Przerwij, jeśli to było przytrzymanie
+        }
+        rollFromTMDB();
+    });
+
+} // <-- ZAMKNIĘCIE CAŁEJ FUNKCJI setupEventListeners()
 // ==========================================
 // 7. NAWIGACJA I RENDEROWANIE LIST
 // ==========================================
@@ -3052,23 +3152,99 @@ function updateSeasonProgressUI(item, sNum) { const sd = document.querySelector(
 
 function openCustomAddModal() {
     toggleAppDepthEffect(true);
-    const mHTML = `<div class="modal-overlay" id="customAddModal"><div class="modern-modal-wrapper" style="max-width: 450px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;"><h3 style="margin: 0 0 20px 0; font-size: 1.3rem; text-align: center;">Dodaj ręcznie</h3><form id="custom-add-form"><div class="custom-add-group"><label class="custom-add-label">Tytuł</label><input type="text" id="custom-title" class="custom-input" placeholder="Wpisz nazwę..." required></div><div class="custom-add-group"><label class="custom-add-label">Rok produkcji</label><input type="number" id="custom-year" class="custom-input" placeholder="Np. 2024"></div><div class="custom-add-group"><label class="custom-add-label">URL plakatu</label><input type="url" id="custom-poster" class="custom-input" placeholder="https://..."></div><div class="custom-add-group"><label class="custom-add-label">Typ nośnika</label><div class="modern-radio-group"><label class="modern-radio-label"><input type="radio" name="custom-type" value="movie" checked><span>Film</span></label><label class="modern-radio-label"><input type="radio" name="custom-type" value="tv"><span>Serial</span></label></div></div><div class="custom-add-group"><label class="custom-add-label">Lista</label><div class="modern-radio-group"><label class="modern-radio-label"><input type="radio" name="custom-list" value="toWatch" checked><span>Do obejrzenia</span></label><label class="modern-radio-label"><input type="radio" name="custom-list" value="watched"><span>Obejrzane</span></label></div></div><button type="submit" class="modal-btn primary" style="width:100%; margin-top: 10px;">Zapisz tytuł w bibliotece</button></form></div></div></div>`;
-    const c = document.getElementById('detailsModalContainer'); c.innerHTML = mHTML;
-    const modal = c.querySelector('.modal-overlay'); const f = c.querySelector('#custom-add-form'); const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
-    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
+    
+    // HTML zawiera tylko jedną zmianę względem oryginału: usunięto "required" z tytułu, 
+    // dodano autocomplete="off" i ukryty <span> dla błędu pod spodem.
+    const mHTML = `<div class="modal-overlay" id="customAddModal"><div class="modern-modal-wrapper" style="max-width: 450px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;"><h3 style="margin: 0 0 20px 0; font-size: 1.3rem; text-align: center;">Dodaj ręcznie</h3><form id="custom-add-form"><div class="custom-add-group"><label class="custom-add-label">Tytuł</label><input type="text" id="custom-title" class="custom-input" placeholder="Wpisz nazwę..." autocomplete="off"><span id="custom-title-error" class="custom-error-text">Tytuł jest wymagany</span></div><div class="custom-add-group"><label class="custom-add-label">Rok produkcji</label><input type="number" id="custom-year" class="custom-input" placeholder="Np. 2024"></div><div class="custom-add-group"><label class="custom-add-label">URL plakatu</label><input type="url" id="custom-poster" class="custom-input" placeholder="https://..."></div><div class="custom-add-group"><label class="custom-add-label">Typ nośnika</label><div class="modern-radio-group"><label class="modern-radio-label"><input type="radio" name="custom-type" value="movie" checked><span>Film</span></label><label class="modern-radio-label"><input type="radio" name="custom-type" value="tv"><span>Serial</span></label></div></div><div class="custom-add-group"><label class="custom-add-label">Lista</label><div class="modern-radio-group"><label class="modern-radio-label"><input type="radio" name="custom-list" value="toWatch" checked><span>Do obejrzenia</span></label><label class="modern-radio-label"><input type="radio" name="custom-list" value="watched"><span>Obejrzane</span></label></div></div><button type="submit" class="modal-btn primary" style="width:100%; margin-top: 10px;">Zapisz tytuł w bibliotece</button></form></div></div></div>`;
+    
+    const c = document.getElementById('detailsModalContainer'); 
+    c.innerHTML = mHTML;
+    
+    const modal = c.querySelector('.modal-overlay'); 
+    const f = c.querySelector('#custom-add-form'); 
+    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); };
+    
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
+    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
+    setupSwipeToClose(modal, close);
+
+    // Dynamiczne ukrywanie czerwonej ramki jak tylko zaczniesz pisać
+    const tInput = document.getElementById('custom-title');
+    const tError = document.getElementById('custom-title-error');
+    if (tInput && tError) {
+        tInput.addEventListener('input', () => {
+            tInput.classList.remove('input-error');
+            tError.classList.remove('visible');
+        });
+    }
 
     f.addEventListener('submit', async e => {
-        e.preventDefault(); const t = escapeHTML(document.getElementById('custom-title').value.trim());
-        if (!t) { showCustomAlert('Błąd', 'Tytuł jest wymagany.', 'error'); return; }
-        const type = document.querySelector('input[name="custom-type"]:checked').value; const lst = document.querySelector('input[name="custom-list"]:checked').value;
+        e.preventDefault(); 
+        
+        // DOKŁADNIE TWOJE POBIERANIE TYTUŁU
+        const t = escapeHTML(document.getElementById('custom-title').value.trim());
+        
+        // --- NOWA WALIDACJA PREMIUM ZAMIAST STAREGO ALERTU ---
+        if (!t) { 
+            triggerHaptic('error');
+            const titleField = document.getElementById('custom-title');
+            const errorSpan = document.getElementById('custom-title-error');
+            
+            if (titleField && errorSpan) {
+                // Wymuszony reset by animacja powtarzała się przy każdym kliknięciu
+                titleField.classList.remove('input-error');
+                void titleField.offsetWidth; 
+                
+                titleField.classList.add('input-error');
+                errorSpan.classList.add('visible');
+                titleField.focus();
+            }
+            return; 
+        }
+
+        // --- DOKŁADNIE TWOJA LOGIKA ODCZYTU RADIA ---
+        const type = document.querySelector('input[name="custom-type"]:checked').value; 
+        const lst = document.querySelector('input[name="custom-list"]:checked').value;
         const tList = (type === 'movie' ? 'movies' : 'series') + (lst === 'toWatch' ? 'ToWatch' : 'Watched');
-        const nIt = { id: `custom_${Date.now()}`, title: t, year: escapeHTML(document.getElementById('custom-year').value) || '', poster: escapeHTML(document.getElementById('custom-poster').value.trim()) || null, type: type, overview: 'Dodano ręcznie.', genres: [], isFavorite: false, customTags: [], dateAdded: Date.now(), releaseDate: null, tmdbRating: null };
-        if (lst === 'toWatch') { const mx = data[tList].length > 0 ? Math.max(...data[tList].map(i => i.customOrder || 0)) : -1; nIt.customOrder = mx + 1; } else { nIt.rating = null; nIt.review = ""; nIt.watchDates = [Date.now()]; }
+        
+        // --- DOKŁADNIE TWÓJ OBIEKT ---
+        const nIt = { 
+            id: `custom_${Date.now()}`, 
+            title: t, 
+            year: escapeHTML(document.getElementById('custom-year').value) || '', 
+            poster: escapeHTML(document.getElementById('custom-poster').value.trim()) || null, 
+            type: type, 
+            overview: 'Dodano ręcznie.', 
+            genres: [], 
+            isFavorite: false, 
+            customTags: [], 
+            dateAdded: Date.now(), 
+            releaseDate: null, 
+            tmdbRating: null 
+        };
+        
+        if (lst === 'toWatch') { 
+            const mx = data[tList].length > 0 ? Math.max(...data[tList].map(i => i.customOrder || 0)) : -1; 
+            nIt.customOrder = mx + 1; 
+        } else { 
+            nIt.rating = null; 
+            nIt.review = ""; 
+            nIt.watchDates = [Date.now()]; 
+        }
+        
         if (type === 'movie') nIt.runtime = null;
-        data[tList].unshift(nIt); await saveData(); switchMainTab(type === 'movie' ? 'movies' : 'series'); switchSubTab(lst); close(); showCustomAlert('Gotowe', `Dodano.`, 'success');
+        
+        // --- DOKŁADNIE TWÓJ ZAPIS I ODŚWIEŻANIE ---
+        data[tList].unshift(nIt); 
+        await saveData(); 
+        
+        switchMainTab(type === 'movie' ? 'movies' : 'series'); 
+        switchSubTab(lst); 
+        close(); 
+        
+        showCustomAlert('Gotowe', `Dodano.`, 'success');
     });
 }
-
 async function openActorDetailsModal(actorId) {
     history.pushState({ modalOpen: true }, '');
     toggleAppDepthEffect(true);
