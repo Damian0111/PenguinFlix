@@ -112,15 +112,37 @@ function triggerHaptic(type = 'light') {
     } catch (e) { }
 }
 
+// --- ULEPSZONE MOTYWY I KOLORY ---
 const applyTheme = () => {
-    const storedTheme = localStorage.getItem('theme');
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const theme = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+    const theme = localStorage.getItem('theme') || 'dark';
     document.body.dataset.theme = theme;
-    document.getElementById('color-scheme-meta').setAttribute('content', theme);
-    document.getElementById('theme-color-meta').setAttribute('content', theme === 'dark' ? '#101114' : '#f0f2f5');
-};
+    
+    // Zmiana meta tagów
+    let metaColor = theme === 'dark' ? '#101114' : (theme === 'amoled' ? '#000000' : '#f0f2f5');
+    document.getElementById('color-scheme-meta').setAttribute('content', theme === 'light' ? 'light' : 'dark');
+    document.getElementById('theme-color-meta').setAttribute('content', metaColor);
 
+    // Załadowanie Koloru Głównego (Akcentu)
+    const accentColor = localStorage.getItem('penguinAccentColor') || '#e50914';
+    document.documentElement.style.setProperty('--primary-color', accentColor);
+    
+    // NAPRAWA: Zawsze ładuj kolor awatara przy starcie aplikacji!
+    const avatarColor = localStorage.getItem('penguinAvatarColor') || '#e50914';
+    document.documentElement.style.setProperty('--custom-avatar-color', avatarColor);
+
+    // Załadowanie Tła Profilu
+    const savedBg = localStorage.getItem('penguinProfileBg');
+    const header = document.querySelector('.profile-header');
+    if (header) {
+        if (savedBg) {
+            header.style.backgroundImage = `url(${savedBg})`;
+            const rmBtn = document.getElementById('btn-remove-profile-bg');
+            if(rmBtn) rmBtn.style.display = 'flex';
+        } else {
+            header.style.backgroundImage = 'none';
+        }
+    }
+};
 const toggleTheme = () => {
     const newTheme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
     document.body.dataset.theme = newTheme;
@@ -413,12 +435,22 @@ function setupEventListeners() {
     });
 
     // --- USTAWIENIA PROFILU ---
-    document.getElementById('btn-theme-toggle').addEventListener('click', toggleTheme);
-    document.getElementById('btn-custom-add').addEventListener('click', openCustomAddModal);
-    document.getElementById('btn-backup').addEventListener('click', backupData);
-    document.getElementById('btn-backup-settings').addEventListener('click', openBackupSettingsModal);
-    document.getElementById('restoreInput').addEventListener('change', restoreData);
-    document.getElementById('btn-info').addEventListener('click', showInfoModal);
+     // --- USTAWIENIA PROFILU (ZABEZPIECZONE) ---
+    // Usunęliśmy odwołanie do starego btn-theme-toggle, bo teraz zarządza tym nowy system!
+    const btnCustomAdd = document.getElementById('btn-custom-add');
+    if (btnCustomAdd) btnCustomAdd.addEventListener('click', openCustomAddModal);
+
+    const btnBackup = document.getElementById('btn-backup');
+    if (btnBackup) btnBackup.addEventListener('click', backupData);
+
+    const btnBackupSettings = document.getElementById('btn-backup-settings');
+    if (btnBackupSettings) btnBackupSettings.addEventListener('click', openBackupSettingsModal);
+
+    const restoreInp = document.getElementById('restoreInput');
+    if (restoreInp) restoreInp.addEventListener('change', restoreData);
+
+    const btnInfo = document.getElementById('btn-info');
+    if (btnInfo) btnInfo.addEventListener('click', showInfoModal);
 
     // --- TWARDY RESET SERIALI ---
     const hardRefreshBtn = document.getElementById('btn-hard-refresh');
@@ -2210,14 +2242,59 @@ function showConfig() {
     });
 }
 
+// ==========================================
+// NOWOCZESNY GENERATOR POWIADOMIEŃ (TOAST - SINGLE PILL)
+// ==========================================
 function showCustomAlert(title, message, type = 'info') {
-    if (type === 'success') triggerHaptic('success'); else if (type === 'error') triggerHaptic('error'); else triggerHaptic('medium');
-    const toastContainer = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = `modern-toast ${type}`;
-    const icons = { success: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`, error: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`, info: `<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>` };
-    toast.innerHTML = `<div class="toast-icon-wrap ${type}">${icons[type] || icons.info}</div><div class="toast-content"><span class="toast-title">${title}</span><span class="toast-msg">${message}</span></div><div class="toast-progress" style="color: ${type === 'success' ? 'var(--success-color)' : type === 'error' ? 'var(--primary-color)' : '#3b82f6'}"></div>`;
+    // Wibracje na podstawie typu zdarzenia
+    if (type === 'success') triggerHaptic('success'); 
+    else if (type === 'error') triggerHaptic('error'); 
+    else triggerHaptic('medium');
+    
+    const toastContainer = document.getElementById('toast-container'); 
+    
+    // MAGIA: Zanim stworzymy nowe powiadomienie, ZABIJAMY wszystkie stare,
+    // które wciąż "wiszą" na ekranie. Zawsze jest tylko JEDNO!
+    while (toastContainer.firstChild) {
+        toastContainer.removeChild(toastContainer.firstChild);
+    }
+    
+    const toast = document.createElement('div'); 
+    toast.className = `modern-toast ${type}`;
+    
+    // Piękne, natywne ikonki z Feather Icons
+    const icons = { 
+        success: `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>`, 
+        error: `<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`, 
+        info: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>` 
+    };
+    
+    // Budujemy nową strukturę (ikona w kółku + napisy)
+    toast.innerHTML = `
+        <div class="toast-icon-wrap ${type}">${icons[type] || icons.info}</div>
+        <div class="toast-content">
+            <span class="toast-title">${title}</span>
+            <span class="toast-msg">${message || ''}</span>
+        </div>
+    `;
+    
     toastContainer.appendChild(toast);
-    const hideTimeout = setTimeout(() => { if (!toast.classList.contains('hiding')) { toast.classList.add('hiding'); toast.addEventListener('animationend', () => toast.remove()); } }, 3500);
-    toast.addEventListener('click', () => { clearTimeout(hideTimeout); toast.classList.add('hiding'); toast.addEventListener('animationend', () => toast.remove()); });
+    
+    // Usuwamy po 3 sekundach
+    const hideTimeout = setTimeout(() => { 
+        // Sprawdzamy czy to wciąż TEN SAM toast (bo użytkownik mógł odpalić nowy w międzyczasie)
+        if (toast.parentNode === toastContainer && !toast.classList.contains('hiding')) { 
+            toast.classList.add('hiding'); 
+            toast.addEventListener('animationend', () => toast.remove()); 
+        } 
+    }, 3000);
+    
+    // Usunięcie powiadomienia palcem po kliknięciu
+    toast.addEventListener('click', () => { 
+        clearTimeout(hideTimeout); 
+        toast.classList.add('hiding'); 
+        toast.addEventListener('animationend', () => toast.remove()); 
+    });
 }
 
 function showCustomConfirm(title, message) {
@@ -3853,24 +3930,56 @@ document.addEventListener('DOMContentLoaded', () => {
         const listId = getActiveListId();
         if(!listId.includes('ToWatch')) { showCustomAlert('Błąd', 'Tę akcję wykonasz tylko w "Do obejrzenia"', 'error'); return; }
         
-        if(await showCustomConfirm('Przenieść?', `Czy chcesz oznaczyć ${bulkSelectedItems.size} pozycji jako obejrzane?`)) {
+        if(await showCustomConfirm('Przenieść?', `Czy chcesz oznaczyć wybrane pozycje jako obejrzane?`)) {
             let movedCount = 0;
+            let skippedCount = 0; // Licznik odrzuconych pozycji
+            
+            // Pobieramy identyfikatory zanim zaczną się przesuwać w tablicy
             const itemsToProcess = Array.from(bulkSelectedItems);
             
             for(let uniqueId of itemsToProcess) {
                 const [id, type] = uniqueId.split('_');
                 const iIdx = data[listId].findIndex(i => String(i.id) === String(id) && i.type === type);
+                
                 if(iIdx > -1) {
-                    const [item] = data[listId].splice(iIdx, 1);
-                    item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder;
-                    item.watchDates = [Date.now()];
-                    const targetList = type === 'movie' ? 'moviesWatched' : 'seriesWatched';
-                    data[targetList].unshift(item);
-                    movedCount++;
+                    const itemToMove = data[listId][iIdx];
+                    let canMove = true;
+
+                    // 1. Zabezpieczenie przed trwającymi serialami
+                    if (type === 'tv' && !isSeriesFinished(itemToMove)) {
+                        canMove = false;
+                    } 
+                    // 2. Zabezpieczenie przed niewydanymi filmami
+                    else if (type === 'movie' && itemToMove.releaseDate) {
+                        const td = new Date(); td.setHours(0, 0, 0, 0); 
+                        const rd = new Date(itemToMove.releaseDate); rd.setHours(0, 0, 0, 0); 
+                        if (rd > td) canMove = false;
+                    }
+
+                    // Jeśli przeszedł filtry, przenosimy!
+                    if (canMove) {
+                        const [item] = data[listId].splice(iIdx, 1);
+                        item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder;
+                        item.watchDates = [Date.now()];
+                        const targetList = type === 'movie' ? 'moviesWatched' : 'seriesWatched';
+                        data[targetList].unshift(item);
+                        movedCount++;
+                    } else {
+                        // Jeśli zablokowany, zostaje w "Do obejrzenia"
+                        skippedCount++;
+                    }
                 }
             }
+            
             await saveData();
-            showCustomAlert('Sukces!', `Przeniesiono ${movedCount} pozycji.`, 'success');
+            
+            // Inteligentne powiadomienie
+            if (skippedCount > 0) {
+                showCustomAlert('Gotowe!', `Przeniesiono: ${movedCount}. Pominięto: ${skippedCount} (wciąż trwają lub czekają na premierę).`, 'info');
+            } else {
+                showCustomAlert('Sukces!', `Przeniesiono ${movedCount} pozycji.`, 'success');
+            }
+            
             exitBulkMode();
             renderList(data[listId], listId, true);
         }
@@ -4543,19 +4652,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const avatarInput = document.getElementById('avatar-upload');
     const customImg = document.getElementById('custom-avatar-img');
     const defaultSvg = document.getElementById('default-avatar-svg');
-    const avatarLabel = document.querySelector('.avatar-container'); // Nasz kontener z awatarem
+    const avatarLabel = document.querySelector('.avatar-container'); 
 
-    // 1. Ładowanie zapisanego zdjęcia po uruchomieniu aplikacji
+    // 1. Ładowanie zapisanego zdjęcia po uruchomieniu aplikacji (PANCERNA METODA)
     const loadAvatar = () => {
         const savedAvatar = localStorage.getItem('penguinAvatar');
         if (savedAvatar) {
             customImg.src = savedAvatar;
-            customImg.style.display = 'block';
-            defaultSvg.style.display = 'none';
+            // Brutalne obejście - nie zmieniamy display, tylko visibility i pozycjonowanie
+            customImg.style.visibility = 'visible';
+            customImg.style.position = 'relative';
+            
+            defaultSvg.style.visibility = 'hidden';
+            defaultSvg.style.position = 'absolute';
         } else {
-            customImg.style.display = 'none';
-            defaultSvg.style.display = 'block';
-            customImg.src = '';
+            customImg.removeAttribute('src'); // Czyści pamięć przeglądarki!
+            customImg.style.visibility = 'hidden';
+            customImg.style.position = 'absolute';
+            
+            defaultSvg.style.visibility = 'visible';
+            defaultSvg.style.position = 'relative';
         }
     };
     loadAvatar();
@@ -4586,8 +4702,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
                     localStorage.setItem('penguinAvatar', compressedBase64);
-                    loadAvatar(); // Aktualizuje widok na górze
-                    updateBottomNavAvatar(); // Aktualizuje ikonkę na dolnym pasku
+                    loadAvatar(); 
+                    updateBottomNavAvatar(); 
                     
                     showCustomAlert('Świetnie!', 'Zaktualizowano zdjęcie profilowe.', 'success');
                 };
@@ -4772,141 +4888,168 @@ function showCustomInstallPrompt() {
     }, 2000);
 }
 // ==========================================
-// MODAL Z WYBOREM KOLORU AWATARA (Z PODGLĄDEM NA ŻYWO)
+// NOWY MODUŁ: ZAAWANSOWANA PERSONALIZACJA 
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    const btnOpenColor = document.getElementById('btn-avatar-color-modal');
-    const colorPreview = document.getElementById('avatar-color-preview');
-    const DEFAULT_COLOR = '#e50914';
+    // Wspólna paleta kolorów
+    const PREDEFINED_COLORS = ['#e50914', '#f97316', '#eab308', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
+    const hslToHex = (h, s, l) => { l /= 100; const a = s * Math.min(l, 1 - l) / 100; const f = n => { const k = (n + h / 30) % 12; const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * c).toString(16).padStart(2, '0'); }; return `#${f(0)}${f(8)}${f(4)}`; };
 
-    // 12 gotowych, najładniejszych kolorów
-    const PREDEFINED_COLORS = [
-        '#e50914', '#f97316', '#eab308', '#84cc16', 
-        '#22c55e', '#10b981', '#06b6d4', '#0ea5e9', 
-        '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'
-    ];
+    // --- 1. WYBÓR MOTYWU (JASNY / CIEMNY / AMOLED) ---
+    const btnThemeModal = document.getElementById('btn-theme-modal');
+    if (btnThemeModal) {
+        // Ustaw etykietę startową
+        const startTheme = localStorage.getItem('theme') || 'dark';
+        const lbl = document.getElementById('current-theme-label');
+        if(lbl) lbl.textContent = startTheme === 'dark' ? 'Ciemny' : (startTheme === 'amoled' ? 'Czarny' : 'Jasny');
 
-    // Funkcja zamieniająca kolor z suwaka (HSL) na kod HEX
-    const hslToHex = (h, s, l) => {
-        l /= 100; const a = s * Math.min(l, 1 - l) / 100;
-        const f = n => { const k = (n + h / 30) % 12; const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * color).toString(16).padStart(2, '0'); };
-        return `#${f(0)}${f(8)}${f(4)}`;
-    };
-
-    // Inicjalizacja przy starcie
-    const savedColor = localStorage.getItem('penguinAvatarColor') || DEFAULT_COLOR;
-    document.documentElement.style.setProperty('--custom-avatar-color', savedColor);
-    if(colorPreview) colorPreview.style.backgroundColor = savedColor;
-
-    if (btnOpenColor) {
-        btnOpenColor.addEventListener('click', () => {
-            triggerHaptic('light');
-            toggleAppDepthEffect(true);
+        btnThemeModal.addEventListener('click', () => {
+            triggerHaptic('light'); toggleAppDepthEffect(true);
+            const cTheme = localStorage.getItem('theme') || 'dark';
             
-            const modalContainer = document.getElementById('customAlertContainer');
-            let currentColor = localStorage.getItem('penguinAvatarColor') || DEFAULT_COLOR;
-            let tempColor = currentColor; 
-
-            // Renderowanie siatki z gotowcami
-            const gridHTML = PREDEFINED_COLORS.map(color => {
-                const isActive = (color.toLowerCase() === currentColor.toLowerCase());
-                return `
-                <div class="theme-color-swatch ${isActive ? 'active' : ''}" data-color="${color}" style="background-color: ${color};">
-                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            const mHTML = `
+                <div class="modern-alert-overlay" id="themeModalOverlay">
+                    <div class="modern-alert-card" style="padding: 24px; max-width: 320px;">
+                        <h2 style="margin-bottom: 16px;">Wybierz Motyw</h2>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <label class="modern-radio-row"><input type="radio" name="theme-opt" value="light" ${cTheme === 'light' ? 'checked' : ''}><span class="label-text">Jasny</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>
+                            <label class="modern-radio-row"><input type="radio" name="theme-opt" value="dark" ${cTheme === 'dark' ? 'checked' : ''}><span class="label-text">Domyślny</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>
+                            <label class="modern-radio-row"><input type="radio" name="theme-opt" value="amoled" ${cTheme === 'amoled' ? 'checked' : ''}><span class="label-text">Czarny</span><svg class="check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></label>
+                        </div>
+                        <div class="modern-alert-actions" style="margin-top: 24px;"><button class="modern-alert-btn secondary" id="theme-cancel-btn">Anuluj</button><button class="modern-alert-btn primary" id="theme-save-btn">Zapisz</button></div>
+                    </div>
                 </div>`;
-            }).join('');
+            
+            const cont = document.getElementById('customAlertContainer'); cont.innerHTML = mHTML;
+            const o = document.getElementById('themeModalOverlay');
+            const cl = () => { o.style.opacity = '0'; setTimeout(() => { cont.innerHTML = ''; toggleAppDepthEffect(false); }, 200); };
+            
+            document.getElementById('theme-cancel-btn').onclick = cl;
+            o.onclick = (e) => { if (e.target === o) cl(); };
+            
+            document.getElementById('theme-save-btn').onclick = () => {
+                const sel = document.querySelector('input[name="theme-opt"]:checked').value;
+                localStorage.setItem('theme', sel);
+                applyTheme();
+                if(lbl) lbl.textContent = sel === 'dark' ? 'Ciemny' : (sel === 'amoled' ? 'Czarny' : 'Jasny');
+                triggerHaptic('success'); cl();
+            };
+        });
+    }
 
-            // Budowanie okienka z DUŻYM podglądem pingwina na samej górze
-            modalContainer.innerHTML = `
-                <div class="modern-alert-overlay" id="colorModalOverlay">
-                    <div class="modern-alert-card" style="padding: 24px; max-width: 360px;">
-                        
-                        <!-- NA ŻYWO PODGLĄD PINGWINA -->
-                        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
-                            <div id="live-penguin-preview" style="width: 80px; height: 80px; border-radius: 50%; background: color-mix(in srgb, var(--custom-avatar-color) 15%, transparent); padding: 16px; transition: background 0.1s;">
-                                <svg viewBox="0 0 24 24" style="width: 100%; height: 100%; fill: var(--custom-avatar-color); transition: fill 0.1s;">
-                                    <path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
-                                </svg>
-                            </div>
-                        </div>
+    // --- 2. GENERATOR MODALI KOLORÓW (Wspólny dla Awatara i Akcentu!) ---
+    const openColorModal = (type) => {
+        triggerHaptic('light'); toggleAppDepthEffect(true);
+        const isAccent = type === 'accent';
+        const lsKey = isAccent ? 'penguinAccentColor' : 'penguinAvatarColor';
+        const cssVar = isAccent ? '--primary-color' : '--custom-avatar-color';
+        const title = isAccent ? 'Kolor Główny' : 'Kolor Awatara';
+        const desc = isAccent ? 'Zmieni wygląd wszystkich przycisków, pasków postępu i zakładek.' : 'Zmieni ikonę Twojego profilu.';
+        
+        let currentColor = localStorage.getItem(lsKey) || '#e50914';
+        let tempColor = currentColor;
 
-                        <h2 style="margin-bottom: 4px; font-size: 1.3rem;">Motyw ikony</h2>
-                        <p style="margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">Wybierz kolor, by spersonalizować profil.</p>
-                        
-                        <div class="theme-color-grid" style="margin-bottom: 8px;">
-                            ${gridHTML}
-                        </div>
-                        
-                        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
-                            <p style="margin: 0 0 8px; font-size: 0.85rem; color: var(--text-secondary); text-align: left;">Lub zmieszaj własny odcień:</p>
-                            <input type="range" min="0" max="360" value="0" class="custom-hue-slider" id="modal-hue-slider">
-                        </div>
+        const gridHTML = PREDEFINED_COLORS.map(color => `<div class="theme-color-swatch ${color.toLowerCase()===currentColor.toLowerCase() ? 'active':''}" data-color="${color}" style="background-color: ${color};"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>`).join('');
+        
+        const previewHTML = isAccent 
+        ? `<div style="display:flex; justify-content:center; gap:12px; margin-bottom: 20px;"><button class="modal-btn primary" style="background:var(${cssVar}); box-shadow:none; padding:8px 24px;">Przycisk</button><div style="width:40px;height:40px;border-radius:50%;background:color-mix(in srgb, var(${cssVar}) 15%, transparent);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(${cssVar})"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div></div>`
+        : `<div style="display: flex; justify-content: center; margin-bottom: 20px;"><div style="width: 80px; height: 80px; border-radius: 50%; background: color-mix(in srgb, var(${cssVar}) 15%, transparent); padding: 16px;"><svg viewBox="0 0 24 24" style="width: 100%; height: 100%; fill: var(${cssVar});"><path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" /></svg></div></div>`;
 
-                        <div class="modern-alert-actions" style="margin-top: 16px;">
-                            <button class="modern-alert-btn secondary" id="color-cancel-btn">Anuluj</button>
-                            <button class="modern-alert-btn primary" id="color-save-btn">Zapisz</button>
-                        </div>
+        const mHTML = `
+            <div class="modern-alert-overlay" id="colorModalOverlay">
+                <div class="modern-alert-card color-picker-dual-modal" style="padding: 24px; max-width: 360px;">
+                    ${previewHTML}
+                    <h2 style="margin-bottom: 4px; font-size: 1.3rem;">${title}</h2>
+                    <p style="margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">${desc}</p>
+                    <div class="theme-color-grid">${gridHTML}</div>
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 16px;">
+                        <input type="range" min="0" max="360" value="0" class="custom-hue-slider" id="modal-hue-slider">
+                    </div>
+                    <div class="modern-alert-actions" style="margin-top: 16px;">
+                        <button class="modern-alert-btn secondary" id="color-cancel-btn">Anuluj</button>
+                        <button class="modern-alert-btn primary" id="color-save-btn">Zapisz</button>
                     </div>
                 </div>
-            `;
+            </div>`;
+        
+        const cont = document.getElementById('customAlertContainer'); cont.innerHTML = mHTML;
+        const o = document.getElementById('colorModalOverlay'); const grid = o.querySelector('.theme-color-grid'); const slider = document.getElementById('modal-hue-slider');
+        
+        grid.onclick = (e) => {
+            const s = e.target.closest('.theme-color-swatch'); if(!s) return;
+            triggerHaptic('light'); grid.querySelectorAll('.theme-color-swatch').forEach(el => el.classList.remove('active')); s.classList.add('active');
+            tempColor = s.dataset.color; document.documentElement.style.setProperty(cssVar, tempColor);
+        };
 
-            const overlay = document.getElementById('colorModalOverlay');
-            const colorGrid = overlay.querySelector('.theme-color-grid');
-            const hueSlider = document.getElementById('modal-hue-slider');
-            
-            // Obsługa kliknięć w GOTOWE kolory
-            colorGrid.addEventListener('click', (e) => {
-                const swatch = e.target.closest('.theme-color-swatch');
-                if (!swatch) return;
+        let lastH = 0;
+        slider.oninput = (e) => {
+            grid.querySelectorAll('.theme-color-swatch').forEach(el => el.classList.remove('active'));
+            const h = parseInt(e.target.value); if(Math.abs(h - lastH) > 15) { triggerHaptic('light'); lastH = h; }
+            tempColor = hslToHex(h, 100, 50); document.documentElement.style.setProperty(cssVar, tempColor);
+        };
 
-                triggerHaptic('light');
-                colorGrid.querySelectorAll('.theme-color-swatch').forEach(s => s.classList.remove('active'));
-                swatch.classList.add('active');
-                
-                tempColor = swatch.dataset.color;
-                document.documentElement.style.setProperty('--custom-avatar-color', tempColor);
-            });
+        const cl = () => { o.style.opacity = '0'; setTimeout(() => { cont.innerHTML = ''; toggleAppDepthEffect(false); }, 200); };
+        
+        document.getElementById('color-save-btn').onclick = () => {
+            triggerHaptic('success'); localStorage.setItem(lsKey, tempColor);
+            const p = document.getElementById(isAccent ? 'accent-color-preview' : 'avatar-color-preview'); if(p) p.style.backgroundColor = tempColor;
+            cl();
+        };
 
-            // Obsługa płynnego PRZESUWANIA suwaka (własny kolor)
-            let lastHapticHue = 0;
-            hueSlider.addEventListener('input', (e) => {
-                colorGrid.querySelectorAll('.theme-color-swatch').forEach(s => s.classList.remove('active'));
-                
-                const hue = parseInt(e.target.value);
-                
-                // Mikro wibracja przy przesuwaniu (co 15 stopni)
-                if (Math.abs(hue - lastHapticHue) > 15) {
-                    triggerHaptic('light');
-                    lastHapticHue = hue;
-                }
+        const revert = () => { triggerHaptic('medium'); document.documentElement.style.setProperty(cssVar, currentColor); cl(); };
+        document.getElementById('color-cancel-btn').onclick = revert; o.onclick = (e) => { if (e.target === o) revert(); };
+    };
 
-                // Generowanie żywego koloru i błyskawiczna zmiana zmiennej CSS
-                tempColor = hslToHex(hue, 100, 50);
-                document.documentElement.style.setProperty('--custom-avatar-color', tempColor);
-            });
+    // Podpięcie przycisków
+    const btnAc = document.getElementById('btn-accent-color-modal'); if(btnAc) {
+        document.getElementById('accent-color-preview').style.backgroundColor = localStorage.getItem('penguinAccentColor') || '#e50914';
+        btnAc.onclick = () => openColorModal('accent');
+    }
+    const btnAv = document.getElementById('btn-avatar-color-modal'); if(btnAv) {
+        document.getElementById('avatar-color-preview').style.backgroundColor = localStorage.getItem('penguinAvatarColor') || '#e50914';
+        btnAv.onclick = () => openColorModal('avatar');
+    }
 
-            const close = () => { 
-                overlay.style.opacity = '0'; 
-                setTimeout(() => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); }, 200); 
+    // --- 3. WŁASNE TŁO PROFILU (UPLOAD) ---
+    const bgInput = document.getElementById('profile-bg-upload');
+    const rmBgBtn = document.getElementById('btn-remove-profile-bg');
+    if (bgInput) {
+        bgInput.addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            triggerHaptic('light');
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    // Kompresja tła, by nie zabić LocalStorage (max szerokość 800px)
+                    const MAX_W = 800; const scale = Math.min(MAX_W / img.width, 1);
+                    canvas.width = img.width * scale; canvas.height = img.height * scale;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const b64 = canvas.toDataURL('image/jpeg', 0.6); // 60% jakości wystarczy do rozmytego tła
+
+                    try {
+                        localStorage.setItem('penguinProfileBg', b64);
+                        applyTheme(); // Nakłada tło od razu
+                        showCustomAlert('Świetnie!', 'Ustawiono nowe tło profilu.', 'success');
+                    } catch(err) {
+                        showCustomAlert('Błąd', 'Plik jest za duży. Spróbuj innego zdjęcia.', 'error');
+                    }
+                };
+                img.src = ev.target.result;
             };
+            reader.readAsDataURL(file); e.target.value = '';
+        });
+    }
 
-            // ZAPISZ
-            document.getElementById('color-save-btn').onclick = () => {
-                triggerHaptic('success');
-                localStorage.setItem('penguinAvatarColor', tempColor);
-                if(colorPreview) colorPreview.style.backgroundColor = tempColor;
-                close();
-            };
-
-            // ANULUJ (Cofa pokazywany kolor)
-            const revertAndClose = () => {
-                triggerHaptic('medium');
-                document.documentElement.style.setProperty('--custom-avatar-color', currentColor);
-                close();
-            };
-
-            document.getElementById('color-cancel-btn').onclick = revertAndClose;
-            overlay.onclick = (e) => { if (e.target === overlay) revertAndClose(); };
+    if (rmBgBtn) {
+        rmBgBtn.addEventListener('click', async () => {
+            if (await showCustomConfirm('Usunąć tło?', 'Przywrócić standardowy, czysty wygląd profilu?')) {
+                localStorage.removeItem('penguinProfileBg');
+                rmBgBtn.style.display = 'none';
+                applyTheme();
+                showCustomAlert('Usunięto', 'Tło powróciło do normy.', 'info');
+            }
         });
     }
 });
