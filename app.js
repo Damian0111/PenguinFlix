@@ -3632,22 +3632,63 @@ async function refreshStaleSeries(forceAll = false) {
 // ==========================================
 
 // ==========================================
-// 13. PWA (Service Worker) z AUTO-UPDATE
+// 13. PWA (Service Worker) z RĘCZNYM UPDATE
 // ==========================================
 if ('serviceWorker' in navigator) {
+    let newWorker;
+    let refreshing = false;
+
+    // Kiedy nowy Service Worker przejmie kontrolę nad stroną, dopiero wtedy odświeżamy
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+    });
+
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').then(reg => {
             console.log('SW zarejestrowany');
+            
             reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
+                newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
+                    // Jeśli nowa wersja się pobrała i czeka w kolejce
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        console.log('Nowa wersja! Odświeżam...');
-                        window.location.reload();
+                        showUpdatePrompt(newWorker);
                     }
                 });
             });
         }).catch(e => console.log('SW błąd', e));
+    });
+}
+
+function showUpdatePrompt(worker) {
+    // Sprawdzamy czy powiadomienie już nie istnieje
+    if (document.getElementById('pwa-update-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'pwa-update-banner';
+    banner.className = 'pwa-update-toast';
+    banner.innerHTML = `
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+        <span>Dostępna aktualizacja!</span>
+        <button id="pwa-update-btn">Instaluj</button>
+    `;
+    
+    document.body.appendChild(banner);
+    
+    // Wibracja i wysunięcie po 500ms
+    setTimeout(() => {
+        triggerHaptic('success');
+        banner.classList.add('visible');
+    }, 500);
+
+    // Kiedy użytkownik kliknie przycisk, wysyłamy sygnał do czekającego workera
+    document.getElementById('pwa-update-btn').addEventListener('click', () => {
+        triggerHaptic('light');
+        banner.innerHTML = `<span>Aktualizowanie...</span>`;
+        // Mówimy nowemu skryptowi by zabił stary i przejął kontrolę natychmiast
+        worker.postMessage({ type: 'SKIP_WAITING' });
     });
 }
 
