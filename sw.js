@@ -1,4 +1,4 @@
-const CACHE_NAME = 'penguinflix-cache-v6'; // Wersja v6 wymusi aktualizację
+const CACHE_NAME = 'penguinflix-cache-v7'; // Wersja v6 wymusi aktualizację
 
 // Twarde ścieżki dla GitHub Pages - to naprawia problem ze skrótem!
 const URLS_TO_CACHE = [
@@ -15,15 +15,13 @@ const URLS_TO_CACHE = [
   '/PenguinFlix/screen-mobile-2.png'
 ];
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Otwarto cache. Dodawanie zasobów: ', URLS_TO_CACHE);
-        return cache.addAll(URLS_TO_CACHE);
-      })
-      .then(() => self.skipWaiting()) 
-  );
+self.addEventListener('install', (event) => {
+    // USUNIĘTO self.skipWaiting(); - teraz Service Worker będzie czekał na przycisk!
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            return cache.addAll(urlsToCache);
+        })
+    );
 });
 
 self.addEventListener('activate', event => {
