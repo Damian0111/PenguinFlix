@@ -5746,3 +5746,45 @@ img {
 #custom-avatar-img {
     transition: opacity 0.2s !important;
 }
+/* ==========================================
+   WALIDACJA FORMULARZY (PREMIUM UI)
+========================================== */
+
+/* Animacja wstrząsu (Shake) */
+@keyframes shakeError {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+
+/* Klasa błędu doczepiana do inputa w JS */
+.custom-input.input-error {
+    border-color: #ef4444 !important; /* Systemowy czerwony */
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.1), 
+        0 0 0 4px color-mix(in srgb, #ef4444 20%, transparent) !important;
+    animation: shakeError 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+/* Tekst błędu pojawiający się pod polem */
+.custom-error-text {
+    display: block;
+    color: #ef4444;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-top: 0;
+    margin-left: 8px;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    height: 0;
+    overflow: hidden;
+}
+
+/* Stan aktywny (gdy JS wykryje błąd) */
+.custom-error-text.visible {
+    opacity: 1;
+    transform: translateY(0);
+    height: 18px; /* Odpowiednia wysokość na jeden wiersz tekstu */
+    margin-top: 6px;
+}
