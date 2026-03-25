@@ -63,3 +63,9 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+// --- NASŁUCHIWANIE NA KOMENDĘ AKTUALIZACJI Z APLIKACJI ---
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
