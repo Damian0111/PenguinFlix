@@ -16,7 +16,7 @@ const URLS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-    // USUNIĘTO self.skipWaiting(); - teraz Service Worker będzie czekał na przycisk!
+    self.skipWaiting(); // <--- TO JEST WINOWAJCA! ZABIERZ TO!
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             return cache.addAll(urlsToCache);
