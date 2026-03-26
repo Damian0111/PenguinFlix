@@ -681,6 +681,9 @@ function setupEventListeners() {
     const ptrContainer = document.getElementById('ptr-container');
     const ptrSpinner = document.getElementById('ptr-spinner');
 
+    // Lista elementów, na których GESTY ZAKŁADEK są ZABLOKOWANE
+    const noSwipeElements = '.sortable-chosen, .discover-categories-wrapper, .stats-poster-wall, .cast-scroller, .known-for-scroller, .recommendations-scroller, .reviews-scroller';
+
     const handleSwipeGesture = () => {
         const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
         if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
@@ -697,13 +700,13 @@ function setupEventListeners() {
     };
 
     mainContent.addEventListener('touchstart', e => {
-        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper') || e.target.closest('.stats-poster-wall')) return;
+        if (e.target.closest(noSwipeElements)) return; // BLOKADA
         touchstartX = e.touches[0].clientX; touchstartY = e.touches[0].clientY;
         if (window.scrollY === 0) isPulling = true;
     }, { passive: true });
 
     mainContent.addEventListener('touchmove', e => {
-        if (e.target.closest('.modal-overlay') || e.target.closest('.discover-categories-wrapper') || e.target.closest('.stats-poster-wall')) return;
+        if (e.target.closest('.modal-overlay') || e.target.closest(noSwipeElements)) return; // BLOKADA
         const deltaY = e.touches[0].clientY - touchstartY;
 
         if (isPulling && deltaY > 0 && window.scrollY === 0) {
@@ -716,7 +719,7 @@ function setupEventListeners() {
     }, { passive: false });
 
     mainContent.addEventListener('touchend', async e => {
-        if (e.target.closest('.sortable-chosen') || e.target.closest('.discover-categories-wrapper') || e.target.closest('.stats-poster-wall')) return;
+        if (e.target.closest(noSwipeElements)) return; // BLOKADA
         
         touchendX = e.changedTouches[0].clientX; touchendY = e.changedTouches[0].clientY;
         handleSwipeGesture();
@@ -1657,7 +1660,6 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
 function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
     
-    // 1. NATYCHMIASTOWY RENDER SZKIELETU
     c.innerHTML = `
         <div style="grid-column: 1/-1; margin-bottom: 8px;">
             <div class="skeleton-box" style="height: 88px; width: 100%; border-radius: var(--radius-lg);"></div>
@@ -1671,9 +1673,7 @@ function renderProfileStats() {
         </div>
     `;
 
-    // 2. OPÓŹNIENIE OBLICZEŃ
     setTimeout(() => {
-        // Formater skraca liczby: np. 2500 -> "2,5 tys."
         const formatNum = (num) => new Intl.NumberFormat('pl-PL', { notation: "compact", maximumFractionDigits: 1 }).format(num);
 
         let tMovies = data.moviesWatched.length; let tSeries = data.seriesWatched.length;
@@ -1709,10 +1709,24 @@ function renderProfileStats() {
         let chart = `<div class="rating-bars">`;
         for(let i=1; i<=5; i++) { 
             let scalePct = dist[i] / maxRat; 
-            // Użycie formatNum dla wyświetlenia ładnych liczb (np. "1,2 tys.")
             chart += `<div class="chart-col"><div class="chart-tooltip">${dist[i] > 0 ? formatNum(dist[i]) : '0'}</div><div class="chart-bar" style="transform: scaleY(${scalePct});"></div></div>`; 
         }
         chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
+
+        // --- SEKCJA ULUBIONYCH AKTORÓW (ORYGINALNY WYGLĄD + KLASY DO DRAG & DROP) ---
+        data.favoriteActors = data.favoriteActors || [];
+        let favActorsHTML = '';
+        if (data.favoriteActors.length > 0) {
+                   const actorCards = data.favoriteActors.map(a => `
+            <div class="cast-member draggable-actor" data-actor-id="${a.id}">
+                <img src="${a.profile_path ? IMAGE_BASE_URL.replace('w500', 'w200') + a.profile_path : POSTER_PLACEHOLDER}" style="pointer-events: none;" onerror="this.outerHTML = ICONS.person;">
+                <strong style="pointer-events: none;">${escapeHTML(a.name)}</strong>
+            </div>
+        `).join('');
+            favActorsHTML = `<div class="cast-scroller" id="fav-actors-container" style="margin-top: 12px; padding-bottom: 4px;">${actorCards}</div>`;
+        } else {
+            favActorsHTML = '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px; line-height: 1.4;">Brak ulubionych aktorów. Kliknij gwiazdkę przy zdjęciu aktora, aby go tu dodać!</div>';
+        }
 
         c.innerHTML = `
             <div style="grid-column: 1/-1; margin-bottom: 8px;">
@@ -1737,17 +1751,39 @@ function renderProfileStats() {
             <div class="stat-card"><div class="label">Ulubiona Epoka</div><div class="value">${topDec}</div></div>
             <div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div>
             <div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div>
+            
+            <!-- SEKCJA ULUBIONYCH AKTORÓW -->
+            <div class="stat-card full-width">
+                <div class="label" style="display:flex; justify-content:space-between;">
+                    <span>Twoi Ulubieńcy</span>
+                    ${data.favoriteActors.length > 1 ? '<span style="font-size:0.7rem; font-weight:normal;">Przytrzymaj i przesuń</span>' : ''}
+                </div>
+                ${favActorsHTML}
+            </div>
+            
             <div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>
         `;
 
-        const advBtn = document.getElementById('btn-open-advanced-stats');
-        if (advBtn) {
-            advBtn.addEventListener('click', () => {
+        // --- INICJALIZACJA DRAG & DROP DLA AKTORÓW ---
+        initActorDragAndDrop();
+
+        c.onclick = (e) => {
+            const advBtn = e.target.closest('#btn-open-advanced-stats');
+            if (advBtn) {
                 triggerHaptic('medium');
                 advBtn.style.transform = 'scale(0.96)';
                 setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150);
-            });
-        }
+                return;
+            }
+            
+            // Kliknięcie aktora otwiera jego szczegóły, ALE ignorujemy to, jeśli właśnie skończyliśmy go przesuwać
+            const actorCard = e.target.closest('.draggable-actor');
+            if (actorCard && !actorCard.classList.contains('was-dragged')) {
+                triggerHaptic('light');
+                openActorDetailsModal(actorCard.dataset.actorId);
+            }
+        };
+
     }, 250);
 }
 // ==========================================
@@ -3254,10 +3290,79 @@ async function openActorDetailsModal(actorId) {
     const ad = await getActorDetails(actorId);
     if (!ad) { c.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych o aktorze.', 'error'); return; }
 
+    // Inicjalizacja bazy ulubionych (bezpiecznik dla starych danych)
+    data.favoriteActors = data.favoriteActors || [];
+    const isFav = data.favoriteActors.some(a => String(a.id) === String(actorId));
+
     const sName = escapeHTML(ad.name);
     const kfHTML = ad.known_for.map(i => { const p = i.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + i.poster_path : POSTER_PLACEHOLDER; const t = escapeHTML(i.title || i.name); return `<div class="known-for-item" data-id="${i.id}" data-type="${i.media_type}"><img src="${p}" alt="${t}" onerror="this.src='${POSTER_PLACEHOLDER}';"><strong>${t}</strong></div>`; }).join('');
 
-    c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;"><div class="actor-header">${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}<h2>${sName}</h2></div><div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>${kfHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${kfHTML}</div></div>` : ''}${ad.full_filmography && ad.full_filmography.length > 0 ? `<div class="filmography-controls"><button id="toggle-filmography-btn" class="filmography-button">Pokaż pełną filmografię</button></div><div id="full-filmography-container" style="display: none;"></div>` : ''}</div></div></div>`;
+    c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
+        
+        <div class="actor-header" style="position: relative;">
+            <button id="actor-fav-btn" class="hero-fav-btn ${isFav ? 'active' : ''}" style="position: absolute; top: 0; right: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: var(--card-color);">${ICONS.star}</button>
+            ${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
+            <h2>${sName}</h2>
+        </div>
+        
+        <div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>
+        
+        ${kfHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${kfHTML}</div></div>` : ''}
+        
+        ${ad.full_filmography && ad.full_filmography.length > 0 ? `
+        <div class="filmography-controls" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <button id="actor-randomize-btn" class="filmography-button" style="background: var(--primary-color); color: white; border: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(229,9,20,0.3);">
+                <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg> 
+                Wylosuj tytuł
+            </button>
+            <button id="toggle-filmography-btn" class="filmography-button">Pełna filmografia</button>
+        </div>
+        <div id="full-filmography-container" style="display: none;"></div>` : ''}
+        
+    </div></div></div>`;
+
+    // --- OBSŁUGA ULUBIONYCH ---
+    const favBtn = c.querySelector('#actor-fav-btn');
+    favBtn.addEventListener('click', async () => {
+        triggerHaptic('light');
+        data.favoriteActors = data.favoriteActors || [];
+        const idx = data.favoriteActors.findIndex(a => String(a.id) === String(actorId));
+        
+        if (idx > -1) {
+            data.favoriteActors.splice(idx, 1);
+            favBtn.classList.remove('active');
+            showCustomAlert('Usunięto', 'Usunięto z ulubionych aktorów.', 'info');
+        } else {
+            data.favoriteActors.unshift({ id: actorId, name: ad.name, profile_path: ad.profile_path });
+            favBtn.classList.add('active');
+            showCustomAlert('Dodano!', 'Aktor dodany do ulubionych.', 'success');
+        }
+        await saveData();
+        if (viewState.activeMainTab === 'profile') renderProfileStats(); // Odśwież widok profilu w tle
+    });
+
+    // --- OBSŁUGA LOSOWANIA ---
+    const randBtn = c.querySelector('#actor-randomize-btn');
+    if (randBtn) {
+        randBtn.addEventListener('click', () => {
+            triggerHaptic('heavy');
+            const pool = ad.full_filmography;
+            const winner = pool[Math.floor(Math.random() * pool.length)];
+            
+            // Zamknij okno aktora i otwórz wylosowany film po krótkiej pauzie
+            c.innerHTML = ''; 
+            toggleAppDepthEffect(false); 
+            if (history.state && history.state.modalOpen) history.back();
+
+            showCustomAlert('Losowanie...', `Z filmografii: ${ad.name}`, 'info');
+            
+            setTimeout(() => {
+                const inLib = Object.values(data).flat().some(i => String(i.id) === String(winner.id) && i.type === winner.media_type);
+                if (inLib) openDetailsModal(winner.id, winner.media_type);
+                else openPreviewModal(winner.id, winner.media_type);
+            }, 500);
+        });
+    }
 
     const fgBtn = document.getElementById('toggle-filmography-btn');
     if (fgBtn) {
@@ -5295,4 +5400,144 @@ function updateBottomNavAvatar() {
             if (svg) svg.style.display = '';
         }
     }
+}
+// ==========================================
+// NATYWNY DRAG & DROP Z ODBLOKOWANYM SCROLLEM
+// ==========================================
+function initActorDragAndDrop() {
+    const container = document.getElementById('fav-actors-container');
+    if (!container) return;
+
+    let isDragging = false;
+    let dragEl = null;
+    let pressTimer = null;
+    
+    let autoScrollRAF = null;
+    let scrollDirection = 0;
+    let currentClientX = 0;
+
+    const updatePosition = (clientX) => {
+        if (!dragEl) return;
+        const siblings = [...container.querySelectorAll('.draggable-actor:not([style*="opacity: 0.5"])')];
+        const nextSibling = siblings.find(sibling => {
+            const box = sibling.getBoundingClientRect();
+            return clientX <= box.left + box.width / 2;
+        });
+        
+        if (nextSibling) {
+            container.insertBefore(dragEl, nextSibling);
+        } else {
+            container.appendChild(dragEl);
+        }
+    };
+
+    const autoScroll = () => {
+        if (scrollDirection !== 0) {
+            container.scrollLeft += scrollDirection * 6;
+            updatePosition(currentClientX);
+        }
+        if (isDragging) {
+            autoScrollRAF = requestAnimationFrame(autoScroll);
+        }
+    };
+
+    // 1. Zaczynamy dotyk
+    const startDrag = (e, el) => {
+        // Jeśli klikasz prawym na kompie - ignoruj
+        if (e.type === 'mousedown' && e.button !== 0) return;
+
+        currentClientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        
+        pressTimer = setTimeout(() => {
+            // Jeśli dotyk nadal trwa, uruchamiamy wibrację i chwytamy obiekt
+            triggerHaptic('medium');
+            isDragging = true;
+            dragEl = el;
+            
+            dragEl.style.transition = 'none';
+            dragEl.style.opacity = '0.5';
+            dragEl.style.transform = 'scale(1.1)';
+            
+            scrollDirection = 0;
+            autoScrollRAF = requestAnimationFrame(autoScroll);
+            
+            // Dopiero teraz blokujemy przewijanie kontenera!
+            container.style.overflowX = 'hidden'; 
+            
+        }, 400); // 400ms to bezpieczny margines na iOS i Androidzie
+    };
+
+    // 2. Poruszanie palcem
+    const doDrag = (e) => {
+        // Jeśli NIE przesuwasz jeszcze aktora (nie upłynęło 400ms) to zwyczajnie odłączamy timer
+        // Przeglądarka z automatu sama zrobi sobie piękny, natywny Scroll.
+        if (!isDragging) {
+            clearTimeout(pressTimer);
+            return;
+        }
+        
+        // JESTEŚMY W TRYBIE PRZENOSZENIA!
+        // Zapobiega "zjechaniu" palcem ekranu (np. odświeżenie pull-to-refresh)
+        if (e.cancelable) e.preventDefault();
+        
+        currentClientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+        updatePosition(currentClientX);
+        
+        const rect = container.getBoundingClientRect();
+        const edgeThreshold = 60;
+        
+        if (currentClientX > rect.right - edgeThreshold) scrollDirection = 1;
+        else if (currentClientX < rect.left + edgeThreshold) scrollDirection = -1;
+        else scrollDirection = 0;
+    };
+
+    // 3. Puszczamy palec
+    const stopDrag = async (e) => {
+        clearTimeout(pressTimer);
+        scrollDirection = 0;
+        cancelAnimationFrame(autoScrollRAF);
+        
+        if (isDragging && dragEl) {
+            triggerHaptic('light');
+            
+            dragEl.style.transition = 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            dragEl.style.opacity = '1';
+            dragEl.style.transform = 'scale(1)';
+            
+            // ODDAJEMY SCROLLA UŻYTKOWNIKOWI Z POWROTEM!
+            container.style.overflowX = 'auto';
+            
+            const newOrderIds = [...container.querySelectorAll('.draggable-actor')].map(el => el.dataset.actorId);
+            const oldList = [...data.favoriteActors];
+            data.favoriteActors = newOrderIds.map(id => oldList.find(a => String(a.id) === String(id))).filter(Boolean);
+            await saveData();
+
+            // === POPRAWKA: Zapisujemy referencję przed wyzerowaniem! ===
+            const droppedElement = dragEl; 
+            droppedElement.classList.add('was-dragged');
+            
+            setTimeout(() => {
+                // Teraz używamy zapisanej referencji, a nie pustego dragEl
+                droppedElement.classList.remove('was-dragged');
+            }, 100);
+            // ==========================================================
+
+            isDragging = false;
+            dragEl = null;
+        }
+    };
+
+    // Podpinamy zdarzenia tylko pod dzieci
+    container.querySelectorAll('.draggable-actor').forEach(el => {
+        el.addEventListener('mousedown', e => startDrag(e, el), { passive: true });
+        el.addEventListener('touchstart', e => startDrag(e, el), { passive: true });
+    });
+
+    // Pasywne nasłuchiwanie na całym oknie (Dzięki passive: false mozemy zrobic preventDefault)
+    document.addEventListener('mousemove', doDrag, { passive: false });
+    document.addEventListener('touchmove', doDrag, { passive: false });
+    
+    document.addEventListener('mouseup', stopDrag, { passive: true });
+    document.addEventListener('touchend', stopDrag, { passive: true });
+    document.addEventListener('touchcancel', stopDrag, { passive: true });
 }
