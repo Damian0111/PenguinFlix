@@ -6,6 +6,7 @@ const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 const POSTER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect width=%22200%22 height=%22300%22 fill=%22%23202227%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%238e9297%22 font-size=%2218%22 font-family=%22sans-serif%22%3EBrak okładki%3C/text%3E%3C/svg%3E";
 
 let hapticsEnabled = localStorage.getItem('hapticsEnabled') !== 'false';
+let largeGridEnabled = localStorage.getItem('largeGridEnabled') === 'true';
 let API_KEY = localStorage.getItem('tmdbApiKey') || '';
 let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
 let fullSearchResults = [];
@@ -207,6 +208,7 @@ async function init() {
         showMainContent();
         await loadData();
         applyTheme();
+        if (largeGridEnabled) document.body.setAttribute('data-large-grid', 'true'); 
         switchMainTab(viewState.activeMainTab || 'movies');
 
         refreshStaleSeries(); // Odświeża daty seriali
@@ -262,6 +264,22 @@ function setupEventListeners() {
             hapticsEnabled = e.target.checked;
             localStorage.setItem('hapticsEnabled', hapticsEnabled);
             if (hapticsEnabled) triggerHaptic('success');
+        });
+    }
+        // --- OBSŁUGA DUŻYCH KAFELKÓW (2 KOLUMNY) ---
+    const largeGridCb = document.getElementById('large-grid-checkbox');
+    if (largeGridCb) {
+        largeGridCb.checked = largeGridEnabled;
+        largeGridCb.addEventListener('change', (e) => {
+            largeGridEnabled = e.target.checked;
+            localStorage.setItem('largeGridEnabled', largeGridEnabled);
+            
+            if (largeGridEnabled) {
+                document.body.setAttribute('data-large-grid', 'true');
+            } else {
+                document.body.removeAttribute('data-large-grid');
+            }
+            triggerHaptic('light');
         });
     }
            // --- ŻELAZNA TARCZA 2.0: BLOKADA SYSTEMOWEGO MENU KONTEKSTOWEGO (TYLKO MOBILE) ---
