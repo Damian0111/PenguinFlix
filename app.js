@@ -510,41 +510,68 @@ function setupEventListeners() {
                 const totalItems = listsToCheck.reduce((acc, list) => acc + (data[list] ? data[list].length : 0), 0);
                 let currentItem = 0;
 
+                               // --- KROK 1: Szybkie wyłapanie pozycji wymagających naprawy ---
+                const itemsToUpdate = [];
+                
                 for (const listName of listsToCheck) {
                     if (!data[listName]) continue;
 
                     for (let i = 0; i < data[listName].length; i++) {
-                        currentItem++;
                         const item = data[listName][i];
                         
-                        if (currentItem % 3 === 0) { 
-                            hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Pobieranie... ${currentItem} / ${totalItems}</span>`;
-                        }
-
+                        // Ignorujemy wpisy dodane ręcznie
                         if (String(item.id).startsWith('custom_')) continue;
                         
-                        // ZMIANA: Sprawdzamy, czy brakuje nam również tmdbRating
                         let isHealthy = true;
                         if (item.type === 'movie' && (item.runtime === undefined || item.runtime === null)) isHealthy = false;
                         if (item.collectionName === undefined) isHealthy = false;
                         if (item.tmdbRating === undefined || item.tmdbRating === null) isHealthy = false;
 
                         if (!isHealthy) {
-                            try {
-                                const details = await getItemDetails(item.id, item.type);
+                            itemsToUpdate.push(item);
+                        }
+                    }
+                }
+
+                // --- KROK 2: Przetwarzanie paczkami (Bezpieczne dla TMDB, płynne dla UI) ---
+                const totalToUpdate = itemsToUpdate.length;
+                
+                if (totalToUpdate > 0) {
+                    const chunkSize = 3; // Bezpieczna ilość równoległych zapytań
+                    let processedCount = 0;
+
+                    for (let i = 0; i < totalToUpdate; i += chunkSize) {
+                        const chunk = itemsToUpdate.slice(i, i + chunkSize);
+                        
+                        // Aktualizacja UI na przycisku
+                        processedCount += chunk.length;
+                        hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Naprawianie... ${processedCount} / ${totalToUpdate}</span>`;
+                        
+                        try {
+                            // Równoległe odpytanie TMDB dla 3 pozycji
+                            const results = await Promise.all(
+                                chunk.map(item => getItemDetails(item.id, item.type).catch(() => null))
+                            );
+
+                            // Wstrzyknięcie pobranych danych do naszych wpisów
+                            results.forEach((details, idx) => {
                                 if (details) {
+                                    const item = chunk[idx];
                                     if (item.type === 'movie' && details.runtime !== undefined) item.runtime = details.runtime;
                                     if (details.tmdbRating !== undefined) item.tmdbRating = details.tmdbRating;
                                     item.collectionName = details.collectionName || 'none';
                                     needsSave = true;
                                     itemsHealed++;
                                 }
-                            } catch (e) {}
-                            await new Promise(resolve => setTimeout(resolve, 250)); // Pauza by nie dostać bana na API
+                            });
+                        } catch (e) {
+                            console.warn("Błąd podczas naprawy paczki:", e);
                         }
+                        
+                        // Ultra-płynna pauza 400ms: daje odetchnąć serwerom TMDB i pozwala przeglądarce narysować nową klatkę animacji
+                        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 400)));
                     }
                 }
-
                 if (needsSave) {
                     await saveData();
                     const activeList = getActiveListId();
@@ -1086,24 +1113,46 @@ function renderList(originalItems, listId, preserveLimit = false) {
     if (!preserveLimit) state.displayLimit = 30;
     let itemsToRender = [...(originalItems || [])];
 
-    // --- FILTROWANIE ---
-    if (state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies')) {
-        itemsToRender = itemsToRender.filter(item => item.runtime && item.runtime <= state.maxRuntime);
-    }
-    // --- NOWOŚĆ: Ukrywanie seriali w zawieszeniu ---
-    if (state.hideTBA && listId === 'seriesToWatch') {
-        itemsToRender = itemsToRender.filter(item => {
-            if (getNextEpisodeInfo(item)) return true; // Zostaw, jeśli jest coś do obejrzenia teraz
-            if (item.nextEpisodeToAir && item.nextEpisodeToAir.date) return true; // Zostaw, jeśli znamy datę kolejnej premiery
-            return false; // Ukryj, jeśli jesteśmy na bieżąco, a TMDB nie ma nowej daty
-        });
-    }
-    if (state.localSearch) { const query = state.localSearch.toLowerCase(); itemsToRender = itemsToRender.filter(item => (item.title && item.title.toLowerCase().includes(query)) || (item.overview && item.overview.toLowerCase().includes(query))); }
-    if (state.filterFavoritesOnly) itemsToRender = itemsToRender.filter(item => item.isFavorite);
-    if (state.filterByGenre !== 'all') itemsToRender = itemsToRender.filter(item => item.genres && item.genres.includes(state.filterByGenre));
-    if (state.filterByCustomTag && state.filterByCustomTag !== 'all') itemsToRender = itemsToRender.filter(item => (item.customTags || []).includes(state.filterByCustomTag));
-    if (state.filterByVod && state.filterByVod !== 'all') { const targetVod = state.filterByVod.toLowerCase(); itemsToRender = itemsToRender.filter(item => item.vod && item.vod.some(v => v.toLowerCase().includes(targetVod))); }
+       // --- ZOPTYMALIZOWANE FILTROWANIE (JEDNO PRZEJŚCIE) ---
+    // Optymalizacja: Obliczamy stałe wartości przed pętlą, a nie dla każdego elementu z osobna!
+    const searchQuery = state.localSearch ? state.localSearch.toLowerCase() : null;
+    const targetVod = (state.filterByVod && state.filterByVod !== 'all') ? state.filterByVod.toLowerCase() : null;
+    const checkRuntime = state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies');
+    const checkTBA = state.hideTBA && listId === 'seriesToWatch';
 
+    itemsToRender = originalItems.filter(item => {
+        // 1. Czas trwania
+        if (checkRuntime && (!item.runtime || item.runtime > state.maxRuntime)) return false;
+        
+        // 2. Ukrywanie seriali w zawieszeniu (TBA)
+        if (checkTBA) {
+            const hasNow = getNextEpisodeInfo(item);
+            const hasFuture = item.nextEpisodeToAir && item.nextEpisodeToAir.date;
+            if (!hasNow && !hasFuture) return false; // Ukryj, jeśli na bieżąco i brak daty
+        }
+        
+        // 3. Wyszukiwanie lokalne (Tytuł i Opis)
+        if (searchQuery) {
+            const titleMatch = item.title && item.title.toLowerCase().includes(searchQuery);
+            const descMatch = item.overview && item.overview.toLowerCase().includes(searchQuery);
+            if (!titleMatch && !descMatch) return false;
+        }
+        
+        // 4. Ulubione
+        if (state.filterFavoritesOnly && !item.isFavorite) return false;
+        
+        // 5. Gatunek
+        if (state.filterByGenre !== 'all' && (!item.genres || !item.genres.includes(state.filterByGenre))) return false;
+        
+        // 6. Tagi własne
+        if (state.filterByCustomTag && state.filterByCustomTag !== 'all' && (!item.customTags || !item.customTags.includes(state.filterByCustomTag))) return false;
+        
+        // 7. Gdzie obejrzeć (VOD)
+        if (targetVod && (!item.vod || !item.vod.some(v => v.toLowerCase().includes(targetVod)))) return false;
+        
+        // Jeśli element przetrwał wszystkie powyższe testy, zostaje na liście!
+        return true; 
+    });
     // --- SORTOWANIE ---
     const [sortBy, direction] = state.sortBy.split('_');
     
@@ -1267,7 +1316,8 @@ function renderList(originalItems, listId, preserveLimit = false) {
                     if (airStr) nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Premiera: ${airStr}</div>`;
                     else nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Na bieżąco! Czekamy na datę premiery.</div>`;
                 }
-                extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="width: ${progressPercent}%;"></div></div></div>`;
+                // Podmień wewnątrz funkcji renderList
+extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="transform: scaleX(${progressPercent / 100});"></div></div></div>`;
             }
             
             return `
@@ -2636,7 +2686,19 @@ async function openPreviewModal(id, type) {
     getWatchProviders(id, type).then(p => { const c = document.getElementById('providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
     getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
-    getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
+        getCredits(id, type).then(c => { 
+        const cc = document.getElementById('cast-container'); 
+        if (cc && c.length > 0) { 
+            const favIds = (data.favoriteActors || []).map(a => String(a.id));
+            const cH = c.map(m => {
+                const isFav = favIds.includes(String(m.id));
+                const imgStyle = isFav ? 'border: 2px solid var(--warning-color); box-shadow: 0 0 12px color-mix(in srgb, var(--warning-color) 40%, transparent);' : '';
+                const favBadge = isFav ? `<div style="position:absolute; top:-5px; right:15px; font-size:1.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); z-index:5;">⭐</div>` : '';
+                return `<div class="cast-member" data-actor-id="${m.id}" style="position:relative;">${favBadge}<img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" style="${imgStyle}" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`;
+            }).join(''); 
+            cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; 
+        } 
+    });
     getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
 
     if (!isAlreadyAdded) {
@@ -2875,7 +2937,19 @@ async function openDetailsModal(id, type) {
         getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
         getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     }
-    getCredits(id, type).then(c => { const cc = document.getElementById('cast-container'); if (cc && c.length > 0) { const cH = c.map(m => `<div class="cast-member" data-actor-id="${m.id}"><img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`).join(''); cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; } });
+       getCredits(id, type).then(c => { 
+        const cc = document.getElementById('cast-container'); 
+        if (cc && c.length > 0) { 
+            const favIds = (data.favoriteActors || []).map(a => String(a.id));
+            const cH = c.map(m => {
+                const isFav = favIds.includes(String(m.id));
+                const imgStyle = isFav ? 'border: 2px solid var(--warning-color); box-shadow: 0 0 12px color-mix(in srgb, var(--warning-color) 40%, transparent);' : '';
+                const favBadge = isFav ? `<div style="position:absolute; top:-5px; right:15px; font-size:1.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); z-index:5;">⭐</div>` : '';
+                return `<div class="cast-member" data-actor-id="${m.id}" style="position:relative;">${favBadge}<img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" style="${imgStyle}" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`;
+            }).join(''); 
+            cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; 
+        } 
+    });
     getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
     
     if (isToWatch) populateAndRenderSeriesSections(item, document.getElementById('seasons-container'));
@@ -3290,12 +3364,72 @@ async function openActorDetailsModal(actorId) {
     const ad = await getActorDetails(actorId);
     if (!ad) { c.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych o aktorze.', 'error'); return; }
 
-    // Inicjalizacja bazy ulubionych (bezpiecznik dla starych danych)
+    // Inicjalizacja bazy ulubionych
     data.favoriteActors = data.favoriteActors || [];
     const isFav = data.favoriteActors.some(a => String(a.id) === String(actorId));
 
     const sName = escapeHTML(ad.name);
     const kfHTML = ad.known_for.map(i => { const p = i.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + i.poster_path : POSTER_PLACEHOLDER; const t = escapeHTML(i.title || i.name); return `<div class="known-for-item" data-id="${i.id}" data-type="${i.media_type}"><img src="${p}" alt="${t}" onerror="this.src='${POSTER_PLACEHOLDER}';"><strong>${t}</strong></div>`; }).join('');
+
+    // --- OBLICZANIE POSTĘPU OGLĄDANIA AKTORA ---
+    const watchedIds = new Set([...data.moviesWatched, ...data.seriesWatched].map(i => String(i.id)));
+    let watchedCount = 0;
+    const totalCredits = ad.full_filmography ? ad.full_filmography.length : 0;
+
+    if (totalCredits > 0) {
+        ad.full_filmography.forEach(credit => {
+            if (watchedIds.has(String(credit.id))) {
+                watchedCount++;
+            }
+        });
+    }
+
+    const progressPct = totalCredits > 0 ? Math.round((watchedCount / totalCredits) * 100) : 0;
+    let progressHTML = '';
+
+    // --- NOWY, ELEGANCJI I MINIMALISTYCZNY DESIGN ---
+    if (totalCredits > 0) {
+        // Dynamiczne komunikaty na podstawie procentowego postępu
+        let levelText = '';
+        if (watchedCount === 0) levelText = 'Nie znasz jeszcze tego aktora';
+        else if (progressPct < 15) levelText = 'Początki znajomości';
+        else if (progressPct < 40) levelText = 'Dobrze kojarzysz tę twarz';
+        else if (progressPct < 70) levelText = 'Solidny fan!';
+        else if (progressPct < 100) levelText = 'Znasz tę filmografię na wylot';
+        else levelText = 'Obejrzano absolutnie wszystko! 👑';
+
+        progressHTML = `
+        <div style="margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                
+                <!-- Lewa strona: Ikonka i Teksty -->
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </div>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-size: 0.95rem; font-weight: 700; color: var(--text-color);">${levelText}</span>
+                        <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span>
+                    </div>
+                </div>
+
+                <!-- Prawa strona: Liczby -->
+                <div style="text-align: right; flex-shrink: 0; padding-left: 8px;">
+                    <span style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span>
+                </div>
+
+            </div>
+
+            <!-- Smukły pasek postępu -->
+            <div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;">
+                <div style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div>
+            </div>
+        </div>`;
+    }
+    // ----------------------------------------------------
 
     c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
         
@@ -3304,6 +3438,9 @@ async function openActorDetailsModal(actorId) {
             ${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
             <h2>${sName}</h2>
         </div>
+        
+        <!-- PASEK POSTĘPU NAD BIOGRAFIĄ -->
+        ${progressHTML} 
         
         <div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>
         
@@ -3338,7 +3475,7 @@ async function openActorDetailsModal(actorId) {
             showCustomAlert('Dodano!', 'Aktor dodany do ulubionych.', 'success');
         }
         await saveData();
-        if (viewState.activeMainTab === 'profile') renderProfileStats(); // Odśwież widok profilu w tle
+        if (viewState.activeMainTab === 'profile') renderProfileStats();
     });
 
     // --- OBSŁUGA LOSOWANIA ---
@@ -3349,7 +3486,6 @@ async function openActorDetailsModal(actorId) {
             const pool = ad.full_filmography;
             const winner = pool[Math.floor(Math.random() * pool.length)];
             
-            // Zamknij okno aktora i otwórz wylosowany film po krótkiej pauzie
             c.innerHTML = ''; 
             toggleAppDepthEffect(false); 
             if (history.state && history.state.modalOpen) history.back();
@@ -3798,62 +3934,86 @@ function showUpdatePrompt(worker) {
 }
 
 // ==========================================
-// 14. INTELIGENTNE CENTRUM POWIADOMIEŃ
+// 14. INTELIGENTNE CENTRUM POWIADOMIEŃ (SMART DISMISS & UTC FIX)
 // ==========================================
 let smartNotificationsEnabled = localStorage.getItem('smartNotificationsEnabled') !== 'false';
 
 const NotificationManager = {
     key: 'penguinNotifs',
     lastRecKey: 'penguinLastRecDate',
+    blacklistKey: 'penguinNotifsBlacklist',
 
-    // ZMIANA 1: Auto-kasowanie starszych niż 7 dni
+    // --- PANCERNY HELPER DO DAT (Omija bugi stref czasowych przeglądarek) ---
+    parseDateToUTC(dateString) {
+        if (!dateString || typeof dateString !== 'string') return null;
+        const parts = dateString.split('T')[0].split('-'); 
+        if (parts.length !== 3) return null;
+        // Wymuszamy stworzenie daty na sztywno rozbijając stringa na Rok, Miesiąc, Dzień
+        return Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    },
+
+    getBlacklist() {
+        return JSON.parse(localStorage.getItem(this.blacklistKey) || '[]');
+    },
+
+    addToBlacklist(dismissId) {
+        const blacklist = this.getBlacklist();
+        if (!blacklist.includes(dismissId)) {
+            blacklist.push(dismissId);
+            if (blacklist.length > 150) blacklist.shift(); 
+            localStorage.setItem(this.blacklistKey, JSON.stringify(blacklist));
+        }
+    },
+
     get() {
         const rawNotifs = JSON.parse(localStorage.getItem(this.key) || '[]');
         const now = Date.now();
-        // Zostawiamy TYLKO te powiadomienia, które są młodsze niż 7 dni (7 dni * 24h * 60m * 60s * 1000ms)
         const freshNotifs = rawNotifs.filter(n => (now - n.timestamp) < 7 * 24 * 60 * 60 * 1000);
-
-        if (freshNotifs.length !== rawNotifs.length) {
-            localStorage.setItem(this.key, JSON.stringify(freshNotifs));
-        }
+        if (freshNotifs.length !== rawNotifs.length) localStorage.setItem(this.key, JSON.stringify(freshNotifs));
         return freshNotifs;
     },
 
     save(notifs) { localStorage.setItem(this.key, JSON.stringify(notifs)); this.updateBadge(); },
 
     add(notif) {
+        const blacklist = this.getBlacklist();
+        // Sprawdzamy, czy powiadomienie o TYM KONKRETNYM DNIU (dismissId) lub całym wydarzeniu (id) jest zbanowane
+        if (blacklist.includes(notif.dismissId) || blacklist.includes(notif.id)) return; 
+
         const notifs = this.get();
         const existingIndex = notifs.findIndex(n => n.id === notif.id);
         
         if (existingIndex === -1) {
-            // Całkowicie nowe powiadomienie
             notifs.unshift({ ...notif, timestamp: Date.now(), read: false });
-            this.save(notifs.slice(0, 20)); 
+            this.save(notifs.slice(0, 25)); 
         } else {
-            // Powiadomienie istnieje. Sprawdzamy czy mija dzień.
+            // Jeśli tytuł uległ zmianie (np. z "4 dni" na "3 dni"), odśwież powiadomienie!
             if (notifs[existingIndex].title !== notif.title) {
                 notifs[existingIndex].title = notif.title;
                 notifs[existingIndex].desc = notif.desc;
-                notifs[existingIndex].read = false; // Zapal kropkę!
-                
-                // --- NOWOŚĆ: "ODMŁADZANIE" CZASU ---
-                // Resetujemy czas jego "przyjścia" na TERAZ. 
+                notifs[existingIndex].dismissId = notif.dismissId; 
+                notifs[existingIndex].read = false; 
                 notifs[existingIndex].timestamp = Date.now();
                 
-                // OPCJONALNIE: Wyciągamy to powiadomienie na sam szczyt listy!
-                // Żeby nowa "dzisiejsza" premiera nie leżała zakopana pod innymi starymi
                 const updatedNotif = notifs.splice(existingIndex, 1)[0];
                 notifs.unshift(updatedNotif);
-                
                 this.save(notifs); 
             }
         }
     },
-    // ZMIANA 2: Funkcja do ręcznego usuwania konkretnego powiadomienia
+    
     remove(id) {
         const notifs = this.get();
+        const notifToRemove = notifs.find(n => n.id === id);
+        
         const filtered = notifs.filter(n => n.id !== id);
         this.save(filtered);
+        
+        if (notifToRemove) {
+            // Dodajemy do blacklisty konkretny dzień (lub id w razie braku).
+            // Dzięki temu jeśli odrzucisz dzień 4, dzień 3 się normalnie pokaże jutro!
+            this.addToBlacklist(notifToRemove.dismissId || notifToRemove.id); 
+        }
     },
 
     markAllRead() {
@@ -3875,37 +4035,30 @@ const NotificationManager = {
         if (!smartNotificationsEnabled) { this.updateBadge(); return; }
         this.checkPremieres();
         await this.generateRecommendations();
+        await this.checkActorPremieres(); 
         this.updateBadge();
     },
 
-       checkPremieres() {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayTime = today.getTime();
-
+    checkPremieres() {
         const getDaysToPremiere = (dateString) => {
-            if (!dateString || dateString === "") return -1;
-            const rDate = new Date(dateString);
-            if (isNaN(rDate.getTime())) return -1;
-
-            rDate.setHours(0, 0, 0, 0);
-            const rTime = rDate.getTime();
-
-            const diffTime = rTime - todayTime;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
+            const utcPremiere = this.parseDateToUTC(dateString);
+            if (!utcPremiere) return -1;
+            
+            const today = new Date();
+            const utcToday = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+            
+            const diffDays = Math.round((utcPremiere - utcToday) / (1000 * 60 * 60 * 24));
+            
             if (diffDays >= 0 && diffDays <= 4) return diffDays;
             return -1;
         };
 
-        // Ładne teksty dla filmów
         const getMovieTitlePrefix = (days) => {
             if (days === 0) return 'Premiera Dzisiaj! 🍿';
             if (days === 1) return 'Premiera Jutro! ⏳';
             return `Premiera za ${days} dni 📅`;
         };
 
-        // Ładne teksty dla seriali
         const getSeriesTitlePrefix = (days) => {
             if (days === 0) return 'Nowy odcinek dzisiaj! 📺';
             if (days === 1) return 'Nowy odcinek jutro! ⏳';
@@ -3917,6 +4070,7 @@ const NotificationManager = {
             if (days !== -1) {
                 this.add({ 
                     id: `prem_m_${m.id}_${m.releaseDate}`, 
+                    dismissId: `prem_m_${m.id}_d${days}`, 
                     title: getMovieTitlePrefix(days), 
                     desc: `Film "${m.title}" wchodzi na ekrany.`, 
                     image: m.poster, targetId: m.id, targetType: 'movie' 
@@ -3924,32 +4078,29 @@ const NotificationManager = {
             }
         });
 
-        // Sprawdzanie seriali "Do obejrzenia"
         (data.seriesToWatch || []).forEach(s => {
             if(s.nextEpisodeToAir) {
                 const days = getDaysToPremiere(s.nextEpisodeToAir.date);
                 if(days !== -1) {
-                    
                     let totalWatched = 0;
-                    if (s.progress) {
-                        totalWatched = Object.values(s.progress).reduce((acc, arr) => acc + arr.length, 0);
-                    }
+                    if (s.progress) totalWatched = Object.values(s.progress).reduce((acc, arr) => acc + arr.length, 0);
                     
                     let airedSoFar = 0;
                     if (s.seasons) {
                         s.seasons.forEach(season => {
-                            if (season.season_number > 0 && season.season_number < s.nextEpisodeToAir.season) {
-                                airedSoFar += season.episode_count;
-                            }
+                            if (season.season_number > 0 && season.season_number < s.nextEpisodeToAir.season) airedSoFar += season.episode_count;
                         });
                     }
                     airedSoFar += (s.nextEpisodeToAir.episode - 1);
 
-                    if (totalWatched >= airedSoFar - 3) {
+                    // LUZUJEMY WARUNEK: Powiadomienie pojawia się jeśli oglądasz na bieżąco (max 5 odcinków w tył)
+                    // LUB jeśli dopiero dodałeś serial i progress to równe 0.
+                    if (totalWatched === 0 || totalWatched >= airedSoFar - 5) {
                         const epStr = `S${String(s.nextEpisodeToAir.season).padStart(2,'0')}E${String(s.nextEpisodeToAir.episode).padStart(2,'0')}`;
                         this.add({ 
                             id: `prem_s_${s.id}_${s.nextEpisodeToAir.date}`, 
-                            title: getSeriesTitlePrefix(days), // Używamy nowej, ładnej funkcji!
+                            dismissId: `prem_s_${s.id}_${s.nextEpisodeToAir.date}_d${days}`, 
+                            title: getSeriesTitlePrefix(days), 
                             desc: `Wychodzi ${epStr} serialu "${s.title}".`, 
                             image: s.poster, targetId: s.id, targetType: 'tv' 
                         });
@@ -3959,6 +4110,53 @@ const NotificationManager = {
         });
     },
 
+    async checkActorPremieres() {
+        if (!data.favoriteActors || data.favoriteActors.length === 0) return;
+
+        const shuffledActors = [...data.favoriteActors].sort(() => 0.5 - Math.random()).slice(0, 2);
+        const today = new Date();
+        const utcToday = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+        
+        const userLibraryIds = new Set(Object.values(data).flat().map(i => String(i.id)));
+
+        for (const actor of shuffledActors) {
+            try {
+                const credits = await fetchFromTMDB(`/person/${actor.id}/combined_credits`);
+                if (!credits || !credits.cast) continue;
+
+                const freshReleases = credits.cast.filter(item => {
+                    if (userLibraryIds.has(String(item.id)) || !item.poster_path) return false;
+                    
+                    const releaseDateStr = item.release_date || item.first_air_date;
+                    const utcRelease = this.parseDateToUTC(releaseDateStr);
+                    if (!utcRelease) return false;
+                    
+                    const diffDays = Math.round((utcRelease - utcToday) / (1000 * 60 * 60 * 24));
+                    return diffDays >= -14 && diffDays <= 7; 
+                });
+
+                if (freshReleases.length > 0) {
+                    freshReleases.sort((a,b) => b.popularity - a.popularity);
+                    const topProject = freshReleases[0];
+                    const isMovie = topProject.media_type === 'movie';
+                    
+                    this.add({
+                        id: `actor_radar_${topProject.id}`, 
+                        dismissId: `actor_radar_${topProject.id}`, 
+                        title: '🌟 Twój Ulubieniec na ekranie!',
+                        desc: `${escapeHTML(actor.name)} występuje w ${isMovie ? 'nowym filmie' : 'nowym serialu'} pt. "${escapeHTML(topProject.title || topProject.name)}".`,
+                        image: IMAGE_BASE_URL.replace('w500', 'w200') + topProject.poster_path,
+                        targetId: topProject.id, 
+                        targetType: topProject.media_type
+                    });
+                }
+            } catch (e) {
+                console.error("Błąd radaru aktorów:", e);
+            }
+        }
+    },
+
+    // (Tu pozostawiasz starą, nienaruszoną funkcję generateRecommendations)
     async generateRecommendations() {
         const lastRec = parseInt(localStorage.getItem(this.lastRecKey) || '0');
         const now = Date.now();
@@ -3971,7 +4169,7 @@ const NotificationManager = {
         const currentYear = new Date().getFullYear();
 
         try {
-            const recs = await getRecommendations(seed.id, 'movie');
+            const recs = await getRecommendations(seed.id, 'movie'); // Zastąp getRecommendations swoim odpowiednikiem
             if (recs && recs.length > 0) {
                 const allIds = Object.values(data).flat().map(i => String(i.id));
                 const newRecs = recs.filter(r => {
@@ -3984,6 +4182,7 @@ const NotificationManager = {
                     const rec = newRecs[0];
                     this.add({
                         id: `rec_${rec.id}_${now}`,
+                        dismissId: `rec_${rec.id}_${now}`,
                         title: '✨ Nowość dla Ciebie',
                         desc: `W tegorocznych nowościach znaleźliśmy "${escapeHTML(rec.title || rec.name)}". Może Ci się spodobać!`,
                         image: rec.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + rec.poster_path : POSTER_PLACEHOLDER,
@@ -3996,24 +4195,36 @@ const NotificationManager = {
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-    const notifCb = document.getElementById('smart-notifications-checkbox');
-    if (notifCb) {
-        notifCb.checked = smartNotificationsEnabled;
-        notifCb.addEventListener('change', (e) => {
-            smartNotificationsEnabled = e.target.checked;
-            localStorage.setItem('smartNotificationsEnabled', smartNotificationsEnabled);
 
-            if (!smartNotificationsEnabled) {
-                localStorage.removeItem('penguinNotifs'); // Czyszczenie
-                document.getElementById('notification-badge').style.display = 'none';
-                showCustomAlert('Powiadomienia są nieaktywne.', '', 'info');
-            } else {
-                showCustomAlert('Powiadomienia są aktywne.', '', 'success');
-                NotificationManager.runEngine();
-            }
-        });
-    }
+document.addEventListener('DOMContentLoaded', () => {
+         // --- ZAZNACZ I ZASTĄP TEN FRAGMENT: ---
+        const notifCb = document.getElementById('smart-notifications-checkbox');
+        if (notifCb) {
+            notifCb.checked = smartNotificationsEnabled;
+            notifCb.addEventListener('change', (e) => {
+                smartNotificationsEnabled = e.target.checked;
+                localStorage.setItem('smartNotificationsEnabled', smartNotificationsEnabled);
+
+                if (!smartNotificationsEnabled) {
+                    localStorage.removeItem('penguinNotifs'); // Czyszczenie
+                    document.getElementById('notification-badge').style.display = 'none';
+                    showCustomAlert('Powiadomienia są nieaktywne.', '', 'info');
+                } else {
+                    showCustomAlert('Powiadomienia są aktywne.', '', 'success');
+                    updateDatesAndRunNotifications(); // <-- Tu zmieniliśmy wywołanie
+                }
+            });
+        }
+
+        // Dodajemy automatyczny start powiadomień po odświeżeniu strony:
+        if (smartNotificationsEnabled) {
+            setTimeout(() => {
+                if (typeof updateDatesAndRunNotifications === 'function') {
+                    updateDatesAndRunNotifications();
+                }
+            }, 1000);
+        }
+        // --- KONIEC FRAGMENTU DO ZASTĄPIENIA ---
 
     const bellBtn = document.getElementById('notification-bell-btn');
     const panelContainer = document.getElementById('notificationPanelContainer');
@@ -4056,6 +4267,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const seriesNotifs = notifs.filter(n => String(n.id).startsWith('prem_s_'));
                 const recNotifs = notifs.filter(n => String(n.id).startsWith('rec_'));
                 const resurrectNotifs = notifs.filter(n => String(n.id).startsWith('resurrect_')); // <-- NOWOŚĆ: Wyłapujemy zmartwychwstania
+                const actorNotifs = notifs.filter(n => String(n.id).startsWith('actor_radar_')); // NOWE
+
+// Renderowanie grup w panelu
+if (actorNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🌟 Ulubieni Aktorzy</div>${actorNotifs.map(renderCard).join('')}</div>`; // NOWE
 
                 // Renderowanie grup w panelu
                 if (movieNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🎬 Premiery Filmowe</div>${movieNotifs.map(renderCard).join('')}</div>`;
@@ -4094,14 +4309,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             overlay.addEventListener('click', closePanel);
             overlay.querySelector('.close-notif-btn').addEventListener('click', closePanel);
-            // NOWE: Obsługa przycisku "Wyczyść"
-            const clearBtn = overlay.querySelector('.clear-all-notifs-btn');
+             // --- LOGIKA: Wyczyść wszystkie na raz ---
+           const clearBtn = overlay.querySelector('.clear-all-notifs-btn');
             if (clearBtn) {
                 clearBtn.addEventListener('click', () => {
                     triggerHaptic('medium');
-                    NotificationManager.save([]); // Kasuje całą bazę powiadomień
+                    // Zabezpieczenie: Wrzuca do czarnej listy używając "dismissId" jeśli istnieje
+                    notifs.forEach(n => NotificationManager.addToBlacklist(n.dismissId || n.id));
+                    
+                    NotificationManager.save([]); 
                     document.getElementById('notificationListWrap').innerHTML = `<div style="text-align:center; padding: 40px 20px; color: var(--text-secondary);"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:none;stroke:currentColor;stroke-width:1;margin-bottom:12px;opacity:0.5;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><br>Brak nowych powiadomień.</div>`;
-                    clearBtn.remove(); // Ukrywa przycisk "wyczyść" bo jest już pusto
+                    clearBtn.remove(); 
                 });
             }
 
@@ -5402,7 +5620,7 @@ function updateBottomNavAvatar() {
     }
 }
 // ==========================================
-// NATYWNY DRAG & DROP Z ODBLOKOWANYM SCROLLEM
+// NATYWNY DRAG & DROP Z ODBLOKOWANYM SCROLLEM I DYNAMICZNĄ PRĘDKOŚCIĄ
 // ==========================================
 function initActorDragAndDrop() {
     const container = document.getElementById('fav-actors-container');
@@ -5413,12 +5631,22 @@ function initActorDragAndDrop() {
     let pressTimer = null;
     
     let autoScrollRAF = null;
-    let scrollDirection = 0;
+    let scrollSpeed = 0; // ZMIANA: Dynamiczna prędkość zamiast stałego kierunku (-1, 0, 1)
     let currentClientX = 0;
 
     const updatePosition = (clientX) => {
         if (!dragEl) return;
         const siblings = [...container.querySelectorAll('.draggable-actor:not([style*="opacity: 0.5"])')];
+        const rect = container.getBoundingClientRect();
+
+        // --- ZMIANA KRYTYCZNA DLA TELEFONÓW ---
+        // Jeśli palec jest dociśnięty bardzo blisko lewej krawędzi okna (np. do 50px),
+        // bezwzględnie wstawiamy element na pierwszą pozycję.
+        if (clientX < rect.left + 50) {
+            if (siblings.length > 0) container.insertBefore(dragEl, siblings[0]);
+            return;
+        }
+
         const nextSibling = siblings.find(sibling => {
             const box = sibling.getBoundingClientRect();
             return clientX <= box.left + box.width / 2;
@@ -5432,8 +5660,8 @@ function initActorDragAndDrop() {
     };
 
     const autoScroll = () => {
-        if (scrollDirection !== 0) {
-            container.scrollLeft += scrollDirection * 6;
+        if (scrollSpeed !== 0) {
+            container.scrollLeft += scrollSpeed;
             updatePosition(currentClientX);
         }
         if (isDragging) {
@@ -5443,13 +5671,11 @@ function initActorDragAndDrop() {
 
     // 1. Zaczynamy dotyk
     const startDrag = (e, el) => {
-        // Jeśli klikasz prawym na kompie - ignoruj
         if (e.type === 'mousedown' && e.button !== 0) return;
 
         currentClientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
         
         pressTimer = setTimeout(() => {
-            // Jeśli dotyk nadal trwa, uruchamiamy wibrację i chwytamy obiekt
             triggerHaptic('medium');
             isDragging = true;
             dragEl = el;
@@ -5458,43 +5684,45 @@ function initActorDragAndDrop() {
             dragEl.style.opacity = '0.5';
             dragEl.style.transform = 'scale(1.1)';
             
-            scrollDirection = 0;
+            scrollSpeed = 0;
             autoScrollRAF = requestAnimationFrame(autoScroll);
             
-            // Dopiero teraz blokujemy przewijanie kontenera!
             container.style.overflowX = 'hidden'; 
             
-        }, 400); // 400ms to bezpieczny margines na iOS i Androidzie
+        }, 400); 
     };
 
     // 2. Poruszanie palcem
     const doDrag = (e) => {
-        // Jeśli NIE przesuwasz jeszcze aktora (nie upłynęło 400ms) to zwyczajnie odłączamy timer
-        // Przeglądarka z automatu sama zrobi sobie piękny, natywny Scroll.
         if (!isDragging) {
             clearTimeout(pressTimer);
             return;
         }
         
-        // JESTEŚMY W TRYBIE PRZENOSZENIA!
-        // Zapobiega "zjechaniu" palcem ekranu (np. odświeżenie pull-to-refresh)
         if (e.cancelable) e.preventDefault();
         
         currentClientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
         updatePosition(currentClientX);
         
         const rect = container.getBoundingClientRect();
-        const edgeThreshold = 60;
+        const edgeThreshold = 80; // ZWIĘKSZONA STREFA ROZPOZNAWANIA BRZEGÓW
         
-        if (currentClientX > rect.right - edgeThreshold) scrollDirection = 1;
-        else if (currentClientX < rect.left + edgeThreshold) scrollDirection = -1;
-        else scrollDirection = 0;
+        // --- ZMIANA: PŁYNNA, DYNAMICZNA PRĘDKOŚĆ SCROLLA ---
+        if (currentClientX > rect.right - edgeThreshold) {
+            // Im bliżej prawej krawędzi, tym szybciej (max 10px na klatkę)
+            scrollSpeed = Math.max(2, 10 * (1 - (rect.right - currentClientX) / edgeThreshold));
+        } else if (currentClientX < rect.left + edgeThreshold) {
+            // Im bliżej lewej krawędzi, tym szybciej
+            scrollSpeed = -Math.max(2, 10 * (1 - (currentClientX - rect.left) / edgeThreshold));
+        } else {
+            scrollSpeed = 0;
+        }
     };
 
     // 3. Puszczamy palec
     const stopDrag = async (e) => {
         clearTimeout(pressTimer);
-        scrollDirection = 0;
+        scrollSpeed = 0;
         cancelAnimationFrame(autoScrollRAF);
         
         if (isDragging && dragEl) {
@@ -5504,7 +5732,6 @@ function initActorDragAndDrop() {
             dragEl.style.opacity = '1';
             dragEl.style.transform = 'scale(1)';
             
-            // ODDAJEMY SCROLLA UŻYTKOWNIKOWI Z POWROTEM!
             container.style.overflowX = 'auto';
             
             const newOrderIds = [...container.querySelectorAll('.draggable-actor')].map(el => el.dataset.actorId);
@@ -5512,28 +5739,23 @@ function initActorDragAndDrop() {
             data.favoriteActors = newOrderIds.map(id => oldList.find(a => String(a.id) === String(id))).filter(Boolean);
             await saveData();
 
-            // === POPRAWKA: Zapisujemy referencję przed wyzerowaniem! ===
             const droppedElement = dragEl; 
             droppedElement.classList.add('was-dragged');
             
             setTimeout(() => {
-                // Teraz używamy zapisanej referencji, a nie pustego dragEl
                 droppedElement.classList.remove('was-dragged');
             }, 100);
-            // ==========================================================
 
             isDragging = false;
             dragEl = null;
         }
     };
 
-    // Podpinamy zdarzenia tylko pod dzieci
     container.querySelectorAll('.draggable-actor').forEach(el => {
         el.addEventListener('mousedown', e => startDrag(e, el), { passive: true });
         el.addEventListener('touchstart', e => startDrag(e, el), { passive: true });
     });
 
-    // Pasywne nasłuchiwanie na całym oknie (Dzięki passive: false mozemy zrobic preventDefault)
     document.addEventListener('mousemove', doDrag, { passive: false });
     document.addEventListener('touchmove', doDrag, { passive: false });
     
@@ -5541,3 +5763,124 @@ function initActorDragAndDrop() {
     document.addEventListener('touchend', stopDrag, { passive: true });
     document.addEventListener('touchcancel', stopDrag, { passive: true });
 }
+// Wymuszenie odświeżania silnika powiadomień po powrocie do aplikacji/otwarciu zakładki
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        NotificationManager.runEngine();
+    }
+});
+async function silentBackgroundSync() {
+    let updated = false;
+    const todayStr = new Date().toISOString().split('T')[0]; // np. "2024-05-15"
+
+    // Sprawdzanie seriali
+    if (data.seriesToWatch && data.seriesToWatch.length > 0) {
+        for (let i = 0; i < data.seriesToWatch.length; i++) {
+            let s = data.seriesToWatch[i];
+            // Jeśli nie ma daty kolejnego odcinka, lub data już minęła
+            if (!s.nextEpisodeToAir || s.nextEpisodeToAir.date < todayStr) {
+                try {
+                    const freshData = await fetchFromTMDB(`/tv/${s.id}`);
+                    if (freshData && freshData.next_episode_to_air) {
+                        s.nextEpisodeToAir = {
+                            date: freshData.next_episode_to_air.air_date,
+                            episode: freshData.next_episode_to_air.episode_number,
+                            season: freshData.next_episode_to_air.season_number
+                        };
+                        updated = true;
+                    } else if (freshData && !freshData.next_episode_to_air) {
+                        s.nextEpisodeToAir = null; // Serial się zakończył / brak info
+                        updated = true;
+                    }
+                } catch (e) { console.warn("Błąd cichego synca serialu", e); }
+            }
+        }
+    }
+
+    // Jeśli coś się zaktualizowało, zapisz do LocalStorage
+    if (updated) {
+        saveData(); // Twoja funkcja zapisująca obiekt 'data' do LocalStorage
+    }
+
+    // DOPIERO TERAZ uruchamiamy powiadomienia, gdy daty są świeże!
+    NotificationManager.runEngine();
+}
+// ==========================================
+// AKTUALIZACJA DAT I START POWIADOMIEŃ W TLE
+// ==========================================
+// ==========================================
+// AKTUALIZACJA DAT I START POWIADOMIEŃ W TLE (ZOPTYMALIZOWANA)
+// ==========================================
+async function updateDatesAndRunNotifications() {
+    if (!smartNotificationsEnabled || !data) return;
+
+    // OPTYMALIZACJA 1: Cooldown. Sprawdzamy TMDB maksymalnie raz na 6 godzin.
+    const lastSync = localStorage.getItem('penguinLastSync') || 0;
+    const now = Date.now();
+    if (now - lastSync < 6 * 60 * 60 * 1000) {
+        // Jeśli minęło mniej niż 6h, tylko przeliczamy dni (UI) i kończymy, ZERO zapytań do TMDB!
+        if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
+        return; 
+    }
+
+    let libraryUpdated = false;
+    // Tworzymy datę idealnie dopasowaną do strefy czasowej urządzenia (Lokalną)
+const d = new Date();
+const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    try {
+        if (data.seriesToWatch && data.seriesToWatch.length > 0) {
+            for (let i = 0; i < data.seriesToWatch.length; i++) {
+                let s = data.seriesToWatch[i];
+                
+                // OPTYMALIZACJA 2: Pomijamy seriale oznaczone jako "Zakończone"
+                if (s.status === 'Ended' || s.status === 'Canceled') continue; 
+
+                // Sprawdzamy tylko, jeśli data minęła lub jej brak
+                if (!s.nextEpisodeToAir || s.nextEpisodeToAir.date < todayStr) {
+                    if (typeof fetchFromTMDB === 'function') {
+                        const freshData = await fetchFromTMDB(`/tv/${s.id}`);
+                        
+                        if (freshData && freshData.next_episode_to_air) {
+                            s.nextEpisodeToAir = {
+                                date: freshData.next_episode_to_air.air_date,
+                                episode: freshData.next_episode_to_air.episode_number,
+                                season: freshData.next_episode_to_air.season_number
+                            };
+                            libraryUpdated = true;
+                        } 
+                        // Jeśli TMDB mówi, że serial się skończył (brak następnego odcinka i status Ended)
+                        else if (freshData && (!freshData.next_episode_to_air && (freshData.status === 'Ended' || freshData.status === 'Canceled'))) {
+                            s.status = freshData.status; // Zapisujemy status!
+                            s.nextEpisodeToAir = null;
+                            libraryUpdated = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (libraryUpdated && typeof saveData === 'function') {
+            saveData(); 
+        }
+        
+        // Zapisujemy czas ostatniej udanej synchronizacji
+        localStorage.setItem('penguinLastSync', now.toString());
+
+    } catch (e) {
+        console.warn("Błąd podczas aktualizacji dat TMDB w tle:", e);
+    }
+
+    if (typeof NotificationManager !== 'undefined') {
+        NotificationManager.runEngine();
+    }
+}
+
+// ==========================================
+// ODŚWIEŻANIE PO POWROCIE DO ZAKŁADKI / TELEFONU
+// ==========================================
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && smartNotificationsEnabled) {
+        updateDatesAndRunNotifications();
+    }
+});
