@@ -511,7 +511,7 @@ function setupEventListeners() {
                 let currentItem = 0;
 
                                // --- KROK 1: Szybkie wyłapanie pozycji wymagających naprawy ---
-                const itemsToUpdate = [];
+             const itemsToUpdate = [];
                 
                 for (const listName of listsToCheck) {
                     if (!data[listName]) continue;
@@ -522,53 +522,48 @@ function setupEventListeners() {
                         // Ignorujemy wpisy dodane ręcznie
                         if (String(item.id).startsWith('custom_')) continue;
                         
-                        let isHealthy = true;
-                        if (item.type === 'movie' && (item.runtime === undefined || item.runtime === null)) isHealthy = false;
-                        if (item.collectionName === undefined) isHealthy = false;
-                        if (item.tmdbRating === undefined || item.tmdbRating === null) isHealthy = false;
-
-                        if (!isHealthy) {
-                            itemsToUpdate.push(item);
-                        }
+                        // ZAWSZE wrzucamy pozycję do sprawdzenia, żeby zaktualizować jej platformy VOD!
+                        // (Bo licencje Netflixa/Maxa zmieniają się co miesiąc)
+                        itemsToUpdate.push(item);
                     }
                 }
 
-                // --- KROK 2: Przetwarzanie paczkami (Bezpieczne dla TMDB, płynne dla UI) ---
+                // --- KROK 2: Przetwarzanie paczkami (Z aktualizacją VOD) ---
                 const totalToUpdate = itemsToUpdate.length;
                 
                 if (totalToUpdate > 0) {
-                    const chunkSize = 3; // Bezpieczna ilość równoległych zapytań
+                    const chunkSize = 3; 
                     let processedCount = 0;
 
                     for (let i = 0; i < totalToUpdate; i += chunkSize) {
                         const chunk = itemsToUpdate.slice(i, i + chunkSize);
                         
-                        // Aktualizacja UI na przycisku
                         processedCount += chunk.length;
-                        hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Naprawianie... ${processedCount} / ${totalToUpdate}</span>`;
+                        hardRefreshMoviesBtn.innerHTML = `<span style="display:flex; justify-content:center; width:100%; font-weight:bold; color: var(--primary-color);">Aktualizacja... ${processedCount} / ${totalToUpdate}</span>`;
                         
                         try {
-                            // Równoległe odpytanie TMDB dla 3 pozycji
                             const results = await Promise.all(
                                 chunk.map(item => getItemDetails(item.id, item.type).catch(() => null))
                             );
 
-                            // Wstrzyknięcie pobranych danych do naszych wpisów
                             results.forEach((details, idx) => {
                                 if (details) {
                                     const item = chunk[idx];
                                     if (item.type === 'movie' && details.runtime !== undefined) item.runtime = details.runtime;
                                     if (details.tmdbRating !== undefined) item.tmdbRating = details.tmdbRating;
                                     item.collectionName = details.collectionName || 'none';
+                                    
+                                    // KLUCZOWA ZMIANA: Nadpisujemy stare platformy VOD nowymi z internetu
+                                    item.vod = details.vod || []; 
+                                    
                                     needsSave = true;
                                     itemsHealed++;
                                 }
                             });
                         } catch (e) {
-                            console.warn("Błąd podczas naprawy paczki:", e);
+                            console.warn("Błąd podczas aktualizacji paczki:", e);
                         }
                         
-                        // Ultra-płynna pauza 400ms: daje odetchnąć serwerom TMDB i pozwala przeglądarce narysować nową klatkę animacji
                         await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 400)));
                     }
                 }
@@ -1111,48 +1106,38 @@ function renderList(originalItems, listId, preserveLimit = false) {
     const container = document.getElementById(`${listId}ListContainer`); if (!container) return;
     const state = viewState[listId];
     if (!preserveLimit) state.displayLimit = 30;
-    let itemsToRender = [...(originalItems || [])];
 
-       // --- ZOPTYMALIZOWANE FILTROWANIE (JEDNO PRZEJŚCIE) ---
-    // Optymalizacja: Obliczamy stałe wartości przed pętlą, a nie dla każdego elementu z osobna!
+    // --- ZOPTYMALIZOWANE FILTROWANIE (JEDNO PRZEJŚCIE) ---
     const searchQuery = state.localSearch ? state.localSearch.toLowerCase() : null;
     const targetVod = (state.filterByVod && state.filterByVod !== 'all') ? state.filterByVod.toLowerCase() : null;
     const checkRuntime = state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies');
     const checkTBA = state.hideTBA && listId === 'seriesToWatch';
 
-    itemsToRender = originalItems.filter(item => {
-        // 1. Czas trwania
+    let itemsToRender = (originalItems || []).filter(item => {
         if (checkRuntime && (!item.runtime || item.runtime > state.maxRuntime)) return false;
         
-        // 2. Ukrywanie seriali w zawieszeniu (TBA)
         if (checkTBA) {
             const hasNow = getNextEpisodeInfo(item);
             const hasFuture = item.nextEpisodeToAir && item.nextEpisodeToAir.date;
-            if (!hasNow && !hasFuture) return false; // Ukryj, jeśli na bieżąco i brak daty
+            if (!hasNow && !hasFuture) return false; 
         }
         
-        // 3. Wyszukiwanie lokalne (Tytuł i Opis)
         if (searchQuery) {
             const titleMatch = item.title && item.title.toLowerCase().includes(searchQuery);
             const descMatch = item.overview && item.overview.toLowerCase().includes(searchQuery);
             if (!titleMatch && !descMatch) return false;
         }
         
-        // 4. Ulubione
         if (state.filterFavoritesOnly && !item.isFavorite) return false;
-        
-        // 5. Gatunek
         if (state.filterByGenre !== 'all' && (!item.genres || !item.genres.includes(state.filterByGenre))) return false;
-        
-        // 6. Tagi własne
         if (state.filterByCustomTag && state.filterByCustomTag !== 'all' && (!item.customTags || !item.customTags.includes(state.filterByCustomTag))) return false;
         
-        // 7. Gdzie obejrzeć (VOD)
+        // Działa w tle (bez plakietek na UI!)
         if (targetVod && (!item.vod || !item.vod.some(v => v.toLowerCase().includes(targetVod)))) return false;
         
-        // Jeśli element przetrwał wszystkie powyższe testy, zostaje na liście!
         return true; 
     });
+
     // --- SORTOWANIE ---
     const [sortBy, direction] = state.sortBy.split('_');
     
@@ -1178,7 +1163,7 @@ function renderList(originalItems, listId, preserveLimit = false) {
         const titleA = (a.title || '').toLowerCase(); const titleB = (b.title || '').toLowerCase();
         const yearA = parseInt(a.year) || 0; const yearB = parseInt(b.year) || 0;
 
-             switch (sortBy) { 
+        switch (sortBy) { 
             case 'title': {
                 let sortTitleA = titleA; let sortTitleB = titleB;
                 if (a.collectionName && a.collectionName !== 'none' && collectionTitles[a.collectionName]) sortTitleA = collectionTitles[a.collectionName].title;
@@ -1198,20 +1183,13 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 if (valA !== valB) return (valA - valB) * dir;
                 return titleA.localeCompare(titleB, 'pl');
             }
-            // --- NOWOŚĆ: Logika sortowania po ocenach z serwerów TMDB ---
-                       case 'tmdb': {
+            case 'tmdb': {
                 const valA = parseFloat(a.tmdbRating) || 0; 
                 const valB = parseFloat(b.tmdbRating) || 0; 
-                
-                // --- MAGIA: Wyrzucamy tytuły bez oceny (0) ZAWSZE na sam dół listy ---
                 if (valA === 0 && valB === 0) return titleA.localeCompare(titleB, 'pl');
                 if (valA === 0) return 1;
                 if (valB === 0) return -1;
-
-                // Normalne sortowanie dla filmów, które mają już oceny
                 if (valA !== valB) return (valA - valB) * dir;
-                
-                // W przypadku takich samych ocen (np. 8.2 i 8.2), sortujemy alfabetycznie
                 return titleA.localeCompare(titleB, 'pl');
             }
             default: return 0;  
@@ -1256,7 +1234,6 @@ function renderList(originalItems, listId, preserveLimit = false) {
                 const nextEpInfo = getNextEpisodeInfo(item);
                 
                 if (nextEpInfo && !isUnreleased) {
-                    // CZYSTY CZAS DLA WIDOKU KAFELKÓW
                     let isEpisodeReleased = true;
                     if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === nextEpInfo.season && item.nextEpisodeToAir.episode === nextEpInfo.episode) {
                          const today = new Date(); today.setHours(0,0,0,0);
@@ -1289,11 +1266,11 @@ function renderList(originalItems, listId, preserveLimit = false) {
             let extraInfo = '';
             if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
             else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
-                const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0); const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
+                const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0); 
+                const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
                 const nextEpInfo = getNextEpisodeInfo(item); let nextEpHTML = '';
                 
                 if (nextEpInfo) { 
-                    // CZYSTY CZAS DLA WIDOKU LISTY
                     let isEpisodeReleased = true;
                     if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === nextEpInfo.season && item.nextEpisodeToAir.episode === nextEpInfo.episode) {
                          const today = new Date(); today.setHours(0,0,0,0);
@@ -1316,8 +1293,9 @@ function renderList(originalItems, listId, preserveLimit = false) {
                     if (airStr) nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Premiera: ${airStr}</div>`;
                     else nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Na bieżąco! Czekamy na datę premiery.</div>`;
                 }
-                // Podmień wewnątrz funkcji renderList
-extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="transform: scaleX(${progressPercent / 100});"></div></div></div>`;
+                
+                // Zoptymalizowany GPU pasek postępu (z transform: scaleX zamiast width)
+                extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="transform: scaleX(${progressPercent / 100});"></div></div></div>`;
             }
             
             return `
@@ -1935,15 +1913,53 @@ async function getCredits(id, type) {
 
 async function getWatchProviders(id, type) {
     if (String(id).startsWith('custom_')) return null;
-    const cacheKey = `providers_${type}_${id}`;
-    const cached = await db.getCache(cacheKey, 3); if (cached) return cached;
+    
+    // Zmieniamy klucz cache na v2, żeby wymusić pobranie nowych danych u użytkowników
+    const cacheKey = `providers_v2_${type}_${id}`;
+    const cached = await db.getCache(cacheKey, 3); 
+    if (cached) return cached;
+    
     const data = await fetchFromTMDB(`/${type}/${id}/watch/providers`);
-    if (data?.results?.PL) {
+    if (!data || !data.results) return null;
+
+    let plUnique = [];
+    let foreignUnique = [];
+
+    // 1. POBIERANIE POLSKICH PLATFORM (Tak jak było)
+    if (data.results.PL) {
         const pl = data.results.PL;
         let provs = [...(pl.flatrate || []), ...(pl.free || []), ...(pl.ads || [])];
-        const uniq = Array.from(new Set(provs.map(p => p.provider_id))).map(id => provs.find(p => p.provider_id === id));
-        if (uniq.length > 0) { await db.setCache(cacheKey, uniq); return uniq; }
+        plUnique = Array.from(new Set(provs.map(p => p.provider_id))).map(id => provs.find(p => p.provider_id === id));
     }
+
+    // 2. POBIERANIE ZAGRANICZNYCH (Szukamy w USA i Wielkiej Brytanii)
+    // Interesuje nas tylko "Wielka Piątka": Netflix (8), Max (384/9), Disney+ (337), Prime (119), Apple TV+ (350)
+    const targetForeignIds = [8, 384, 9, 337, 119, 350]; 
+    const foreignProvs = [];
+    
+    ['US', 'GB'].forEach(region => {
+        if (data.results[region] && data.results[region].flatrate) {
+            data.results[region].flatrate.forEach(p => {
+                if (targetForeignIds.includes(p.provider_id)) {
+                    foreignProvs.push(p);
+                }
+            });
+        }
+    });
+
+    // Wyciągamy unikalne zagraniczne i WYKLUCZAMY TE, KTÓRE SĄ JUŻ W POLSCE
+    const plIds = plUnique.map(p => p.provider_id);
+    foreignUnique = Array.from(new Set(foreignProvs.map(p => p.provider_id)))
+        .map(id => foreignProvs.find(p => p.provider_id === id))
+        .filter(p => !plIds.includes(p.provider_id)); // Jeśli jest w PL, nie pokazuj w Zagranicznych!
+
+    const finalResult = { pl: plUnique, foreign: foreignUnique };
+    
+    if (finalResult.pl.length > 0 || finalResult.foreign.length > 0) {
+        await db.setCache(cacheKey, finalResult); 
+        return finalResult;
+    }
+    
     return null;
 }
 
@@ -2263,7 +2279,7 @@ async function openFilterModal() {
     const isSeriesToWatch = listId === 'seriesToWatch';
     const uniqueGenres = [...new Set((data[listId] || []).flatMap(item => item.genres || []))].sort();
     const uniqueTags = [...new Set((data[listId] || []).flatMap(item => item.customTags || []))].sort();
-    const topVodProviders = ['Netflix', 'Max', 'Amazon Prime Video', 'Disney Plus', 'Apple TV Plus', 'SkyShowtime'];
+    const topVodProviders = ['Netflix', 'Max', 'Amazon Prime Video', 'Disney Plus', 'Apple TV Plus', 'SkyShowtime', 'CDA Premium'];
 
     // --- 1. Suwak Czasu (Tylko dla filmów) ---
     let timeFilterHTML = '';
@@ -2563,10 +2579,31 @@ function getModalHeaderHTML(item, isAdded) {
 
 
 
-function renderProvidersHTML(providers) {
-    if (!providers || providers.length === 0) return '';
-    const lHTML = providers.map(p => `<img class="provider-logo" src="${IMAGE_BASE_URL.replace('w500', 'w92')}${p.logo_path}" alt="${escapeHTML(p.provider_name)}" title="${escapeHTML(p.provider_name)}">`).join('');
-    return `<div class="providers-section"><h3>Gdzie obejrzeć?</h3><div class="providers-list">${lHTML}</div><span style="font-size:0.75rem; color:var(--text-secondary); display:block; margin-top:8px;">Dane o platformach dostarcza JustWatch</span></div>`;
+function renderProvidersHTML(providersData) {
+    if (!providersData) return '';
+    
+    let plHTML = '';
+    let foreignHTML = '';
+
+    // 1. Renderowanie Polskich platform (Kwadratowe logotypy)
+    if (providersData.pl && providersData.pl.length > 0) {
+        const lHTML = providersData.pl.map(p => `<img class="provider-logo" src="${IMAGE_BASE_URL.replace('w500', 'w92')}${p.logo_path}" alt="${escapeHTML(p.provider_name)}" title="${escapeHTML(p.provider_name)}">`).join('');
+        plHTML = `<div class="providers-list">${lHTML}</div>`;
+    } else {
+        plHTML = `<div style="font-size:0.85rem; color:var(--text-secondary); font-style:italic;">Brak w polskim abonamencie VOD.</div>`;
+    }
+
+    // 2. Renderowanie Zagranicznych (Subtelne pigułki z ikoną globu)
+    if (providersData.foreign && providersData.foreign.length > 0) {
+        const fTags = providersData.foreign.map(p => {
+            let sName = p.provider_name.replace('Amazon ', '').replace(' Plus', '+').replace('HBO ', '');
+            return `<span style="display:inline-flex; align-items:center; gap:6px; background:color-mix(in srgb, var(--text-secondary) 15%, transparent); color:var(--text-color); font-size:0.75rem; font-weight:600; padding:6px 12px; border-radius:20px; border:1px solid color-mix(in srgb, var(--border-color) 60%, transparent);">🌍 ${escapeHTML(sName)}</span>`;
+        }).join('');
+        
+        foreignHTML = `<div style="margin-top:16px;"><span style="display:block; font-size:0.7rem; font-weight:800; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Za granicą (Użyj VPN):</span><div style="display:flex; flex-wrap:wrap; gap:8px;">${fTags}</div></div>`;
+    }
+
+    return `<div class="providers-section"><h3>Gdzie obejrzeć?</h3>${plHTML}${foreignHTML}<span style="font-size:0.7rem; color:var(--text-secondary); display:block; margin-top:12px;">Dane VOD dostarcza JustWatch</span></div>`;
 }
 
 function renderRecommendationsHTML(recs, type) {
