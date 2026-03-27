@@ -18,7 +18,8 @@
   <link rel="stylesheet" href="styles.css?v=10" />
 
   <!-- POLITYKA BEZPIECZEŃSTWA (CSP) -->
- <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://image.tmdb.org https://www.themoviedb.org data: blob:; connect-src 'self' https://api.themoviedb.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-src https://www.youtube-nocookie.com;">  
+ <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://image.tmdb.org https://www.themoviedb.org data: blob:; connect-src 'self' https://api.themoviedb.org; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-src https://www.youtube-nocookie.com;">
+  
   <!-- ZOPTYMALIZOWANE ŁADOWANIE SKRYPTU (z atrybutem defer) -->
   <script src="app.js?v=9" defer></script>
 </head>
@@ -290,6 +291,14 @@
                   <span class="text">Panel powiadomień</span>
                 </div>
                 <div class="toggle-switch"><input type="checkbox" id="smart-notifications-checkbox" /><div class="slider"></div></div>
+              </label>
+               <!-- NOWOŚĆ: Przełącznik Dużych Kafelków -->
+              <label class="settings-item modern-toggle-row" style="margin-bottom: 0; border-bottom: 1px solid var(--border-color) !important; border-radius: 0;">
+                <div style="display: flex; align-items: center; gap: 16px">
+                  <svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"></rect><rect x="14" y="3" width="7" height="18" rx="1"></rect></svg>
+                  <span class="text">Duże kafelki (2 kolumny)</span>
+                </div>
+                <div class="toggle-switch"><input type="checkbox" id="large-grid-checkbox" /><div class="slider"></div></div>
               </label>
             </div>
           </div>
