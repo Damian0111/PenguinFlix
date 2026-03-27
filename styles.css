@@ -5843,15 +5843,19 @@ img {
 /* ==========================================
    WYMUSZENIE 2 KOLUMN (DUŻE KAFELKI)
 ========================================== */
-/* Dla smartfonów: wymuszamy sztywno 2 równe kolumny */
 @media (max-width: 600px) {
     body[data-large-grid="true"] .grid-view-container {
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 12px !important;
+        /* minmax(0, 1fr) gwarantuje matematycznie idealne, równe połowy ekranu */
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 14px !important; /* Minimalnie większy odstęp wygląda lepiej przy dużych kartach */
+    }
+    
+    /* Stabilizujemy same kafelki, żeby nie wychodziły poza swoje kolumny */
+    body[data-large-grid="true"] .grid-item {
+        width: 100% !important;
     }
 }
-/* Dla tabletów/PC: powiększamy minimalny rozmiar kafelka, 
-   żeby okładki nie były gigantyczne (na pół ekranu monitora) */
+
 @media (min-width: 601px) {
     body[data-large-grid="true"] .grid-view-container {
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
