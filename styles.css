@@ -1070,12 +1070,17 @@ ul {
 
 .progress-bar-inner {
     height: 100%;
+    width: 100%; /* Wypełnia całość */
     border-radius: 50px;
     background: linear-gradient(90deg, var(--primary-color) 0%, #ff4b2b 100%);
     box-shadow: 0 0 10px color-mix(in srgb, var(--primary-color) 50%, transparent);
-    transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    
+    /* Magia optymalizacji GPU */
+    transform-origin: left;
+    transform: scaleX(0); 
+    transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: transform;
 }
-
 .star-rating-display {
     display: flex;
     gap: 2px;
