@@ -1833,10 +1833,10 @@ function renderProfileStats() {
     }, 250);
 }
 // ==========================================
-// 9. LOGIKA POBIERANIA SZCZEGÓŁÓW API
+// 1. ZAKTUALIZOWANA FUNKCJA POBIERANIA DANYCH
 // ==========================================
 async function getItemDetails(id, type) {
-    const d = await fetchFromTMDB(`/${type}/${id}`, { append_to_response: 'images,watch/providers,release_dates', include_image_language: 'pl,en,null' });
+    const d = await fetchFromTMDB(`/${type}/${id}`, { append_to_response: 'images,watch/providers,release_dates,content_ratings,credits', include_image_language: 'pl,en,null' });
     if (!d) return null;
 
     let vodList = [];
@@ -1847,11 +1847,15 @@ async function getItemDetails(id, type) {
     }
 
     let finalReleaseDate = d.release_date || d.first_air_date || null;
+    let ageRating = null;
 
     if (type === 'movie' && d.release_dates && d.release_dates.results) {
         const globalYear = finalReleaseDate ? parseInt(finalReleaseDate.substring(0, 4)) : 0;
         const plRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'PL');
         const usRelease = d.release_dates.results.find(r => r.iso_3166_1 === 'US');
+
+        if (plRelease && plRelease.release_dates[0].certification) ageRating = plRelease.release_dates[0].certification;
+        else if (usRelease && usRelease.release_dates[0].certification) ageRating = usRelease.release_dates[0].certification;
 
         const getTheatricalDate = (countryData) => {
             if (!countryData || !countryData.release_dates) return null;
@@ -1866,9 +1870,21 @@ async function getItemDetails(id, type) {
             const localYear = parseInt(localDate.substring(0, 4));
             if (globalYear > 0 && Math.abs(localYear - globalYear) <= 1) finalReleaseDate = localDate;
         }
+    } else if (type === 'tv' && d.content_ratings && d.content_ratings.results) {
+        const usRating = d.content_ratings.results.find(r => r.iso_3166_1 === 'US');
+        if (usRating) ageRating = usRating.rating;
     }
 
-       const item = { 
+    // --- ZMIANA: Pobieranie Twórcy/Reżysera jako obiektu z ID ---
+    let mainCreator = null;
+    if (type === 'movie' && d.credits && d.credits.crew) {
+        const director = d.credits.crew.find(c => c.job === 'Director');
+        if (director) mainCreator = { id: director.id, name: director.name };
+    } else if (type === 'tv' && d.created_by && d.created_by.length > 0) {
+        mainCreator = { id: d.created_by[0].id, name: d.created_by[0].name };
+    }
+
+    const item = { 
         id: d.id, 
         title: d.title || d.name, 
         poster: d.poster_path ? IMAGE_BASE_URL + d.poster_path : null, 
@@ -1882,18 +1898,22 @@ async function getItemDetails(id, type) {
         customTags: [], 
         vod: vodList, 
         tmdbRating: d.vote_average ? parseFloat(d.vote_average).toFixed(1) : null,
-        // ZMIANA: Zapisujemy pełną NAZWĘ kolekcji
-        collectionName: d.belongs_to_collection ? d.belongs_to_collection.name : null 
+        collectionName: d.belongs_to_collection ? d.belongs_to_collection.name : null,
+        creator: mainCreator,
+        tagline: d.tagline || null,
+        ageRating: ageRating || null,
+        country: d.production_countries && d.production_countries.length > 0 ? d.production_countries[0].iso_3166_1 : null,
+        budget: d.budget || 0,
+        revenue: d.revenue || 0
     };
+
     if (type === 'tv') {
         item.status = d.status;
-        
-        // --- KLUCZOWA ZMIANA: TWARDE +1 DZIEŃ W BAZIE ---
         let adjustedAirDate = null;
         if (d.next_episode_to_air && d.next_episode_to_air.air_date) {
             const tempDate = new Date(d.next_episode_to_air.air_date);
-            tempDate.setDate(tempDate.getDate() + 1); // Wymuszenie +1 dnia dla strefy EU
-            adjustedAirDate = tempDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+            tempDate.setDate(tempDate.getDate() + 1); 
+            adjustedAirDate = tempDate.toISOString().split('T')[0]; 
         }
 
         item.nextEpisodeToAir = d.next_episode_to_air ? { 
@@ -1901,24 +1921,24 @@ async function getItemDetails(id, type) {
             season: d.next_episode_to_air.season_number, 
             episode: d.next_episode_to_air.episode_number 
         } : null;
-        // ------------------------------------------------
 
         const realSeasons = d.seasons ? d.seasons.filter(s => s.season_number > 0) : [];
         item.seasons = realSeasons; 
         item.numberOfSeasons = realSeasons.length; 
         item.numberOfEpisodes = realSeasons.reduce((acc, s) => acc + s.episode_count, 0); 
         item.progress = {};
-      } else if (type === 'movie') { 
+    } else if (type === 'movie') { 
         item.runtime = d.runtime || null; 
     }
     
-    // NAPRAWA: TMDB chowa czas odcinka w innej szufladce, wyciągamy średnią (pierwszą liczbę z tablicy)
     if (type === 'tv' && d.episode_run_time && d.episode_run_time.length > 0) {
-        item.runtime = d.episode_run_time[0]; // np. wyciągnie "45" (minut)
+        item.runtime = d.episode_run_time[0]; 
     }
     
     return item;
 }
+
+
 async function getCredits(id, type) {
     if (String(id).startsWith('custom_')) return [];
     const cacheKey = `credits_${type}_${id}`;
@@ -2004,16 +2024,48 @@ async function getSeasonDetails(seriesId, seasonNumber) {
 }
 
 async function getActorDetails(actorId) {
-    const cacheKey = `actor_${actorId}`;
+    const cacheKey = `actor_v3_${actorId}`;
     const cached = await db.getCache(cacheKey, 7); if (cached) return cached;
+    
     let dt = await fetchFromTMDB(`/person/${actorId}`);
     if (!dt) return null;
     if (!dt.biography) { const en = await fetchFromTMDB(`/person/${actorId}`, { language: 'en-US' }); if (en) dt.biography = en.biography; }
+    
     const cr = await fetchFromTMDB(`/person/${actorId}/combined_credits`);
     if (!cr) return null;
-    const uC = cr.cast.filter((i, idx, s) => idx === s.findIndex(t => t.id === i.id));
-    const kf = [...uC].filter(i => i.poster_path).sort((a, b) => b.vote_count - a.vote_count).slice(0, 10);
-    const fg = [...uC].filter(i => i.release_date || i.first_air_date).sort((a, b) => new Date(b.release_date || b.first_air_date) - new Date(a.release_date || a.first_air_date));
+
+    // --- NOWA, INTELIGENTNA LOGIKA DLA AKTORÓW-REŻYSERÓW ---
+    const castCredits = cr.cast || [];
+    const directingCredits = (cr.crew || []).filter(c => c.job === 'Director');
+
+    // Używamy Mapy (słownika), żeby nie dublować filmów po ID
+    const creditsMap = new Map();
+
+    // 1. Najpierw dodajemy wszystkie role aktorskie
+    castCredits.forEach(c => {
+        creditsMap.set(c.id, { ...c, isActor: true, isDirector: false });
+    });
+
+    // 2. Teraz dodajemy reżyserię (lub aktualizujemy istniejący film, jeśli w nim grał!)
+    directingCredits.forEach(c => {
+        if (creditsMap.has(c.id)) {
+            // Grał i reżyserował (np. Stallone w Rocky)
+            creditsMap.get(c.id).isDirector = true;
+        } else {
+            // Tylko reżyserował (nie grał)
+            creditsMap.set(c.id, { ...c, isActor: false, isDirector: true });
+        }
+    });
+
+    // Zmieniamy Mapę z powrotem na czystą tablicę unikalnych filmów
+    const uniqueCredits = Array.from(creditsMap.values());
+
+    // Wyciągamy top 10 najpopularniejszych do sekcji "Znany z"
+    const kf = [...uniqueCredits].filter(i => i.poster_path).sort((a, b) => b.vote_count - a.vote_count).slice(0, 10);
+    
+    // Sortujemy całą filmografię po dacie premiery
+    const fg = [...uniqueCredits].filter(i => i.release_date || i.first_air_date).sort((a, b) => new Date(b.release_date || b.first_air_date) - new Date(a.release_date || a.first_air_date));
+    
     const result = { name: dt.name, biography: dt.biography, profile_path: dt.profile_path, known_for: kf, full_filmography: fg };
     await db.setCache(cacheKey, result); return result;
 }
@@ -2531,18 +2583,81 @@ function showCustomConfirm(title, message) {
 
 function displaySearchResults(results) {
     const container = document.getElementById('searchResults'); container.innerHTML = '';
-    const filtered = results.filter(item => (item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path);
+    
+    // --- ZMIANA: Dopuszczamy osoby (person) z ustawionym zdjęciem profilowym ---
+    const filtered = results.filter(item => 
+        ((item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path) || 
+        (item.media_type === 'person' && item.profile_path)
+    );
+    
     if (filtered.length === 0) { container.innerHTML = '<div class="placeholder" style="padding:20px; text-align:center;">Brak wyników.</div>'; return; }
+    
     filtered.slice(0, 5).forEach(item => {
         const safeTitle = escapeHTML(item.title || item.name);
-        const div = document.createElement('div'); div.className = 'search-item'; div.dataset.id = item.id; div.dataset.type = item.media_type;
-        const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
-        let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
-        const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
-        div.innerHTML = `<img src="${posterSrc}" alt="Okładka" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div>`;
-        container.appendChild(div);
+        const div = document.createElement('div'); 
+        div.className = 'search-item'; 
+        
+        if (item.media_type === 'person') {
+            // RENDEROWANIE LUDZI
+            const profileSrc = IMAGE_BASE_URL.replace('w500', 'w200') + item.profile_path;
+            const knownFor = item.known_for ? item.known_for.map(k => k.title || k.name).join(', ') : '';
+            div.innerHTML = `<img src="${profileSrc}" alt="Profil" style="border-radius:50%; width:40px; height:40px; object-fit:cover; align-self:center;"><div class="info"><strong>${safeTitle}</strong><span>Osoba • ${escapeHTML(knownFor)}</span></div>`;
+            div.onclick = (e) => { e.stopPropagation(); openActorDetailsModal(item.id); };
+            container.appendChild(div);
+        } else {
+            // RENDEROWANIE FILMÓW / SERIALI
+            div.dataset.id = item.id; div.dataset.type = item.media_type;
+            const posterSrc = IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path;
+            let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
+            const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
+            div.innerHTML = `<img src="${posterSrc}" alt="Okładka" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch" title="Do obejrzenia"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div>`;
+            container.appendChild(div);
+        }
     });
+    
     if (filtered.length > 5) { const showAll = document.createElement('div'); showAll.className = 'search-item show-all-results-btn'; showAll.innerHTML = `<span>Pokaż wszystkie ${filtered.length} wyników</span>`; showAll.style.justifyContent = 'center'; showAll.style.fontWeight = '600'; container.appendChild(showAll); showAll.addEventListener('click', showAllResultsModal); }
+}
+
+function showAllResultsModal() {
+    toggleAppDepthEffect(true);
+    const query = escapeHTML(document.getElementById('searchInput').value); const modalContainer = document.getElementById('detailsModalContainer');
+    
+    // Filtrujemy dokładnie tak samo
+    const filtered = fullSearchResults.filter(item => 
+        ((item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path) || 
+        (item.media_type === 'person' && item.profile_path)
+    );
+    
+    const rHTML = filtered.map(item => {
+        const safeTitle = escapeHTML(item.title || item.name); 
+        
+        if (item.media_type === 'person') {
+            const profileSrc = IMAGE_BASE_URL.replace('w500', 'w200') + item.profile_path;
+            const knownFor = item.known_for ? item.known_for.map(k => k.title || k.name).join(', ') : '';
+            return `<div class="search-item" data-id="${item.id}" data-type="person"><img class="fade-image" src="${profileSrc}" style="border-radius:50%; width:40px; height:40px; object-fit:cover; align-self:center;" onload="this.classList.add('loaded')"><div class="info"><strong>${safeTitle}</strong><span>Osoba • ${escapeHTML(knownFor)}</span></div></div>`;
+        } else {
+            const posterSrc = IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path;
+            let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
+            const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
+            return `<div class="search-item" data-id="${item.id}" data-type="${item.media_type}"><img class="fade-image" src="${posterSrc}" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div></div>`;
+        }
+    }).join('');
+    
+    modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="max-width: 700px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border-color); text-align: center;"><h2 style="margin: 0; font-size: 1.2rem;">Wyniki dla: "${query}"</h2></div><div class="modern-modal-scroll" style="padding: 0;"><div class="all-results-list">${rHTML}</div></div></div></div>`;
+    document.getElementById('searchResults').style.display = 'none';
+
+    const modal = modalContainer.querySelector('.modal-overlay'); const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
+    modal.querySelector('.all-results-list').addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
+        if (addBtn) { e.stopPropagation(); handleQuickAddItem(addBtn); close(); } 
+        else if (item) { 
+            if (item.dataset.id && item.dataset.type) { 
+                if (item.dataset.type === 'person') { openActorDetailsModal(item.dataset.id); close(); }
+                else { openPreviewModal(item.dataset.id, item.dataset.type); close(); }
+            } 
+        }
+    });
 }
 
 function showAllResultsModal() {
@@ -2663,6 +2778,9 @@ async function openFullReviewsModal(id, type) {
     setupSwipeToClose(overlay, close);
 }
 
+// ==========================================
+// 2. MODAL PREVIEW (ZANIM DODASZ FILM)
+// ==========================================
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
@@ -2691,13 +2809,112 @@ async function openPreviewModal(id, type) {
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
+      // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
+       // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
+    const formatMoney = (num) => {
+        if (num >= 1000000000) return '$' + (num / 1000000000).toFixed(1) + ' mld';
+        if (num >= 1000000) return '$' + Math.round(num / 1000000) + ' mln';
+        return '$' + new Intl.NumberFormat('pl-PL').format(num);
+    };
+
+    const translateAgeRating = (rating) => {
+        if (!rating) return null;
+        const r = String(rating).toUpperCase().trim();
+        const map = {
+            'R': '18+', 'NC-17': '18+', 'TV-MA': '18+',
+            'PG-13': '13+', 'TV-14': '16+',
+            'PG': 'Za zgodą rodziców', 'TV-PG': 'Za zgodą rodziców',
+            'G': 'Dla każdego', 'TV-G': 'Dla każdego', 'TV-Y': 'Dla dzieci', 'TV-Y7': '7+',
+            '12': '12+', '16': '16+', '18': '18+'
+        };
+        return map[r] || rating;
+    };
+
+    let triviaListHTML = '';
+    
+    // Twórca / Reżyser
+    if (item.creator && typeof item.creator === 'object') {
+        triviaListHTML += `
+        <div class="trivia-item director-link" onclick="openActorDetailsModal('${item.creator.id}')">
+            <div class="trivia-label-group">
+                <svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                <span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span>
+            </div>
+            <div class="trivia-value">${escapeHTML(item.creator.name)} <svg class="director-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+        </div>`;
+    } else if (item.creator) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div>
+            <div class="trivia-value">${escapeHTML(item.creator)}</div>
+        </div>`;
+    }
+
+    // Wiek
+    if (item.ageRating) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span class="trivia-label">Kategoria wiekowa</span></div>
+            <div class="trivia-value">${escapeHTML(translateAgeRating(item.ageRating))}</div>
+        </div>`;
+    }
+
+    // Kraj
+    if (item.country) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="trivia-label">Produkcja</span></div>
+            <div class="trivia-value">${escapeHTML(item.country)}</div>
+        </div>`;
+    }
+
+    // Budżet
+    if (item.type === 'movie' && item.budget > 10000) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span class="trivia-label">Budżet</span></div>
+            <div class="trivia-value">${formatMoney(item.budget)}</div>
+        </div>`;
+    }
+
+    // Przychody
+    if (item.type === 'movie' && item.revenue > 10000) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span class="trivia-label">Box Office</span></div>
+            <div class="trivia-value" style="color: var(--success-color);">${formatMoney(item.revenue)}</div>
+        </div>`;
+    }
+    
+    let triviaSectionHTML = triviaListHTML !== '' ? `
+        <div class="rewatch-section trivia-section">
+            <div class="rewatch-accordion-header">
+                <h3 class="rewatch-accordion-title">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    Informacje i ciekawostki
+                </h3>
+                <svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div class="rewatch-accordion-content">
+                <div class="trivia-list-group">${triviaListHTML}</div>
+            </div>
+        </div>
+    ` : '';
+
+    let taglineHTML = item.tagline ? `<div class="movie-tagline-premium">"${escapeHTML(item.tagline)}"</div>` : '';
+    // --- RENDER MODALA ---
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
     const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); if (history.state && history.state.modalOpen) history.back(); };
 
-    modal.addEventListener('click', async (e) => {
+      modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
+        
+        // TO JEST KLUCZOWE - otwiera Ciekawostki!
+        const accordionHeader = e.target.closest('.rewatch-accordion-header');
+        if (accordionHeader) { triggerHaptic('light'); accordionHeader.parentElement.classList.toggle('expanded'); return; }
+        
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
         const rec = e.target.closest('.recommendation-item');
         if (rec) {
@@ -2741,7 +2958,7 @@ async function openPreviewModal(id, type) {
     getWatchProviders(id, type).then(p => { const c = document.getElementById('providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
     getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
     getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
-        getCredits(id, type).then(c => { 
+    getCredits(id, type).then(c => { 
         const cc = document.getElementById('cast-container'); 
         if (cc && c.length > 0) { 
             const favIds = (data.favoriteActors || []).map(a => String(a.id));
@@ -2763,6 +2980,11 @@ async function openPreviewModal(id, type) {
     }
 }
 
+
+
+// ==========================================
+// 3. MODAL SZCZEGÓŁÓW (DLA FILMÓW W BIBLIOTECE)
+// ==========================================
 async function openDetailsModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
@@ -2773,11 +2995,19 @@ async function openDetailsModal(id, type) {
     const dModal = document.getElementById('detailsModalContainer');
     dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
 
-    if (!String(id).startsWith('custom_') && (!item.backdrop || item.vod === undefined || item.tmdbRating === undefined || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
+    if (!String(id).startsWith('custom_') && (!item.backdrop || item.vod === undefined || item.tmdbRating === undefined || item.creator === undefined || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
         const fd = await getItemDetails(id, type);
         if (fd) {
             item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate; item.vod = fd.vod || [];
             item.tmdbRating = fd.tmdbRating || item.tmdbRating; 
+            
+            item.creator = fd.creator || item.creator;
+            item.tagline = fd.tagline || item.tagline;
+            item.ageRating = fd.ageRating || item.ageRating;
+            item.country = fd.country || item.country;
+            item.budget = fd.budget || item.budget;
+            item.revenue = fd.revenue || item.revenue;
+
             if (type === 'tv') { item.status = fd.status !== undefined ? fd.status : item.status; item.nextEpisodeToAir = fd.nextEpisodeToAir !== undefined ? fd.nextEpisodeToAir : item.nextEpisodeToAir; item.seasons = fd.seasons || item.seasons; item.numberOfSeasons = fd.numberOfSeasons || item.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes || item.numberOfEpisodes; if (!item.progress) item.progress = {}; } else if (type === 'movie') { item.runtime = fd.runtime || item.runtime; }
             await saveData();
         }
@@ -2786,7 +3016,7 @@ async function openDetailsModal(id, type) {
     const isToWatch = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
     
     let fHTML = '';
-    let isTimeCalc = false; // <-- Zmienna pomocnicza wyciągnięta wyżej!
+    let isTimeCalc = false; 
 
     if (isWatched) { 
         fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; 
@@ -2810,7 +3040,7 @@ async function openDetailsModal(id, type) {
                 const minutesLeft = episodesLeft * avgRuntime;
                 const h = Math.floor(minutesLeft / 60); 
                 const m = minutesLeft % 60;
-                wMsg = h > 0 ? `Zostało: ~${h}h ${m}m` : `Zostało: ~${m}m`; // <-- Dodana tylda ~
+                wMsg = h > 0 ? `Zostało: ~${h}h ${m}m` : `Zostało: ~${m}m`;
             } else if (!isSeriesFinished(item)) {
                 cw = false; 
                 wMsg = 'Czekasz na nowe odcinki...'; 
@@ -2834,7 +3064,7 @@ async function openDetailsModal(id, type) {
                 <span style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 600; display:flex; align-items:center; gap:8px;">
                     ${iconSvg} <span id="series-time-text">${wMsg}</span>
                 </span>
-            </div>`; // <-- Dodane ID 'series-time-text'
+            </div>`;
         } else {
             fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
         }
@@ -2877,9 +3107,7 @@ async function openDetailsModal(id, type) {
     }
 
     let addTagBtnHTML = `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>`;
-    
     let pinBtnHTML = `<button id="modal-pin-btn" style="background:${item.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${item.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${item.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
-    
     let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     
     const hasNote = item.privateNote && item.privateNote.trim() !== '';
@@ -2891,7 +3119,6 @@ async function openDetailsModal(id, type) {
     </button>`;
 
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
-    
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:8px;">${noteBtnHTML}${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     const savedNote = item.privateNote ? escapeHTML(item.privateNote) : '';
@@ -2899,8 +3126,101 @@ async function openDetailsModal(id, type) {
     <div id="private-note-wrapper" class="private-note-container ${hasNote ? 'active' : ''}">
         <textarea id="private-note-textarea" class="private-note-input" placeholder="Wpisz prywatną notatkę, polecajkę, powód dodania...">${savedNote}</textarea>
     </div>`;
+    // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
+    // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
+    const formatMoney = (num) => {
+        if (num >= 1000000000) return '$' + (num / 1000000000).toFixed(1) + ' mld';
+        if (num >= 1000000) return '$' + Math.round(num / 1000000) + ' mln';
+        return '$' + new Intl.NumberFormat('pl-PL').format(num);
+    };
 
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}${privateNoteAreaHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div><h3>Opis</h3>${renderCollapsibleText(item.overview)}</div><div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
+    const translateAgeRating = (rating) => {
+        if (!rating) return null;
+        const r = String(rating).toUpperCase().trim();
+        const map = {
+            'R': '18+', 'NC-17': '18+', 'TV-MA': '18+',
+            'PG-13': '13+', 'TV-14': '16+',
+            'PG': 'Za zgodą rodziców', 'TV-PG': 'Za zgodą rodziców',
+            'G': 'Dla każdego', 'TV-G': 'Dla każdego', 'TV-Y': 'Dla dzieci', 'TV-Y7': '7+',
+            '12': '12+', '16': '16+', '18': '18+'
+        };
+        return map[r] || rating;
+    };
+
+    let triviaListHTML = '';
+    
+    // Twórca / Reżyser
+    if (item.creator && typeof item.creator === 'object') {
+        triviaListHTML += `
+        <div class="trivia-item director-link" onclick="openActorDetailsModal('${item.creator.id}')">
+            <div class="trivia-label-group">
+                <svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                <span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span>
+            </div>
+            <div class="trivia-value">${escapeHTML(item.creator.name)} <svg class="director-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+        </div>`;
+    } else if (item.creator) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div>
+            <div class="trivia-value">${escapeHTML(item.creator)}</div>
+        </div>`;
+    }
+
+    // Wiek
+    if (item.ageRating) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span class="trivia-label">Kategoria wiekowa</span></div>
+            <div class="trivia-value">${escapeHTML(translateAgeRating(item.ageRating))}</div>
+        </div>`;
+    }
+
+    // Kraj
+    if (item.country) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="trivia-label">Produkcja</span></div>
+            <div class="trivia-value">${escapeHTML(item.country)}</div>
+        </div>`;
+    }
+
+    // Budżet
+    if (item.type === 'movie' && item.budget > 10000) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span class="trivia-label">Budżet</span></div>
+            <div class="trivia-value">${formatMoney(item.budget)}</div>
+        </div>`;
+    }
+
+    // Przychody
+    if (item.type === 'movie' && item.revenue > 10000) {
+        triviaListHTML += `
+        <div class="trivia-item">
+            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span class="trivia-label">Box Office</span></div>
+            <div class="trivia-value" style="color: var(--success-color);">${formatMoney(item.revenue)}</div>
+        </div>`;
+    }
+    
+    let triviaSectionHTML = triviaListHTML !== '' ? `
+        <div class="rewatch-section trivia-section">
+            <div class="rewatch-accordion-header">
+                <h3 class="rewatch-accordion-title">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    Informacje i ciekawostki
+                </h3>
+                <svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div class="rewatch-accordion-content">
+                <div class="trivia-list-group">${triviaListHTML}</div>
+            </div>
+        </div>
+    ` : '';
+
+    let taglineHTML = item.tagline ? `<div class="movie-tagline-premium">"${escapeHTML(item.tagline)}"</div>` : '';
+    // --- RENDER MODALA ---
+    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}${privateNoteAreaHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = dModal.querySelector('.modal-overlay');
     
@@ -2965,9 +3285,13 @@ async function openDetailsModal(id, type) {
 
     const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if(history.state && history.state.modalOpen) history.back(); };
     
-    modal.addEventListener('click', async (e) => {
+      modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
-        const rewatchHeader = e.target.closest('.rewatch-accordion-header'); if (rewatchHeader) { triggerHaptic('light'); rewatchHeader.parentElement.classList.toggle('expanded'); return; }
+        
+        // TO JEST KLUCZOWE - otwiera Historię Seansów oraz Ciekawostki!
+        const accordionHeader = e.target.closest('.rewatch-accordion-header'); 
+        if (accordionHeader) { triggerHaptic('light'); accordionHeader.parentElement.classList.toggle('expanded'); return; }
+        
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
         const rec = e.target.closest('.recommendation-item'); 
         if (rec) { 
@@ -2992,7 +3316,7 @@ async function openDetailsModal(id, type) {
         getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
         getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     }
-       getCredits(id, type).then(c => { 
+    getCredits(id, type).then(c => { 
         const cc = document.getElementById('cast-container'); 
         if (cc && c.length > 0) { 
             const favIds = (data.favoriteActors || []).map(a => String(a.id));
@@ -3018,12 +3342,10 @@ async function openDetailsModal(id, type) {
         if (mv) mv.onclick = async () => { await handleMoveItem(id, type); close(); };
     }
 
-    // --- NOWOŚĆ: Uruchomienie dokładnego obliczania czasu w tle ---
     if (isToWatch && item.type === 'tv' && isTimeCalc) {
         updateExactRemainingTime(item);
     }
 }
-
 function openTrailerModal(tk) {
     const tc = document.getElementById('trailerModalContainer'); const orig = window.location.protocol === 'file:' ? '' : `&origin=${window.location.origin}`;
     tc.innerHTML = `<div id="trailerModalOverlay"><div id="trailerModalContent"><button class="trailer-close-btn" title="Zamknij">${ICONS.close}</button><div class="video-wrapper"><iframe src="https://www.youtube-nocookie.com/embed/${tk}?autoplay=1&rel=0&modestbranding=1&playsinline=1${orig}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div></div></div>`;
@@ -3417,38 +3739,38 @@ async function openActorDetailsModal(actorId) {
     c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
 
     const ad = await getActorDetails(actorId);
-    if (!ad) { c.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych o aktorze.', 'error'); return; }
+    if (!ad) { c.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych.', 'error'); return; }
 
-    // Inicjalizacja bazy ulubionych
     data.favoriteActors = data.favoriteActors || [];
     const isFav = data.favoriteActors.some(a => String(a.id) === String(actorId));
 
     const sName = escapeHTML(ad.name);
     const kfHTML = ad.known_for.map(i => { const p = i.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + i.poster_path : POSTER_PLACEHOLDER; const t = escapeHTML(i.title || i.name); return `<div class="known-for-item" data-id="${i.id}" data-type="${i.media_type}"><img src="${p}" alt="${t}" onerror="this.src='${POSTER_PLACEHOLDER}';"><strong>${t}</strong></div>`; }).join('');
 
-    // --- OBLICZANIE POSTĘPU OGLĄDANIA AKTORA ---
     const watchedIds = new Set([...data.moviesWatched, ...data.seriesWatched].map(i => String(i.id)));
     let watchedCount = 0;
     const totalCredits = ad.full_filmography ? ad.full_filmography.length : 0;
 
+    let hasActing = false;
+    let hasDirecting = false;
+    
     if (totalCredits > 0) {
         ad.full_filmography.forEach(credit => {
-            if (watchedIds.has(String(credit.id))) {
-                watchedCount++;
-            }
+            if (watchedIds.has(String(credit.id))) watchedCount++;
+            if (credit.isActor) hasActing = true;
+            if (credit.isDirector) hasDirecting = true;
         });
     }
 
+    const hasBothRoles = hasActing && hasDirecting;
     const progressPct = totalCredits > 0 ? Math.round((watchedCount / totalCredits) * 100) : 0;
     let progressHTML = '';
 
-    // --- NOWY, ELEGANCJI I MINIMALISTYCZNY DESIGN ---
     if (totalCredits > 0) {
-        // Dynamiczne komunikaty na podstawie procentowego postępu
         let levelText = '';
-        if (watchedCount === 0) levelText = 'Nie znasz jeszcze tego aktora';
+        if (watchedCount === 0) levelText = 'Nie znasz jeszcze tego twórcy';
         else if (progressPct < 15) levelText = 'Początki znajomości';
-        else if (progressPct < 40) levelText = 'Dobrze kojarzysz tę twarz';
+        else if (progressPct < 40) levelText = 'Dobrze kojarzysz tę twarz/styl';
         else if (progressPct < 70) levelText = 'Solidny fan!';
         else if (progressPct < 100) levelText = 'Znasz tę filmografię na wylot';
         else levelText = 'Obejrzano absolutnie wszystko! 👑';
@@ -3456,8 +3778,6 @@ async function openActorDetailsModal(actorId) {
         progressHTML = `
         <div style="margin-bottom: 24px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                
-                <!-- Lewa strona: Ikonka i Teksty -->
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;">
@@ -3470,21 +3790,23 @@ async function openActorDetailsModal(actorId) {
                         <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span>
                     </div>
                 </div>
-
-                <!-- Prawa strona: Liczby -->
                 <div style="text-align: right; flex-shrink: 0; padding-left: 8px;">
                     <span style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span>
                 </div>
-
             </div>
-
-            <!-- Smukły pasek postępu -->
             <div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;">
                 <div style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div>
             </div>
         </div>`;
     }
-    // ----------------------------------------------------
+
+    const filterHTML = hasBothRoles ? `
+        <div class="segmented-control" id="filmography-filter" style="margin: 16px 0; max-width: 100%;">
+            <button class="seg-btn active" data-filter="all">Wszystko</button>
+            <button class="seg-btn" data-filter="actor">Tylko rola</button>
+            <button class="seg-btn" data-filter="director">Tylko reżyseria</button>
+        </div>
+    ` : '';
 
     c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
         
@@ -3494,14 +3816,11 @@ async function openActorDetailsModal(actorId) {
             <h2>${sName}</h2>
         </div>
         
-        <!-- PASEK POSTĘPU NAD BIOGRAFIĄ -->
         ${progressHTML} 
-        
         <div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>
-        
         ${kfHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${kfHTML}</div></div>` : ''}
         
-        ${ad.full_filmography && ad.full_filmography.length > 0 ? `
+        ${totalCredits > 0 ? `
         <div class="filmography-controls" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
             <button id="actor-randomize-btn" class="filmography-button" style="background: var(--primary-color); color: white; border: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(229,9,20,0.3);">
                 <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg> 
@@ -3509,31 +3828,112 @@ async function openActorDetailsModal(actorId) {
             </button>
             <button id="toggle-filmography-btn" class="filmography-button">Pełna filmografia</button>
         </div>
-        <div id="full-filmography-container" style="display: none;"></div>` : ''}
+        
+        <div id="full-filmography-wrapper" style="display: none;">
+            ${filterHTML}
+            <div id="full-filmography-container"></div>
+        </div>
+        ` : ''}
         
     </div></div></div>`;
 
-    // --- OBSŁUGA ULUBIONYCH ---
+    const renderFilmography = (filterType = 'all') => {
+        const fc = document.getElementById('full-filmography-container');
+        if (!fc) return;
+
+        let listToRender = ad.full_filmography;
+        if (filterType === 'actor') listToRender = ad.full_filmography.filter(i => i.isActor);
+        if (filterType === 'director') listToRender = ad.full_filmography.filter(i => i.isDirector);
+
+        if (listToRender.length === 0) {
+            fc.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-secondary);">Brak wyników w tej kategorii.</div>';
+            return;
+        }
+
+        fc.innerHTML = listToRender.map(i => {
+            const yr = (i.release_date || i.first_air_date || '----').substring(0, 4); 
+            const pst = i.poster_path ? IMAGE_BASE_URL.replace('w500', 'w92') + i.poster_path : POSTER_PLACEHOLDER;
+            const isAdded = Object.values(data).flat().some(it => String(it.id) === String(i.id)); 
+            const t = escapeHTML(i.title || i.name);
+            
+            let roleText = 'Brak informacji';
+            if (i.isActor && i.isDirector) {
+                roleText = `<span style="color: var(--warning-color); font-weight: 800;">Reżyseria & Rola:</span> ${escapeHTML(i.character || 'Nieznana')}`;
+            } else if (i.isDirector) {
+                roleText = `<span style="color: var(--primary-color); font-weight: 800;">Reżyseria</span>`;
+            } else if (i.isActor) {
+                roleText = `Rola: ${escapeHTML(i.character || 'Nieznana')}`;
+            }
+
+            // GWARANCJA POPRAWNYCH ATRYBUTÓW DATA-LIST
+                     // CAŁKOWICIE NOWE KLASY I ATRYBUTY (BY OMINĄĆ STARE BŁĘDY KODU)
+            let act = '';
+            if (isAdded) {
+                act = `<span class="already-added-info" style="justify-content: flex-start; margin-top: 8px;"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Już w kolekcji</span>`;
+            } else {
+                act = `
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn-fg-action" data-dest="toWatch" data-itemid="${i.id}" data-itemtype="${i.media_type}" style="flex: 1; padding: 10px; font-size: 0.8rem; border-radius: var(--radius-md); box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor:pointer; font-weight:bold; background:var(--primary-color); color:white; border:none;">Do obejrzenia</button>
+                    <button class="btn-fg-action" data-dest="watched" data-itemid="${i.id}" data-itemtype="${i.media_type}" style="flex: 1; padding: 10px; font-size: 0.8rem; background: var(--border-color); color: var(--text-color); border-radius: var(--radius-md); cursor:pointer; font-weight:bold; border:none;">Obejrzane</button>
+                </div>`;
+            }
+            
+            return `<div class="filmography-item"><div class="filmography-item-header"><img src="${pst}" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="filmography-item-info"><strong>${t}</strong><span>${yr}</span><span class="character">${roleText}</span></div></div><div class="filmography-item-details">${renderCollapsibleText(i.overview)}<div class="filmography-actions">${act}</div></div></div>`;
+        }).join('');
+    };
+
+    const filterContainer = document.getElementById('filmography-filter');
+    if (filterContainer) {
+        filterContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.seg-btn');
+            if (btn) {
+                triggerHaptic('light');
+                filterContainer.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderFilmography(btn.dataset.filter);
+            }
+        });
+    }
+
+    const fgBtn = document.getElementById('toggle-filmography-btn');
+    if (fgBtn) {
+        fgBtn.addEventListener('click', () => {
+            const fWrapper = document.getElementById('full-filmography-wrapper');
+            if (fWrapper.style.display === 'block') { 
+                fWrapper.style.display = 'none'; 
+                fgBtn.textContent = 'Pokaż pełną filmografię'; 
+            } else {
+                if (document.getElementById('full-filmography-container').innerHTML === '') {
+                    renderFilmography('all'); 
+                }
+                fWrapper.style.display = 'block'; 
+                fgBtn.textContent = 'Ukryj filmografię';
+                setTimeout(() => {
+                    const scrollArea = c.querySelector('.modern-modal-scroll');
+                    scrollArea.scrollTo({ top: fWrapper.offsetTop - 20, behavior: 'smooth' });
+                }, 50);
+            }
+        });
+    }
+
     const favBtn = c.querySelector('#actor-fav-btn');
     favBtn.addEventListener('click', async () => {
         triggerHaptic('light');
         data.favoriteActors = data.favoriteActors || [];
         const idx = data.favoriteActors.findIndex(a => String(a.id) === String(actorId));
-        
         if (idx > -1) {
             data.favoriteActors.splice(idx, 1);
             favBtn.classList.remove('active');
-            showCustomAlert('Usunięto', 'Usunięto z ulubionych aktorów.', 'info');
+            showCustomAlert('Usunięto', 'Usunięto z ulubionych.', 'info');
         } else {
             data.favoriteActors.unshift({ id: actorId, name: ad.name, profile_path: ad.profile_path });
             favBtn.classList.add('active');
-            showCustomAlert('Dodano!', 'Aktor dodany do ulubionych.', 'success');
+            showCustomAlert('Dodano!', 'Twórca dodany do ulubionych.', 'success');
         }
         await saveData();
         if (viewState.activeMainTab === 'profile') renderProfileStats();
     });
 
-    // --- OBSŁUGA LOSOWANIA ---
     const randBtn = c.querySelector('#actor-randomize-btn');
     if (randBtn) {
         randBtn.addEventListener('click', () => {
@@ -3546,31 +3946,11 @@ async function openActorDetailsModal(actorId) {
             if (history.state && history.state.modalOpen) history.back();
 
             showCustomAlert('Losowanie...', `Z filmografii: ${ad.name}`, 'info');
-            
             setTimeout(() => {
                 const inLib = Object.values(data).flat().some(i => String(i.id) === String(winner.id) && i.type === winner.media_type);
                 if (inLib) openDetailsModal(winner.id, winner.media_type);
                 else openPreviewModal(winner.id, winner.media_type);
             }, 500);
-        });
-    }
-
-    const fgBtn = document.getElementById('toggle-filmography-btn');
-    if (fgBtn) {
-        fgBtn.addEventListener('click', () => {
-            const fc = document.getElementById('full-filmography-container');
-            if (fc.style.display === 'block') { fc.style.display = 'none'; fgBtn.textContent = 'Pokaż pełną filmografię'; }
-            else {
-                if (fc.innerHTML === '') {
-                    fc.innerHTML = ad.full_filmography.map(i => {
-                        const yr = (i.release_date || i.first_air_date || '----').substring(0, 4); const pst = i.poster_path ? IMAGE_BASE_URL.replace('w500', 'w92') + i.poster_path : POSTER_PLACEHOLDER;
-                        const isAdded = Object.values(data).flat().some(it => String(it.id) === String(i.id)); const t = escapeHTML(i.title || i.name);
-                        const act = isAdded ? `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Już na liście</span>` : `<button class="add-filmography-item-btn" data-id="${i.id}" data-type="${i.media_type}">Dodaj do obejrzenia</button>`;
-                        return `<div class="filmography-item"><div class="filmography-item-header"><img src="${pst}" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="filmography-item-info"><strong>${t}</strong><span>${yr}</span><span class="character">jako: ${escapeHTML(i.character) || 'Brak informacji'}</span></div></div><div class="filmography-item-details">${renderCollapsibleText(i.overview)}<div class="filmography-actions" style="margin-top:10px;">${act}</div></div></div>`;
-                    }).join('');
-                }
-                fc.style.display = 'block'; fgBtn.textContent = 'Ukryj filmografię';
-            }
         });
     }
 
@@ -3580,6 +3960,9 @@ async function openActorDetailsModal(actorId) {
 
     modal.addEventListener('click', e => {
         if (e.target === modal) close();
+        
+        if (e.target.closest('.segmented-control')) return;
+
         const kfItem = e.target.closest('.known-for-item');
         if (kfItem && kfItem.dataset.id && kfItem.dataset.type) {
             const rId = kfItem.dataset.id; const rType = kfItem.dataset.type;
@@ -3591,23 +3974,27 @@ async function openActorDetailsModal(actorId) {
             }, 50);
             return;
         }
-        const h = e.target.closest('.filmography-item-header'); if (h) { const d = h.nextElementSibling; if (d && d.classList.contains('filmography-item-details')) { d.style.display = d.style.display === 'block' ? 'none' : 'block'; } }
-        const add = e.target.closest('.add-filmography-item-btn'); if (add) addItemFromFilmography(add);
+        const h = e.target.closest('.filmography-item-header'); 
+        if (h) { 
+            const d = h.nextElementSibling; 
+            if (d && d.classList.contains('filmography-item-details')) { 
+                d.style.display = d.style.display === 'block' ? 'none' : 'block'; 
+            } 
+        }
+        
+               // NOWY NASŁUCHIWACZ KLIKNIĘCIA
+        const fgBtnAction = e.target.closest('.btn-fg-action'); 
+        if (fgBtnAction) {
+            processFilmographyAdd(fgBtnAction);
+        }
     });
     modal.querySelector('.modal-top-close-btn').addEventListener('click', close);
 }
 
-async function addItemFromFilmography(btn) {
-    btn.disabled = true; btn.textContent = 'Dodawanie...'; const { id, type } = btn.dataset;
-    const det = await getItemDetails(id, type);
-    if (!det) { btn.textContent = 'Błąd!'; showCustomAlert('Błąd', 'Brak danych.', 'error'); setTimeout(() => { btn.textContent = 'Dodaj do obejrzenia'; btn.disabled = false; }, 2000); return; }
-    det.dateAdded = Date.now(); det.customTags = [];
-    const tl = (type === 'movie' ? 'movies' : 'series') + 'ToWatch';
-    const mx = data[tl].length > 0 ? Math.max(...data[tl].map(i => i.customOrder || 0)) : -1; det.customOrder = mx + 1;
-    data[tl].unshift(det); await saveData();
-    btn.parentElement.innerHTML = `<span class="already-added-info"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Dodano!</span>`;
-    showCustomAlert('Dodano', `"${escapeHTML(det.title)}" w planowanych.`, 'success');
-}
+
+// --- NOWOŚĆ: Rozbudowana funkcja dodająca z Filmografii ---
+
+
 
 function setupInteractiveStars(item) {
     const container = document.querySelector('.star-rating-interactive'); if (!container) return;
@@ -5939,3 +6326,72 @@ document.addEventListener("visibilitychange", () => {
         updateDatesAndRunNotifications();
     }
 });
+// NOWA, CAŁKOWICIE NIEZALEŻNA FUNKCJA DODAWANIA Z FILMOGRAFII
+async function processFilmographyAdd(btn) {
+    // Blokujemy przyciski
+    btn.parentElement.querySelectorAll('button').forEach(b => b.disabled = true);
+    const originalText = btn.textContent;
+    btn.textContent = 'Ładowanie...'; 
+    
+    // Pobieramy NOWE atrybuty (żaden stary kod ich nie przechwyci)
+    const id = btn.dataset.itemid;
+    const type = btn.dataset.itemtype;
+    const targetList = btn.dataset.dest; // Będzie to 'toWatch' lub 'watched'
+    
+    const det = await getItemDetails(id, type);
+    
+    if (!det) { 
+        showCustomAlert('Błąd', 'Brak pełnych danych z serwera.', 'error'); 
+        btn.parentElement.querySelectorAll('button').forEach(b => b.disabled = false); 
+        btn.textContent = originalText;
+        return; 
+    }
+
+    // Dodatkowe zabezpieczenie: Nie pozwalamy dodać niewydanego filmu do "Obejrzanych"
+    if (targetList === 'watched') {
+        if (type === 'tv' && !isSeriesFinished(det)) { 
+            showCustomAlert('Uwaga', 'Ten serial nadal trwa. Dodaj go do "Do obejrzenia".', 'info'); 
+            btn.parentElement.querySelectorAll('button').forEach(b => b.disabled = false); 
+            btn.textContent = originalText;
+            return; 
+        }
+        if (type === 'movie' && det.releaseDate) { 
+            const td = new Date(); td.setHours(0, 0, 0, 0); 
+            const rd = new Date(det.releaseDate); rd.setHours(0, 0, 0, 0); 
+            if (rd > td) { 
+                showCustomAlert('Uwaga', 'Ten film nie miał jeszcze premiery.', 'info'); 
+                btn.parentElement.querySelectorAll('button').forEach(b => b.disabled = false); 
+                btn.textContent = originalText;
+                return; 
+            } 
+        }
+    }
+
+    det.dateAdded = Date.now(); 
+    det.customTags = [];
+    
+    // Budujemy klucz bazy danych
+    const listSuffix = targetList === 'watched' ? 'Watched' : 'ToWatch';
+    const listKey = (type === 'movie' ? 'movies' : 'series') + listSuffix;
+    
+    if (targetList === 'toWatch') {
+        const mx = data[listKey].length > 0 ? Math.max(...data[listKey].map(i => i.customOrder || 0)) : -1; 
+        det.customOrder = mx + 1;
+    } else {
+        det.rating = null; 
+        det.review = ""; 
+        det.watchDates = [Date.now()];
+    }
+
+    data[listKey].unshift(det); 
+    await saveData();
+    
+    // Sukces - odświeżamy UI
+    btn.parentElement.innerHTML = `
+        <span class="already-added-info" style="justify-content: flex-start; margin-top: 8px;">
+            <svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> 
+            ${targetList === 'watched' ? 'Dodano do Obejrzanych' : 'Dodano do Planowanych'}
+        </span>`;
+        
+    showCustomAlert('Sukces!', targetList === 'watched' ? 'Tytuł trafił do Twojej historii!' : 'Tytuł trafił do kolejki.', 'success');
+}
