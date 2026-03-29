@@ -6094,3 +6094,15 @@ html, body {
 #sub-header {
     touch-action: none !important; 
 }
+/* ==========================================
+   OPTYMALIZACJA NAKŁADANIA MODALI (GPU FIX)
+========================================== */
+/* Kiedy aplikacja ma więcej niż jedno okno (np. Aktor nałożony na Film),
+   wszystkie kolejne nakładki tracą efekt rozmycia, żeby nie zawiesić telefonu. */
+body[data-modal-depth="2"] #actorModalContainer .modal-overlay,
+body[data-modal-depth="3"] #actorModalContainer .modal-overlay,
+body[data-modal-depth="4"] #actorModalContainer .modal-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0, 0, 0, 0.4) !important; /* Lżejsze przyciemnienie */
+}
