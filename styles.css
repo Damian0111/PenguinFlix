@@ -6107,31 +6107,155 @@ body[data-modal-depth="4"] #actorModalContainer .modal-overlay {
     background: rgba(0, 0, 0, 0.4) !important; /* Lżejsze przyciemnienie */
 }
 /* ==========================================
-   HARDWARE ACCELERATION (FIX NA MIGOTANIE I PRZEBIJANIE TŁA)
+   BEZPIECZNA AKCELERACJA GPU (FIX NA MIGOTANIE)
 ========================================== */
 .modal-overlay {
-    /* Wymusza na telefonie osobną warstwę GPU dla rozmytego tła */
     transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    will-change: opacity;
 }
 
 .modern-modal-wrapper {
-    /* Blokuje "przebijanie" warstw pod spodem podczas przesuwania palcem */
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
+    /* Używamy translate3d, które jest najbezpieczniejsze dla urządzeń mobilnych */
+    transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    will-change: transform;
-    
-    /* Dodatkowe zabezpieczenie: nieprzezroczysty cień ukrywa ewentualne niedoskonałości renderowania krawędzi */
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 24px 48px rgba(0, 0, 0, 0.6) !important;
 }
 
-/* Lżejsze dla procesora przejście tła pod spodem */
+/* RESETUJEMY BŁĘDNY KOD - Przywraca błyskawiczną prędkość aplikacji! */
 #fixed-header,
 #sub-header,
 main#app,
 .bottom-nav {
-    will-change: transform, filter;
+    will-change: auto !important; 
+}
+/* ==========================================
+   WŁASNE IKONY NAWIGACJI (MASK IMAGE)
+========================================== */
+.custom-nav-icon {
+    width: 24px;
+    height: 24px;
+    background-color: var(--text-secondary); /* Domyślny szary */
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Kiedy zakładka jest aktywna, nasza wgrana ikona dostaje główny kolor i rośnie */
+.nav-item.active .custom-nav-icon {
+    background-color: var(--primary-color);
+    transform: scale(1.15) translateY(-1px);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Style dla listy zarządzania ikonami w modalu */
+.icon-manager-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: color-mix(in srgb, var(--bg-color) 50%, var(--card-color));
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+}
+
+.icon-manager-preview {
+    width: 32px;
+    height: 32px;
+    background-color: var(--text-color);
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+}
+
+
+/* ==========================================
+   GLOBALNE WŁASNE IKONY (ODBLOKOWANE ANIMACJE)
+========================================== */
+
+/* Zwykła ikona (ustawienia, listy) */
+.sys-custom-raw-icon {
+    display: inline-block !important;
+    /* Ucinamy fizycznie do 20px zamiast blokować transformacją! */
+    width: 20px !important;  
+    height: 20px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Ikony zmaskowane (akcje, dolny pasek) */
+.sys-custom-icon {
+    display: inline-block !important;
+    background-color: currentColor !important; 
+    -webkit-mask-size: contain !important;
+    -webkit-mask-repeat: no-repeat !important;
+    -webkit-mask-position: center !important;
+    mask-size: contain !important;
+    mask-repeat: no-repeat !important;
+    mask-position: center !important;
+    /* Ucinamy fizycznie do 20px zamiast blokować transformacją! */
+    width: 20px !important; 
+    height: 20px !important;
+    flex-shrink: 0 !important;
+    vertical-align: middle !important;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Kolorowanie akcji (Gwiazdka, Kosz, Notatka) */
+.hero-fav-btn.active .sys-custom-icon,
+.note-btn-active .sys-custom-icon {
+    background-color: var(--warning-color) !important;
+}
+.delete-btn:hover .sys-custom-icon {
+    background-color: var(--primary-color) !important;
+}
+
+/* ==========================================
+   AKTYWNY STAN NAWIGACJI DOLNEJ
+========================================== */
+.nav-item.active {
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--text-color) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text-color) 12%, transparent);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, #ffffff 15%, transparent), 0 4px 12px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Domyślne SVG rośnie */
+.nav-item.active svg {
+    fill: var(--primary-color);
+    transform: scale(1.15) translateY(-1px);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Nasza wgrana ikona rośnie FIZYCZNIE, by nie psuć transformacji */
+.nav-item.active .sys-custom-icon {
+    background-color: var(--primary-color) !important;
+    width: 24px !important; 
+    height: 24px !important;
+    transform: translateY(-1px);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* ==========================================
+   KOSTKA LOSOWANIA (NAPRAWA ANIMACJI)
+========================================== */
+/* Kostka musi być ociupinę większa od reszty ikon (28px) */
+.fab-randomizer .sys-custom-icon,
+.fab-randomizer .sys-custom-raw-icon {
+    width: 28px !important;
+    height: 28px !important;
+    background-color: white !important;
+}
+
+/* Teraz animacja z @keyframes zadziała perfekcyjnie! */
+.fab-randomizer.rolling svg,
+.fab-randomizer.rolling .sys-custom-icon,
+.fab-randomizer.rolling .sys-custom-raw-icon {
+    animation: rollDice 0.6s ease-in-out forwards !important;
 }
