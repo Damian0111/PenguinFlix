@@ -3,8 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content" />
   <title>PenguinFlix - Twój Dziennik Filmowy</title>
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
   <link rel="preconnect" href="https://api.themoviedb.org" crossorigin />
@@ -292,6 +291,27 @@
                 </div>
                 <div class="toggle-switch"><input type="checkbox" id="smart-notifications-checkbox" /><div class="slider"></div></div>
               </label>
+              <!-- NOWOŚĆ: Przełącznik Blokady Ekranu (Wake Lock) -->
+<label class="settings-item modern-toggle-row" style="margin-bottom: 0; border-bottom: 1px solid var(--border-color) !important; border-radius: 0;">
+  <div style="display: flex; align-items: center; gap: 16px">
+    <svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+    <div style="display: flex; flex-direction: column;">
+      <span class="text" style="line-height: 1.2;">Nie usypiaj ekranu</span>
+      <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: normal; margin-top: 2px;">Zapobiega wygaszaniu podczas czytania</span>
+    </div>
+  </div>
+  <div class="toggle-switch"><input type="checkbox" id="wakelock-checkbox" /><div class="slider"></div></div>
+</label>
                <!-- NOWOŚĆ: Przełącznik Dużych Kafelków -->
               <label class="settings-item modern-toggle-row" style="margin-bottom: 0; border-bottom: 1px solid var(--border-color) !important; border-radius: 0;">
                 <div style="display: flex; align-items: center; gap: 16px">
