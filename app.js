@@ -6,8 +6,61 @@ const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 const POSTER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22%3E%3Crect width=%22200%22 height=%22300%22 fill=%22%23202227%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%238e9297%22 font-size=%2218%22 font-family=%22sans-serif%22%3EBrak okładki%3C/text%3E%3C/svg%3E";
 
 let hapticsEnabled = localStorage.getItem('hapticsEnabled') !== 'false';
+let globalModalZIndex = 2000;
+let currentModalDepth = 0; 
 let largeGridEnabled = localStorage.getItem('largeGridEnabled') === 'true';
 let API_KEY = localStorage.getItem('tmdbApiKey') || '';
+// ==========================================
+// INTELIGENTNY MANAGER BLOKADY EKRANU (WAKE LOCK)
+// ==========================================
+const WakeLockManager = {
+    sentinel: null,
+    enabled: localStorage.getItem('wakeLockEnabled') === 'true',
+
+    async request() {
+        if (!this.enabled) return;
+        // Sprawdzamy, czy przeglądarka to obsługuje (iOS wspiera od wersji 16.4)
+        if ('wakeLock' in navigator) {
+            try {
+                this.sentinel = await navigator.wakeLock.request('screen');
+                console.log('Wake Lock aktywny: Ekran nie zgaśnie.');
+                
+                this.sentinel.addEventListener('release', () => {
+                    console.log('Wake Lock zwolniony.');
+                });
+            } catch (err) {
+                console.warn('Wake Lock zablokowany (np. przez niski stan baterii):', err);
+            }
+        }
+    },
+
+    release() {
+        if (this.sentinel !== null) {
+            this.sentinel.release();
+            this.sentinel = null;
+        }
+    },
+
+    toggle(isOn) {
+        this.enabled = isOn;
+        localStorage.setItem('wakeLockEnabled', isOn);
+        if (isOn) {
+            this.request();
+            showCustomAlert('Włączono', 'Ekran nie zgaśnie podczas korzystania.', 'success');
+        } else {
+            this.release();
+            showCustomAlert('Wyłączono', 'Ekran będzie gasł standardowo.', 'info');
+        }
+    }
+};
+
+// System sam wyłącza Wake Lock po wyjściu z aplikacji, 
+// więc musimy go odnowić, gdy użytkownik wraca:
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && WakeLockManager.enabled) {
+        WakeLockManager.request();
+    }
+});
 let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
 let fullSearchResults = [];
 
@@ -152,28 +205,48 @@ const toggleTheme = () => {
     document.getElementById('theme-color-meta').setAttribute('content', newTheme === 'dark' ? '#101114' : '#f0f2f5');
 };
 
+
 const toggleAppDepthEffect = (isActive) => {
     const themeMeta = document.getElementById('theme-color-meta');
     const currentTheme = document.body.dataset.theme || 'dark';
-    // Domyślne kolory z Twojego CSS
-    const defaultColor = currentTheme === 'dark' ? '#101114' : '#f0f2f5';
+    const defaultColor = currentTheme === 'dark' ? '#101114' : (currentTheme === 'amoled' ? '#000000' : '#f0f2f5');
 
     if (isActive) {
         document.body.classList.add('modal-active');
-        // Kiedy otwiera się modal, górny pasek telefonu staje się czarny (jak tło modala)
         if (themeMeta) themeMeta.setAttribute('content', '#000000');
     } else {
         setTimeout(() => {
-            const isAnyModalOpen = document.getElementById('detailsModalContainer').innerHTML !== '' ||
-                document.getElementById('actorModalContainer').innerHTML !== '';
-            if (!isAnyModalOpen) {
+            const anyModalLeft = document.querySelectorAll('.modal-overlay, .modern-alert-overlay, #trailerModalOverlay').length > 0;
+            
+            if (!anyModalLeft) {
                 document.body.classList.remove('modal-active');
-                // Gdy modal się zamknie, pasek telefonu wraca do normalnego koloru
                 if (themeMeta) themeMeta.setAttribute('content', defaultColor);
+                
+                // DODAJ TĘ LINIJKĘ: Resetujemy licznik, bo ekran jest czysty
+                globalModalZIndex = 2000;
             }
         }, 50);
     }
 };
+function closeAllModals() {
+    triggerHaptic('heavy'); // Mocna wibracja na znak "resetu"
+    
+    // 1. Czyścimy cały HTML z okien na raz
+    document.getElementById('detailsModalContainer').innerHTML = '';
+    document.getElementById('actorModalContainer').innerHTML = '';
+    document.getElementById('trailerModalContainer').innerHTML = '';
+    
+    // 2. Resetujemy tło i liczniki
+    toggleAppDepthEffect(false);
+    globalModalZIndex = 2000;
+    
+    // 3. Cofamy historię przeglądarki o tyle kroków, ile mieliśmy okien!
+    if (currentModalDepth > 0) {
+        const depthToGoBack = -currentModalDepth;
+        currentModalDepth = 0;
+        history.go(depthToGoBack); 
+    }
+}
 
 // ==========================================
 // 4. API WRAPPER (Fetch)
@@ -265,6 +338,21 @@ function setupEventListeners() {
             localStorage.setItem('hapticsEnabled', hapticsEnabled);
             if (hapticsEnabled) triggerHaptic('success');
         });
+
+    }
+        // --- OBSŁUGA PRZEŁĄCZNIKA WAKE LOCK ---
+    const wakeLockCb = document.getElementById('wakelock-checkbox');
+    if (wakeLockCb) {
+        wakeLockCb.checked = WakeLockManager.enabled;
+        wakeLockCb.addEventListener('change', (e) => {
+            triggerHaptic('light');
+            WakeLockManager.toggle(e.target.checked);
+        });
+    }
+
+    // Uruchom podczas startu aplikacji, jeśli opcja była zaznaczona w przeszłości:
+    if (WakeLockManager.enabled) {
+        WakeLockManager.request();
     }
         // --- OBSŁUGA DUŻYCH KAFELKÓW (2 KOLUMNY) ---
     const largeGridCb = document.getElementById('large-grid-checkbox');
@@ -295,6 +383,19 @@ function setupEventListeners() {
         if (!isInput && !isAvatar) {
             e.preventDefault();
             e.stopPropagation();
+        }
+    }, { passive: false });
+        // --- ŻELAZNA TARCZA 4.0: BLOKADA RUBBER-BANDINGU (OVERSCROLL) ---
+    document.addEventListener('touchmove', function(e) {
+        // Sprawdzamy, czy użytkownik dotyka elementu, który FAKTYCZNIE jest przewijalny
+        const isScrollableContainer = e.target.closest('.modern-modal-scroll, .fp-content, #searchResults, .notification-list, .cast-scroller, .known-for-scroller, .discover-categories-wrapper, .stats-poster-wall, .control-modal-options');
+        
+        // Zostawiamy w spokoju główny kontener (mainContent ma własną obsługę Pull-to-Refresh w innej części kodu)
+        const isMainContent = e.target.closest('#mainContent');
+
+        // Jeśli ktoś próbuje przeciągać palcem po zablokowanym tle (np. zaciemnionym overlay'u modala, dolnym pasku, nagłówku) -> BLOKUJEMY RUCH
+        if (!isScrollableContainer && !isMainContent) {
+            e.preventDefault();
         }
     }, { passive: false });
 
@@ -337,41 +438,47 @@ function setupEventListeners() {
 
     // --- NATYWNY GEST WSTECZ (TELEFONY I PRZEGLĄDARKI) ---
     
-        // --- NATYWNY GEST WSTECZ (TELEFONY I PRZEGLĄDARKI) ---
-    window.addEventListener('popstate', (e) => {
-        const trailer = document.getElementById('trailerModalContainer');
-        const actor = document.getElementById('actorModalContainer');
-        const details = document.getElementById('detailsModalContainer');
+     window.addEventListener('popstate', (e) => {
+        currentModalDepth = Math.max(0, currentModalDepth - 1);
+        // 1. Szukamy WSZYSTKICH otwartych okien na ekranie
+        const allOverlays = document.querySelectorAll('.modal-overlay, .modern-alert-overlay, #trailerModalOverlay');
+        
+        if (allOverlays.length > 0) {
+            // Sortujemy je po z-index, żeby znaleźć to na samym wierzchu
+            const sorted = Array.from(allOverlays).sort((a, b) => {
+                const zA = parseInt(window.getComputedStyle(a).zIndex) || 0;
+                const zB = parseInt(window.getComputedStyle(b).zIndex) || 0;
+                return zA - zB;
+            });
+            
+            const topmost = sorted[sorted.length - 1];
+            
+            // Usuwamy tylko najwyższe okno!
+            if (topmost.parentElement && topmost.parentElement.style.display === 'contents') {
+                topmost.parentElement.remove(); // Usuwa kartę ze stosu (Filmy/Aktorzy)
+            } else {
+                topmost.remove(); // Usuwa zwykłe modale (Zwiastuny, Alerty)
+            }
+            
+            toggleAppDepthEffect(false); // Wyłączy tło, tylko jeśli to było ostatnie okno
+            return; // Przerwanie - cofnęliśmy jedno okno
+        }
+
         const statsPage = document.getElementById('full-stats-page'); 
 
-        // Zamykanie zwiastuna
-        if (trailer && trailer.innerHTML !== '') { trailer.innerHTML = ''; return; }
-        
-        // Zamykanie aktora
-        if (actor && actor.innerHTML !== '') { actor.innerHTML = ''; toggleAppDepthEffect(false); return; }
-        
-        // Zamykanie detali filmu/serialu
-        if (details && details.innerHTML !== '') { details.innerHTML = ''; toggleAppDepthEffect(false); return; }
-
-        // --- OBSŁUGA COFANIA W STATYSTYKACH ---
+        // 2. Obsługa cofania w Pełnoekranowych Statystykach
         if (statsPage && statsPage.classList.contains('active')) {
-            // Jeśli cofamy się i w historii JEST zapisana poprzednia zakładka statystyk:
             if (e.state && e.state.statsPageOpen && e.state.statsTab) {
-                if (typeof statsHistorySteps !== 'undefined') statsHistorySteps--; // Zmniejszamy licznik
-                
-                // Zmieniamy zakładkę wizualnie (bez tworzenia nowej historii)
+                if (typeof statsHistorySteps !== 'undefined') statsHistorySteps--; 
                 const tabId = e.state.statsTab;
                 statsPage.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
                 const btn = statsPage.querySelector(`.seg-btn[data-fptab="${tabId}"]`);
                 if (btn) btn.classList.add('active');
-                
                 statsPage.querySelectorAll('.fp-tab-content').forEach(c => c.classList.remove('active'));
                 const tab = document.getElementById(`fp-tab-${tabId}`);
                 if (tab) tab.classList.add('active');
-                
-                return; // Przerywamy, okno zostaje otwarte na poprzedniej zakładce!
+                return; 
             } else {
-                // Jeśli cofnęliśmy się aż do początku (poza statystyki) - zamykamy panel
                 if (typeof statsHistorySteps !== 'undefined') statsHistorySteps = 0;
                 statsPage.classList.remove('active');
                 statsPage.style.transform = ''; 
@@ -380,7 +487,7 @@ function setupEventListeners() {
             }
         }
 
-        // Standardowa nawigacja (jeśli nic innego nie jest otwarte)
+        // 3. Standardowa nawigacja (jeśli nic innego nie jest otwarte)
         if (e.state) {
             if (e.state.mainTab && e.state.mainTab !== viewState.activeMainTab) {
                 switchMainTab(e.state.mainTab, true);
@@ -393,7 +500,6 @@ function setupEventListeners() {
             }
         }
     });
-
     // --- OBSŁUGA PRZYCISKU WRÓĆ NA GÓRĘ ---
     const scrollToTopBtn = document.getElementById('scrollToTopBtn');
     if (scrollToTopBtn) {
@@ -409,13 +515,18 @@ function setupEventListeners() {
     }
 
      // --- NAWIGACJA ZAKŁADEK (Ulepszona o Scroll-To-Top) ---
-    document.querySelector('.bottom-nav').addEventListener('click', (e) => {
+       document.querySelector('.bottom-nav').addEventListener('click', (e) => {
         const navItem = e.target.closest('.nav-item');
         if (navItem) {
             if (!navItem.classList.contains('active')) {
-                switchMainTab(navItem.dataset.maintab);
+                const tabId = navItem.dataset.maintab;
+                // MAGIA VIEW TRANSITIONS:
+                if (document.startViewTransition) {
+                    document.startViewTransition(() => switchMainTab(tabId));
+                } else {
+                    switchMainTab(tabId); // Fallback dla starych przeglądarek
+                }
             } else {
-                // Jeśli kliknięto w aktywną zakładkę -> Przewiń na samą górę!
                 triggerHaptic('light');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
@@ -1763,12 +1874,24 @@ function renderProfileStats() {
         data.favoriteActors = data.favoriteActors || [];
         let favActorsHTML = '';
         if (data.favoriteActors.length > 0) {
-                   const actorCards = data.favoriteActors.map(a => `
-            <div class="cast-member draggable-actor" data-actor-id="${a.id}">
-                <img src="${a.profile_path ? IMAGE_BASE_URL.replace('w500', 'w200') + a.profile_path : POSTER_PLACEHOLDER}" style="pointer-events: none;" onerror="this.outerHTML = ICONS.person;">
-                <strong style="pointer-events: none;">${escapeHTML(a.name)}</strong>
-            </div>
-        `).join('');
+          const actorCards = data.favoriteActors.map(a => {
+    // Fallback: jeśli ktoś dodał ulubieńca na starej wersji apki, domyślnie ustawiamy go jako Aktora
+    const isDir = a.isDirector === true;
+    const isAct = a.isActor !== false; 
+
+    let rClass = 'role-actor';
+    let rText = 'Aktor';
+    if (isDir && isAct) { rClass = 'role-both'; rText = 'Reżyseria & Rola'; }
+    else if (isDir) { rClass = 'role-director'; rText = 'Reżyser'; }
+
+    return `
+    <div class="cast-member draggable-actor ${rClass}" data-actor-id="${a.id}">
+        <img src="${a.profile_path ? IMAGE_BASE_URL.replace('w500', 'w200') + a.profile_path : POSTER_PLACEHOLDER}" style="pointer-events: none;" onerror="this.outerHTML = ICONS.person;">
+        <strong style="pointer-events: none;">${escapeHTML(a.name)}</strong>
+        <span class="role-label" style="pointer-events: none;">${rText}</span>
+    </div>
+    `;
+}).join('');
             favActorsHTML = `<div class="cast-scroller" id="fav-actors-container" style="margin-top: 12px; padding-bottom: 4px;">${actorCards}</div>`;
         } else {
             favActorsHTML = '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px; line-height: 1.4;">Brak ulubionych aktorów. Kliknij gwiazdkę przy zdjęciu aktora, aby go tu dodać!</div>';
@@ -2687,7 +2810,10 @@ function getModalHeaderHTML(item, isAdded) {
     let rTime = ''; if (item.type === 'movie' && item.runtime) rTime = ` • ${formatRuntime(item.runtime)}`;
     let sBadge = item.type === 'tv' ? getStatusBadge(item.status) : '';
 
+     const closeAllBtn = currentModalDepth >= 2 ? `<button class="modal-close-all-btn" onclick="closeAllModals()" title="Wróć do ekranu głównego"><svg viewBox="0 0 24 24"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg> Powrót do panelu głównego</button>` : '';
+
     return `<div class="modal-drag-handle"></div>
+    ${closeAllBtn}
     <button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button>
     <div class="modal-hero-header">
         <div class="hero-bg-img" style="background-image: url('${bgImage}'); ${bgFilter}"></div>
@@ -2784,12 +2910,26 @@ async function openFullReviewsModal(id, type) {
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
+        currentModalDepth++;
 
     const dModal = document.getElementById('detailsModalContainer');
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
+    
+    // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
+    if (dModal.children.length >= 15) {
+        showCustomAlert('Limit okien', 'Osiągnięto limit zakładek. Cofnij się, aby przeglądać dalej.', 'info');
+        history.back(); return;
+    }
+    const modalNode = document.createElement('div');
+    modalNode.style.display = 'contents';
+    dModal.appendChild(modalNode);
+        globalModalZIndex += 10;
+    const zIndex = globalModalZIndex;
+    // ----------------------------------------------
+
+    modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
 
     const item = await getItemDetails(id, type);
-    if (!item) { dModal.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych.', 'error'); return; }
+    if (!item) { modalNode.remove(); toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych.', 'error'); history.back(); return; }
 
     const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
     const localItem = Object.values(data).flat().find(i => String(i.id) === String(id) && i.type === type);
@@ -2809,112 +2949,37 @@ async function openPreviewModal(id, type) {
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:10px;">${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
-      // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
-       // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
-    const formatMoney = (num) => {
-        if (num >= 1000000000) return '$' + (num / 1000000000).toFixed(1) + ' mld';
-        if (num >= 1000000) return '$' + Math.round(num / 1000000) + ' mln';
-        return '$' + new Intl.NumberFormat('pl-PL').format(num);
-    };
-
-    const translateAgeRating = (rating) => {
-        if (!rating) return null;
-        const r = String(rating).toUpperCase().trim();
-        const map = {
-            'R': '18+', 'NC-17': '18+', 'TV-MA': '18+',
-            'PG-13': '13+', 'TV-14': '16+',
-            'PG': 'Za zgodą rodziców', 'TV-PG': 'Za zgodą rodziców',
-            'G': 'Dla każdego', 'TV-G': 'Dla każdego', 'TV-Y': 'Dla dzieci', 'TV-Y7': '7+',
-            '12': '12+', '16': '16+', '18': '18+'
-        };
-        return map[r] || rating;
-    };
+    const formatMoney = (num) => { if (num >= 1000000000) return '$' + (num / 1000000000).toFixed(1) + ' mld'; if (num >= 1000000) return '$' + Math.round(num / 1000000) + ' mln'; return '$' + new Intl.NumberFormat('pl-PL').format(num); };
+    const translateAgeRating = (rating) => { if (!rating) return null; const r = String(rating).toUpperCase().trim(); const map = { 'R': '18+', 'NC-17': '18+', 'TV-MA': '18+', 'PG-13': '13+', 'TV-14': '16+', 'PG': 'Za zgodą rodziców', 'TV-PG': 'Za zgodą rodziców', 'G': 'Dla każdego', 'TV-G': 'Dla każdego', 'TV-Y': 'Dla dzieci', 'TV-Y7': '7+', '12': '12+', '16': '16+', '18': '18+' }; return map[r] || rating; };
 
     let triviaListHTML = '';
+    if (item.creator && typeof item.creator === 'object') { triviaListHTML += `<div class="trivia-item director-link" onclick="openActorDetailsModal('${item.creator.id}')"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div><div class="trivia-value">${escapeHTML(item.creator.name)} <svg class="director-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></div></div>`; } else if (item.creator) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div><div class="trivia-value">${escapeHTML(item.creator)}</div></div>`; }
+    if (item.ageRating) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span class="trivia-label">Kategoria wiekowa</span></div><div class="trivia-value">${escapeHTML(translateAgeRating(item.ageRating))}</div></div>`; }
+    if (item.country) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="trivia-label">Produkcja</span></div><div class="trivia-value">${escapeHTML(item.country)}</div></div>`; }
+    if (item.type === 'movie' && item.budget > 10000) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span class="trivia-label">Budżet</span></div><div class="trivia-value">${formatMoney(item.budget)}</div></div>`; }
+    if (item.type === 'movie' && item.revenue > 10000) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span class="trivia-label">Box Office</span></div><div class="trivia-value" style="color: var(--success-color);">${formatMoney(item.revenue)}</div></div>`; }
     
-    // Twórca / Reżyser
-    if (item.creator && typeof item.creator === 'object') {
-        triviaListHTML += `
-        <div class="trivia-item director-link" onclick="openActorDetailsModal('${item.creator.id}')">
-            <div class="trivia-label-group">
-                <svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                <span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span>
-            </div>
-            <div class="trivia-value">${escapeHTML(item.creator.name)} <svg class="director-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
-        </div>`;
-    } else if (item.creator) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div>
-            <div class="trivia-value">${escapeHTML(item.creator)}</div>
-        </div>`;
-    }
-
-    // Wiek
-    if (item.ageRating) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span class="trivia-label">Kategoria wiekowa</span></div>
-            <div class="trivia-value">${escapeHTML(translateAgeRating(item.ageRating))}</div>
-        </div>`;
-    }
-
-    // Kraj
-    if (item.country) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="trivia-label">Produkcja</span></div>
-            <div class="trivia-value">${escapeHTML(item.country)}</div>
-        </div>`;
-    }
-
-    // Budżet
-    if (item.type === 'movie' && item.budget > 10000) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span class="trivia-label">Budżet</span></div>
-            <div class="trivia-value">${formatMoney(item.budget)}</div>
-        </div>`;
-    }
-
-    // Przychody
-    if (item.type === 'movie' && item.revenue > 10000) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span class="trivia-label">Box Office</span></div>
-            <div class="trivia-value" style="color: var(--success-color);">${formatMoney(item.revenue)}</div>
-        </div>`;
-    }
-    
-    let triviaSectionHTML = triviaListHTML !== '' ? `
-        <div class="rewatch-section trivia-section">
-            <div class="rewatch-accordion-header">
-                <h3 class="rewatch-accordion-title">
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                    Informacje i ciekawostki
-                </h3>
-                <svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
-            <div class="rewatch-accordion-content">
-                <div class="trivia-list-group">${triviaListHTML}</div>
-            </div>
-        </div>
-    ` : '';
-
+    let triviaSectionHTML = triviaListHTML !== '' ? `<div class="rewatch-section trivia-section"><div class="rewatch-accordion-header"><h3 class="rewatch-accordion-title"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>Informacje i ciekawostki</h3><svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></div><div class="rewatch-accordion-content"><div class="trivia-list-group">${triviaListHTML}</div></div></div>` : '';
     let taglineHTML = item.tagline ? `<div class="movie-tagline-premium">"${escapeHTML(item.tagline)}"</div>` : '';
-    // --- RENDER MODALA ---
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
-    const modal = dModal.querySelector('.modal-overlay');
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); if (history.state && history.state.modalOpen) history.back(); };
+    modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
-      modal.addEventListener('click', async (e) => {
+    const modal = modalNode.querySelector('.modal-overlay');
+    
+    // NOWA FUNKCJA ZAMYKAJĄCA (Bez usuwania tła, jeśli jest więcej okien)
+    const close = () => { 
+        if (history.state && history.state.modalOpen) {
+            history.back(); // Gest usunie okno i naprawi tło
+        } else {
+            modalNode.remove(); 
+            toggleAppDepthEffect(false); 
+        }
+    };
+
+    modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
-        
-        // TO JEST KLUCZOWE - otwiera Ciekawostki!
         const accordionHeader = e.target.closest('.rewatch-accordion-header');
         if (accordionHeader) { triggerHaptic('light'); accordionHeader.parentElement.classList.toggle('expanded'); return; }
-        
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
         const rec = e.target.closest('.recommendation-item');
         if (rec) {
@@ -2925,7 +2990,7 @@ async function openPreviewModal(id, type) {
         const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) {
             if (localItem) { localItem.customTags = localItem.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); }
-            openPreviewModal(id, type); return;
+            openPreviewModal(id, type); return; // Uwaga, odświeżenie tu tworzy nową kartę. Możesz to zoptymalizować w przyszłości.
         }
     });
     modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
@@ -2936,50 +3001,37 @@ async function openPreviewModal(id, type) {
     const pinBtn = modal.querySelector('#modal-pin-btn');
     if (pinBtn && localItem) {
         pinBtn.addEventListener('click', async (e) => {
-            triggerHaptic('light');
-            localItem.isPinned = !localItem.isPinned;
-            e.currentTarget.style.background = localItem.isPinned ? 'var(--info-color)' : 'var(--card-color)';
-            e.currentTarget.style.borderColor = localItem.isPinned ? 'var(--info-color)' : 'var(--border-color)';
-            e.currentTarget.style.color = localItem.isPinned ? '#ffffff' : 'var(--text-secondary)';
-            await saveData();
-            const listId = getActiveListId();
-            if (listId) renderList(data[listId], listId, true);
+            triggerHaptic('light'); localItem.isPinned = !localItem.isPinned;
+            e.currentTarget.style.background = localItem.isPinned ? 'var(--info-color)' : 'var(--card-color)'; e.currentTarget.style.borderColor = localItem.isPinned ? 'var(--info-color)' : 'var(--border-color)'; e.currentTarget.style.color = localItem.isPinned ? '#ffffff' : 'var(--text-secondary)';
+            await saveData(); const listId = getActiveListId(); if (listId) renderList(data[listId], listId, true);
         });
     }
 
     const shareBtn = modal.querySelector('#modal-share-btn');
-    if (shareBtn) {
-        shareBtn.addEventListener('click', (e) => {
-            const btn = e.currentTarget;
-            handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
-        });
-    }
+    if (shareBtn) shareBtn.addEventListener('click', (e) => { handleNativeShare(decodeURIComponent(e.currentTarget.dataset.title || ''), e.currentTarget.dataset.poster, e.currentTarget.dataset.year, e.currentTarget.dataset.rating, decodeURIComponent(e.currentTarget.dataset.overview || '')); });
 
-    getWatchProviders(id, type).then(p => { const c = document.getElementById('providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
-    getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
-    getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
+    getWatchProviders(id, type).then(p => { const c = modalNode.querySelector('#providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
+    getRecommendations(id, type).then(r => { const c = modalNode.querySelector('#recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
+    getTrailerKey(id, type).then(tk => { if (tk) { const c = modalNode.querySelector('#trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     getCredits(id, type).then(c => { 
-        const cc = document.getElementById('cast-container'); 
+        const cc = modalNode.querySelector('#cast-container'); 
         if (cc && c.length > 0) { 
             const favIds = (data.favoriteActors || []).map(a => String(a.id));
             const cH = c.map(m => {
-                const isFav = favIds.includes(String(m.id));
-                const imgStyle = isFav ? 'border: 2px solid var(--warning-color); box-shadow: 0 0 12px color-mix(in srgb, var(--warning-color) 40%, transparent);' : '';
-                const favBadge = isFav ? `<div style="position:absolute; top:-5px; right:15px; font-size:1.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); z-index:5;">⭐</div>` : '';
+                const isFav = favIds.includes(String(m.id)); const imgStyle = isFav ? 'border: 2px solid var(--warning-color); box-shadow: 0 0 12px color-mix(in srgb, var(--warning-color) 40%, transparent);' : ''; const favBadge = isFav ? `<div style="position:absolute; top:-5px; right:15px; font-size:1.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); z-index:5;">⭐</div>` : '';
                 return `<div class="cast-member" data-actor-id="${m.id}" style="position:relative;">${favBadge}<img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" style="${imgStyle}" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`;
             }).join(''); 
             cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; 
         } 
     });
-    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
+    getReviews(id, type).then(revs => { const c = modalNode.querySelector('#reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
 
     if (!isAlreadyAdded) {
-        const wBtn = document.getElementById('previewAddToWatchBtn'); const wdBtn = document.getElementById('previewAddToWatchedBtn');
+        const wBtn = modalNode.querySelector('#previewAddToWatchBtn'); const wdBtn = modalNode.querySelector('#previewAddToWatchedBtn');
         if (wBtn) wBtn.onclick = async () => { if (await addItemToList(id, type, 'toWatch')) close(); };
         if (wdBtn) wdBtn.onclick = async () => { if (await addItemToList(id, type, 'watched')) close(); };
     }
 }
-
 
 
 // ==========================================
@@ -2988,83 +3040,56 @@ async function openPreviewModal(id, type) {
 async function openDetailsModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
+        currentModalDepth++;
 
     const { listName, item } = getListAndItem(id, type); 
-    if (!item) { toggleAppDepthEffect(false); return; }
+    if (!item) { toggleAppDepthEffect(false); history.back(); return; }
 
     const dModal = document.getElementById('detailsModalContainer');
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
+    
+    // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
+    if (dModal.children.length >= 15) {
+        showCustomAlert('Limit okien', 'Osiągnięto limit zakładek. Cofnij się, aby przeglądać dalej.', 'info');
+        history.back(); return;
+    }
+    const modalNode = document.createElement('div');
+    modalNode.style.display = 'contents';
+    dModal.appendChild(modalNode);
+       globalModalZIndex += 10;
+    const zIndex = globalModalZIndex;
+    // ----------------------------------------------
+
+    modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper"><div class="skeleton-box skeleton-modal-header"></div><div class="skeleton-box skeleton-title"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div>`;
 
     if (!String(id).startsWith('custom_') && (!item.backdrop || item.vod === undefined || item.tmdbRating === undefined || item.creator === undefined || (type === 'movie' && item.runtime === undefined) || (type === 'tv' && item.status === undefined))) {
         const fd = await getItemDetails(id, type);
         if (fd) {
             item.backdrop = fd.backdrop || item.backdrop; item.poster = fd.poster || item.poster; item.overview = fd.overview || item.overview; item.genres = fd.genres || item.genres; item.releaseDate = fd.releaseDate || item.releaseDate; item.vod = fd.vod || [];
             item.tmdbRating = fd.tmdbRating || item.tmdbRating; 
-            
-            item.creator = fd.creator || item.creator;
-            item.tagline = fd.tagline || item.tagline;
-            item.ageRating = fd.ageRating || item.ageRating;
-            item.country = fd.country || item.country;
-            item.budget = fd.budget || item.budget;
-            item.revenue = fd.revenue || item.revenue;
-
+            item.creator = fd.creator || item.creator; item.tagline = fd.tagline || item.tagline; item.ageRating = fd.ageRating || item.ageRating; item.country = fd.country || item.country; item.budget = fd.budget || item.budget; item.revenue = fd.revenue || item.revenue;
             if (type === 'tv') { item.status = fd.status !== undefined ? fd.status : item.status; item.nextEpisodeToAir = fd.nextEpisodeToAir !== undefined ? fd.nextEpisodeToAir : item.nextEpisodeToAir; item.seasons = fd.seasons || item.seasons; item.numberOfSeasons = fd.numberOfSeasons || item.numberOfSeasons; item.numberOfEpisodes = fd.numberOfEpisodes || item.numberOfEpisodes; if (!item.progress) item.progress = {}; } else if (type === 'movie') { item.runtime = fd.runtime || item.runtime; }
             await saveData();
         }
     }
 
     const isToWatch = listName === 'seriesToWatch'; const isWatched = listName.includes('Watched');
-    
-    let fHTML = '';
-    let isTimeCalc = false; 
+    let fHTML = ''; let isTimeCalc = false; 
 
-    if (isWatched) { 
-        fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; 
-    } else {
-        let cw = true; 
-        let wMsg = '';
-
+    if (isWatched) { fHTML = `<div class="modal-sticky-footer"><button id="saveReviewBtn" class="modal-btn primary">Zapisz Ocenę</button></div>`; } 
+    else {
+        let cw = true; let wMsg = '';
         if (item.type === 'tv') {
-            let totalAiredEpisodes = 0;
-            if (item.seasons) item.seasons.forEach(s => { if(s.season_number > 0) totalAiredEpisodes += s.episode_count; });
-            
-            let totalWatched = 0;
-            if (item.progress) totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
-            
+            let totalAiredEpisodes = 0; if (item.seasons) item.seasons.forEach(s => { if(s.season_number > 0) totalAiredEpisodes += s.episode_count; });
+            let totalWatched = 0; if (item.progress) totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
             const episodesLeft = totalAiredEpisodes - totalWatched;
-            
-            if (episodesLeft > 0) {
-                cw = false;
-                isTimeCalc = true;
-                const avgRuntime = item.runtime && item.runtime > 0 ? item.runtime : 45;
-                const minutesLeft = episodesLeft * avgRuntime;
-                const h = Math.floor(minutesLeft / 60); 
-                const m = minutesLeft % 60;
-                wMsg = h > 0 ? `Zostało: ~${h}h ${m}m` : `Zostało: ~${m}m`;
-            } else if (!isSeriesFinished(item)) {
-                cw = false; 
-                wMsg = 'Czekasz na nowe odcinki...'; 
-            }
+            if (episodesLeft > 0) { cw = false; isTimeCalc = true; const avgRuntime = item.runtime && item.runtime > 0 ? item.runtime : 45; const minutesLeft = episodesLeft * avgRuntime; const h = Math.floor(minutesLeft / 60); const m = minutesLeft % 60; wMsg = h > 0 ? `Zostało: ~${h}h ${m}m` : `Zostało: ~${m}m`; } else if (!isSeriesFinished(item)) { cw = false; wMsg = 'Czekasz na nowe odcinki...'; }
         } else if (item.type === 'movie') {
-            if (!item.releaseDate) { 
-                cw = false; wMsg = `Brak daty premiery.`; 
-            } else { 
-                const t = new Date(); t.setHours(0,0,0,0); 
-                const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); 
-                if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } 
-            }
+            if (!item.releaseDate) { cw = false; wMsg = `Brak daty premiery.`; } else { const t = new Date(); t.setHours(0,0,0,0); const rd = new Date(item.releaseDate); rd.setHours(0,0,0,0); if (rd > t) { cw = false; wMsg = `Premiera: ${rd.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`; } }
         }
 
         if (!cw) {
-            const iconSvg = isTimeCalc 
-                ? `<svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`
-                : `<svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:currentColor;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`;
-                
-            fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;">
-                <span style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 600; display:flex; align-items:center; gap:8px;">
-                    ${iconSvg} <span id="series-time-text">${wMsg}</span>
-                </span>
-            </div>`;
+            const iconSvg = isTimeCalc ? `<svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>` : `<svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:currentColor;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`;
+            fHTML = `<div class="modal-sticky-footer" style="justify-content: center; text-align: center;"><span style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 600; display:flex; align-items:center; gap:8px;">${iconSvg} <span id="series-time-text">${wMsg}</span></span></div>`;
         } else {
             fHTML = `<div class="modal-sticky-footer"><button id="moveToWatchedBtn" class="modal-btn primary">Oznacz jako Obejrzane</button></div>`;
         }
@@ -3073,24 +3098,11 @@ async function openDetailsModal(id, type) {
     let nxBanner = '';
     if (isToWatch) {
         const nextEp = getNextEpisodeStr(item);
-        if (nextEp) {
-            nxBanner = `<div style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">
-                <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--primary-color)"><path d="M8 5v14l11-7z"/></svg> 
-                <span>Następny odcinek: <span style="color:var(--primary-color)">${nextEp}</span></span>
-            </div>`;
-        }
+        if (nextEp) { nxBanner = `<div style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--primary-color)"><path d="M8 5v14l11-7z"/></svg><span>Następny odcinek: <span style="color:var(--primary-color)">${nextEp}</span></span></div>`; }
         else if (!isSeriesFinished(item)) {
             const aStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
-            if(aStr) {
-                nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">
-                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg> 
-                    <span>Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></span>
-                </div>`;
-            } else {
-                nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">
-                    ⏳ Jesteś na bieżąco! Nieznana data premiery.
-                </div>`;
-            }
+            if(aStr) { nxBanner = `<div style="background: color-mix(in srgb, var(--info-color) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color)"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span>Jesteś na bieżąco! <span style="color:var(--info-color)">Premiera: ${aStr}</span></span></div>`; } 
+            else { nxBanner = `<div style="background: color-mix(in srgb, var(--text-secondary) 15%, transparent); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); display:flex; align-items:center; gap:8px; font-weight:bold; color: var(--text-color);">⏳ Jesteś na bieżąco! Nieznana data premiery.</div>`; }
         }
     }
 
@@ -3111,187 +3123,84 @@ async function openDetailsModal(id, type) {
     let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     
     const hasNote = item.privateNote && item.privateNote.trim() !== '';
-    let noteBtnHTML = `<button id="modal-note-btn" class="${hasNote ? 'note-btn-active' : ''}" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-secondary); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Prywatna Notatka">
-        <svg viewBox="0 0 24 24" style="width:16px;height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-    </button>`;
+    let noteBtnHTML = `<button id="modal-note-btn" class="${hasNote ? 'note-btn-active' : ''}" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-secondary); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Prywatna Notatka"><svg viewBox="0 0 24 24" style="width:16px;height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>`;
 
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:8px;">${noteBtnHTML}${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
 
     const savedNote = item.privateNote ? escapeHTML(item.privateNote) : '';
-    let privateNoteAreaHTML = `
-    <div id="private-note-wrapper" class="private-note-container ${hasNote ? 'active' : ''}">
-        <textarea id="private-note-textarea" class="private-note-input" placeholder="Wpisz prywatną notatkę, polecajkę, powód dodania...">${savedNote}</textarea>
-    </div>`;
-    // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
-    // --- NOWY SYSTEM CIEKAWOSTEK (LISTA PREMIUM Z IKONAMI SVG) ---
-    const formatMoney = (num) => {
-        if (num >= 1000000000) return '$' + (num / 1000000000).toFixed(1) + ' mld';
-        if (num >= 1000000) return '$' + Math.round(num / 1000000) + ' mln';
-        return '$' + new Intl.NumberFormat('pl-PL').format(num);
-    };
+    let privateNoteAreaHTML = `<div id="private-note-wrapper" class="private-note-container ${hasNote ? 'active' : ''}"><textarea id="private-note-textarea" class="private-note-input" placeholder="Wpisz prywatną notatkę, polecajkę, powód dodania...">${savedNote}</textarea></div>`;
 
-    const translateAgeRating = (rating) => {
-        if (!rating) return null;
-        const r = String(rating).toUpperCase().trim();
-        const map = {
-            'R': '18+', 'NC-17': '18+', 'TV-MA': '18+',
-            'PG-13': '13+', 'TV-14': '16+',
-            'PG': 'Za zgodą rodziców', 'TV-PG': 'Za zgodą rodziców',
-            'G': 'Dla każdego', 'TV-G': 'Dla każdego', 'TV-Y': 'Dla dzieci', 'TV-Y7': '7+',
-            '12': '12+', '16': '16+', '18': '18+'
-        };
-        return map[r] || rating;
-    };
+    const formatMoney = (num) => { if (num >= 1000000000) return '$' + (num / 1000000000).toFixed(1) + ' mld'; if (num >= 1000000) return '$' + Math.round(num / 1000000) + ' mln'; return '$' + new Intl.NumberFormat('pl-PL').format(num); };
+    const translateAgeRating = (rating) => { if (!rating) return null; const r = String(rating).toUpperCase().trim(); const map = { 'R': '18+', 'NC-17': '18+', 'TV-MA': '18+', 'PG-13': '13+', 'TV-14': '16+', 'PG': 'Za zgodą rodziców', 'TV-PG': 'Za zgodą rodziców', 'G': 'Dla każdego', 'TV-G': 'Dla każdego', 'TV-Y': 'Dla dzieci', 'TV-Y7': '7+', '12': '12+', '16': '16+', '18': '18+' }; return map[r] || rating; };
 
     let triviaListHTML = '';
+    if (item.creator && typeof item.creator === 'object') { triviaListHTML += `<div class="trivia-item director-link" onclick="openActorDetailsModal('${item.creator.id}')"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div><div class="trivia-value">${escapeHTML(item.creator.name)} <svg class="director-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></div></div>`; } else if (item.creator) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div><div class="trivia-value">${escapeHTML(item.creator)}</div></div>`; }
+    if (item.ageRating) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span class="trivia-label">Kategoria wiekowa</span></div><div class="trivia-value">${escapeHTML(translateAgeRating(item.ageRating))}</div></div>`; }
+    if (item.country) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="trivia-label">Produkcja</span></div><div class="trivia-value">${escapeHTML(item.country)}</div></div>`; }
+    if (item.type === 'movie' && item.budget > 10000) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span class="trivia-label">Budżet</span></div><div class="trivia-value">${formatMoney(item.budget)}</div></div>`; }
+    if (item.type === 'movie' && item.revenue > 10000) { triviaListHTML += `<div class="trivia-item"><div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span class="trivia-label">Box Office</span></div><div class="trivia-value" style="color: var(--success-color);">${formatMoney(item.revenue)}</div></div>`; }
     
-    // Twórca / Reżyser
-    if (item.creator && typeof item.creator === 'object') {
-        triviaListHTML += `
-        <div class="trivia-item director-link" onclick="openActorDetailsModal('${item.creator.id}')">
-            <div class="trivia-label-group">
-                <svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                <span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span>
-            </div>
-            <div class="trivia-value">${escapeHTML(item.creator.name)} <svg class="director-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
-        </div>`;
-    } else if (item.creator) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg><span class="trivia-label">${item.type === 'movie' ? 'Reżyser' : 'Twórca'}</span></div>
-            <div class="trivia-value">${escapeHTML(item.creator)}</div>
-        </div>`;
-    }
-
-    // Wiek
-    if (item.ageRating) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span class="trivia-label">Kategoria wiekowa</span></div>
-            <div class="trivia-value">${escapeHTML(translateAgeRating(item.ageRating))}</div>
-        </div>`;
-    }
-
-    // Kraj
-    if (item.country) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="trivia-label">Produkcja</span></div>
-            <div class="trivia-value">${escapeHTML(item.country)}</div>
-        </div>`;
-    }
-
-    // Budżet
-    if (item.type === 'movie' && item.budget > 10000) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg><span class="trivia-label">Budżet</span></div>
-            <div class="trivia-value">${formatMoney(item.budget)}</div>
-        </div>`;
-    }
-
-    // Przychody
-    if (item.type === 'movie' && item.revenue > 10000) {
-        triviaListHTML += `
-        <div class="trivia-item">
-            <div class="trivia-label-group"><svg class="trivia-icon" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg><span class="trivia-label">Box Office</span></div>
-            <div class="trivia-value" style="color: var(--success-color);">${formatMoney(item.revenue)}</div>
-        </div>`;
-    }
-    
-    let triviaSectionHTML = triviaListHTML !== '' ? `
-        <div class="rewatch-section trivia-section">
-            <div class="rewatch-accordion-header">
-                <h3 class="rewatch-accordion-title">
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                    Informacje i ciekawostki
-                </h3>
-                <svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
-            <div class="rewatch-accordion-content">
-                <div class="trivia-list-group">${triviaListHTML}</div>
-            </div>
-        </div>
-    ` : '';
-
+    let triviaSectionHTML = triviaListHTML !== '' ? `<div class="rewatch-section trivia-section"><div class="rewatch-accordion-header"><h3 class="rewatch-accordion-title"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>Informacje i ciekawostki</h3><svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></div><div class="rewatch-accordion-content"><div class="trivia-list-group">${triviaListHTML}</div></div></div>` : '';
     let taglineHTML = item.tagline ? `<div class="movie-tagline-premium">"${escapeHTML(item.tagline)}"</div>` : '';
-    // --- RENDER MODALA ---
-    dModal.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}${privateNoteAreaHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
-    const modal = dModal.querySelector('.modal-overlay');
+    modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}${privateNoteAreaHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
+
+    const modal = modalNode.querySelector('.modal-overlay');
     
-    const noteBtn = modal.querySelector('#modal-note-btn');
-    const noteWrapper = modal.querySelector('#private-note-wrapper');
-    const noteTextarea = modal.querySelector('#private-note-textarea');
+    // NOWA FUNKCJA ZAMYKAJĄCA
+    const close = () => { 
+        if (typeof listName !== 'undefined' && listName) renderList(data[listName], listName, true); 
+        
+        if (history.state && history.state.modalOpen) {
+            history.back(); 
+        } else {
+            modalNode.remove(); 
+            toggleAppDepthEffect(false); 
+        }
+    };
+
+    const noteBtn = modalNode.querySelector('#modal-note-btn');
+    const noteWrapper = modalNode.querySelector('#private-note-wrapper');
+    const noteTextarea = modalNode.querySelector('#private-note-textarea');
 
     if (noteBtn && noteWrapper && noteTextarea) {
         noteBtn.addEventListener('click', () => {
-            triggerHaptic('light');
-            noteWrapper.classList.toggle('active');
-            if (noteWrapper.classList.contains('active')) {
-                noteTextarea.focus();
-            }
+            triggerHaptic('light'); noteWrapper.classList.toggle('active');
+            if (noteWrapper.classList.contains('active')) noteTextarea.focus();
         });
-
         noteTextarea.addEventListener('blur', async (e) => {
             const newVal = e.target.value.trim();
-            if (item.privateNote !== newVal) {
-                item.privateNote = newVal;
-                await saveData();
-                if (newVal !== '') {
-                    noteBtn.classList.add('note-btn-active');
-                } else {
-                    noteBtn.classList.remove('note-btn-active');
-                    noteWrapper.classList.remove('active'); 
-                }
-            }
+            if (item.privateNote !== newVal) { item.privateNote = newVal; await saveData(); if (newVal !== '') { noteBtn.classList.add('note-btn-active'); } else { noteBtn.classList.remove('note-btn-active'); noteWrapper.classList.remove('active'); } }
         });
     }
 
-    const mngBtn = modal.querySelector('#modal-manage-tags-btn');
+    const mngBtn = modalNode.querySelector('#modal-manage-tags-btn');
     if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
 
-    const pinBtn = modal.querySelector('#modal-pin-btn');
+    const pinBtn = modalNode.querySelector('#modal-pin-btn');
     if (pinBtn) {
         pinBtn.addEventListener('click', async (e) => {
-            triggerHaptic('light');
-            item.isPinned = !item.isPinned;
-            e.currentTarget.style.background = item.isPinned ? 'var(--info-color)' : 'var(--card-color)';
-            e.currentTarget.style.borderColor = item.isPinned ? 'var(--info-color)' : 'var(--border-color)';
-            e.currentTarget.style.color = item.isPinned ? '#ffffff' : 'var(--text-secondary)';
-            await saveData();
-            renderList(data[listName], listName, true);
+            triggerHaptic('light'); item.isPinned = !item.isPinned;
+            e.currentTarget.style.background = item.isPinned ? 'var(--info-color)' : 'var(--card-color)'; e.currentTarget.style.borderColor = item.isPinned ? 'var(--info-color)' : 'var(--border-color)'; e.currentTarget.style.color = item.isPinned ? '#ffffff' : 'var(--text-secondary)';
+            await saveData(); renderList(data[listName], listName, true);
         });
     }
 
-    const shareBtn = modal.querySelector('#modal-share-btn');
-    if(shareBtn) {
-        shareBtn.addEventListener('click', (e) => {
-            const btn = e.currentTarget;
-            handleNativeShare(decodeURIComponent(btn.dataset.title || ''), btn.dataset.poster, btn.dataset.year, btn.dataset.rating, decodeURIComponent(btn.dataset.overview || ''));
-        });
-    }
+    const shareBtn = modalNode.querySelector('#modal-share-btn');
+    if(shareBtn) { shareBtn.addEventListener('click', (e) => { handleNativeShare(decodeURIComponent(e.currentTarget.dataset.title || ''), e.currentTarget.dataset.poster, e.currentTarget.dataset.year, e.currentTarget.dataset.rating, decodeURIComponent(e.currentTarget.dataset.overview || '')); }); }
 
-    if (isWatched) { const rTx = document.getElementById('reviewText'); if (rTx) rTx.value = item.review || ''; }
-    const fC = modal.querySelector('#hero-fav-container');
+    if (isWatched) { const rTx = modalNode.querySelector('#reviewText'); if (rTx) rTx.value = item.review || ''; }
+    const fC = modalNode.querySelector('#hero-fav-container');
     if (fC) {
         fC.innerHTML = `<button id="modal-favorite-btn" class="hero-fav-btn ${item.isFavorite ? 'active' : ''}">${ICONS.star}</button>`;
         fC.querySelector('#modal-favorite-btn').addEventListener('click', async (e) => { item.isFavorite = !item.isFavorite; e.currentTarget.classList.toggle('active', item.isFavorite); await saveData(); renderList(data[listName], listName, true); });
     }
 
-    const close = () => { dModal.innerHTML = ''; toggleAppDepthEffect(false); renderList(data[listName], listName, true); if(history.state && history.state.modalOpen) history.back(); };
-    
-      modal.addEventListener('click', async (e) => {
+    modal.addEventListener('click', async (e) => {
         if (e.target === modal) { close(); return; }
-        
-        // TO JEST KLUCZOWE - otwiera Historię Seansów oraz Ciekawostki!
         const accordionHeader = e.target.closest('.rewatch-accordion-header'); 
         if (accordionHeader) { triggerHaptic('light'); accordionHeader.parentElement.classList.toggle('expanded'); return; }
-        
         const cast = e.target.closest('.cast-member[data-actor-id]'); if (cast) { openActorDetailsModal(cast.dataset.actorId); return; }
         const rec = e.target.closest('.recommendation-item'); 
         if (rec) { 
@@ -3300,7 +3209,7 @@ async function openDetailsModal(id, type) {
             return; 
         }
         const removeIcon = e.target.closest('.remove-tag');
-        if (removeIcon) { item.customTags = item.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); openDetailsModal(id, type); return; }
+        if (removeIcon) { item.customTags = item.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); openDetailsModal(id, type); return; } // UWAGA: tu odświeża budując na nowo
         const addRewatchBtn = e.target.closest('#add-rewatch-btn');
         if (addRewatchBtn) { triggerHaptic('success'); item.watchDates.push(Date.now()); await saveData(); openDetailsModal(id, type); showCustomAlert('Świetnie!', 'Dodano dzisiejszy seans do pamiętnika.', 'success'); return; }
         const delRewatchBtn = e.target.closest('.delete-rewatch-btn');
@@ -3309,41 +3218,39 @@ async function openDetailsModal(id, type) {
             if (await showCustomConfirm('Usunąć seans?', 'Czy na pewno chcesz usunąć tę datę z historii oglądania?')) { item.watchDates.splice(parseInt(delRewatchBtn.dataset.idx), 1); await saveData(); openDetailsModal(id, type); } return;
         }
     });
-    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
+    modalNode.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
 
     if (!String(item.id).startsWith('custom_')) {
-        getWatchProviders(id, type).then(p => { const c = document.getElementById('providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
-        getRecommendations(id, type).then(r => { const c = document.getElementById('recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
-        getTrailerKey(id, type).then(tk => { if (tk) { const c = document.getElementById('trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
+        getWatchProviders(id, type).then(p => { const c = modalNode.querySelector('#providers-container'); if (c && p) c.innerHTML = renderProvidersHTML(p); });
+        getRecommendations(id, type).then(r => { const c = modalNode.querySelector('#recommendations-container'); if (c && r.length > 0) c.innerHTML = renderRecommendationsHTML(r, type); });
+        getTrailerKey(id, type).then(tk => { if (tk) { const c = modalNode.querySelector('#trailer-section-container'); if (c) { c.innerHTML = `<button class="hero-trailer-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Zwiastun</button>`; c.querySelector('.hero-trailer-btn').onclick = () => openTrailerModal(tk); } } });
     }
     getCredits(id, type).then(c => { 
-        const cc = document.getElementById('cast-container'); 
+        const cc = modalNode.querySelector('#cast-container'); 
         if (cc && c.length > 0) { 
             const favIds = (data.favoriteActors || []).map(a => String(a.id));
             const cH = c.map(m => {
-                const isFav = favIds.includes(String(m.id));
-                const imgStyle = isFav ? 'border: 2px solid var(--warning-color); box-shadow: 0 0 12px color-mix(in srgb, var(--warning-color) 40%, transparent);' : '';
-                const favBadge = isFav ? `<div style="position:absolute; top:-5px; right:15px; font-size:1.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); z-index:5;">⭐</div>` : '';
+                const isFav = favIds.includes(String(m.id)); const imgStyle = isFav ? 'border: 2px solid var(--warning-color); box-shadow: 0 0 12px color-mix(in srgb, var(--warning-color) 40%, transparent);' : ''; const favBadge = isFav ? `<div style="position:absolute; top:-5px; right:15px; font-size:1.2rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6)); z-index:5;">⭐</div>` : '';
                 return `<div class="cast-member" data-actor-id="${m.id}" style="position:relative;">${favBadge}<img src="${IMAGE_BASE_URL.replace('w500', 'w200')}${m.profile_path}" loading="lazy" style="${imgStyle}" onerror="this.outerHTML = ICONS.person;"><strong>${escapeHTML(m.name)}</strong><span>${escapeHTML(m.character)}</span></div>`;
             }).join(''); 
             cc.innerHTML = `<div class="cast-section" style="margin-top:0; padding-top:0; border:none;"><h3>Obsada</h3><div class="cast-scroller">${cH}</div></div>`; 
         } 
     });
-    getReviews(id, type).then(revs => { const c = document.getElementById('reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
+    getReviews(id, type).then(revs => { const c = modalNode.querySelector('#reviews-container'); if (c && revs.length > 0) c.innerHTML = renderReviewsHTML(revs, id, type); });
     
-    if (isToWatch) populateAndRenderSeriesSections(item, document.getElementById('seasons-container'));
+    if (isToWatch) populateAndRenderSeriesSections(item, modalNode.querySelector('#seasons-container'));
 
     if (isWatched) {
         setupInteractiveStars(item);
-        const sv = document.getElementById('saveReviewBtn');
-        if (sv) sv.onclick = async () => { const rat = document.querySelector('.star-rating-interactive'); item.rating = rat ? parseFloat(rat.dataset.rating) : null; item.review = document.getElementById('reviewText').value; await saveData(); close(); showCustomAlert('Zapisano!', `Ocena zaktualizowana.`, 'success'); };
+        const sv = modalNode.querySelector('#saveReviewBtn');
+        if (sv) sv.onclick = async () => { const rat = modalNode.querySelector('.star-rating-interactive'); item.rating = rat ? parseFloat(rat.dataset.rating) : null; item.review = modalNode.querySelector('#reviewText').value; await saveData(); close(); showCustomAlert('Zapisano!', `Ocena zaktualizowana.`, 'success'); };
     } else {
-        const mv = document.getElementById('moveToWatchedBtn');
+        const mv = modalNode.querySelector('#moveToWatchedBtn');
         if (mv) mv.onclick = async () => { await handleMoveItem(id, type); close(); };
     }
 
     if (isToWatch && item.type === 'tv' && isTimeCalc) {
-        updateExactRemainingTime(item);
+        updateExactRemainingTime(item); // Note: updateExactRemainingTime targets DOM by ID, you might need to adapt it if it acts weird.
     }
 }
 function openTrailerModal(tk) {
@@ -3733,13 +3640,28 @@ function openCustomAddModal() {
     });
 }
 async function openActorDetailsModal(actorId) {
-    history.pushState({ modalOpen: true }, '');
     toggleAppDepthEffect(true);
+    history.pushState({ modalOpen: true }, '');
+    currentModalDepth++;
+    
     const c = document.getElementById('actorModalContainer');
-    c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
+    
+    // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
+    if (c.children.length >= 6) {
+        showCustomAlert('Limit okien', 'Osiągnięto limit zakładek. Cofnij się, aby przeglądać dalej.', 'info');
+        history.back(); return;
+    }
+    const modalNode = document.createElement('div');
+    modalNode.style.display = 'contents';
+    c.appendChild(modalNode);
+    globalModalZIndex += 10;
+    const zIndex = globalModalZIndex;
+    // ----------------------------------------------
+
+    modalNode.innerHTML = `<div class="modal-overlay actor-modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
 
     const ad = await getActorDetails(actorId);
-    if (!ad) { c.innerHTML = ''; toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych.', 'error'); return; }
+    if (!ad) { modalNode.remove(); toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych.', 'error'); history.back(); return; }
 
     data.favoriteActors = data.favoriteActors || [];
     const isFav = data.favoriteActors.some(a => String(a.id) === String(actorId));
@@ -3751,9 +3673,7 @@ async function openActorDetailsModal(actorId) {
     let watchedCount = 0;
     const totalCredits = ad.full_filmography ? ad.full_filmography.length : 0;
 
-    let hasActing = false;
-    let hasDirecting = false;
-    
+    let hasActing = false; let hasDirecting = false;
     if (totalCredits > 0) {
         ad.full_filmography.forEach(credit => {
             if (watchedIds.has(String(credit.id))) watchedCount++;
@@ -3775,78 +3695,59 @@ async function openActorDetailsModal(actorId) {
         else if (progressPct < 100) levelText = 'Znasz tę filmografię na wylot';
         else levelText = 'Obejrzano absolutnie wszystko! 👑';
 
-        progressHTML = `
-        <div style="margin-bottom: 24px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                    </div>
-                    <div style="display: flex; flex-direction: column;">
-                        <span style="font-size: 0.95rem; font-weight: 700; color: var(--text-color);">${levelText}</span>
-                        <span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span>
-                    </div>
-                </div>
-                <div style="text-align: right; flex-shrink: 0; padding-left: 8px;">
-                    <span style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span>
-                </div>
-            </div>
-            <div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;">
-                <div style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div>
-            </div>
-        </div>`;
+        progressHTML = `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;"><div style="display: flex; align-items: center; gap: 12px;"><div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><div style="display: flex; flex-direction: column;"><span style="font-size: 0.95rem; font-weight: 700; color: var(--text-color);">${levelText}</span><span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span></div></div><div style="text-align: right; flex-shrink: 0; padding-left: 8px;"><span style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span></div></div><div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;"><div style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div></div></div>`;
     }
 
-    const filterHTML = hasBothRoles ? `
-        <div class="segmented-control" id="filmography-filter" style="margin: 16px 0; max-width: 100%;">
-            <button class="seg-btn active" data-filter="all">Wszystko</button>
-            <button class="seg-btn" data-filter="actor">Tylko rola</button>
-            <button class="seg-btn" data-filter="director">Tylko reżyseria</button>
-        </div>
-    ` : '';
+  // Zawsze generujemy pasek! Jeśli nie był reżyserem, po prostu zakładka pokaże informację o braku wyników (co i tak jest fajne dla użytkownika, bo wie na pewno).
+const filterHTML = `<div class="segmented-control" id="filmography-filter" style="margin: 16px 0; max-width: 100%;">
+    <button class="seg-btn active" data-filter="all">Wszystko</button>
+    <button class="seg-btn" data-filter="actor">Tylko rola</button>
+    <button class="seg-btn" data-filter="director">Tylko reżyseria</button>
+</div>`;
 
-    c.innerHTML = `<div class="modal-overlay actor-modal-overlay"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
-        
+    const closeAllBtnActor = currentModalDepth >= 2 ? `<button class="modal-close-all-btn" onclick="closeAllModals()"><svg viewBox="0 0 24 24"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg> Powrót do panelu głównego</button>` : '';
+
+    modalNode.innerHTML = `<div class="modal-overlay actor-modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div>${closeAllBtnActor}<button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
         <div class="actor-header" style="position: relative;">
             <button id="actor-fav-btn" class="hero-fav-btn ${isFav ? 'active' : ''}" style="position: absolute; top: 0; right: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: var(--card-color);">${ICONS.star}</button>
             ${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
             <h2>${sName}</h2>
         </div>
-        
         ${progressHTML} 
         <div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>
         ${kfHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${kfHTML}</div></div>` : ''}
-        
-        ${totalCredits > 0 ? `
-        <div class="filmography-controls" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-            <button id="actor-randomize-btn" class="filmography-button" style="background: var(--primary-color); color: white; border: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(229,9,20,0.3);">
-                <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg> 
-                Wylosuj tytuł
-            </button>
-            <button id="toggle-filmography-btn" class="filmography-button">Pełna filmografia</button>
-        </div>
-        
-        <div id="full-filmography-wrapper" style="display: none;">
-            ${filterHTML}
-            <div id="full-filmography-container"></div>
-        </div>
-        ` : ''}
-        
+        ${totalCredits > 0 ? `<div class="filmography-controls" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;"><button id="actor-randomize-btn" class="filmography-button" style="background: var(--primary-color); color: white; border: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(229,9,20,0.3);"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg> Wylosuj tytuł</button><button id="toggle-filmography-btn" class="filmography-button">Pełna filmografia</button></div><div id="full-filmography-wrapper" style="display: none;">${filterHTML}<div id="full-filmography-container"></div></div>` : ''}
     </div></div></div>`;
 
-    const renderFilmography = (filterType = 'all') => {
-        const fc = document.getElementById('full-filmography-container');
+    const modal = modalNode.querySelector('.modal-overlay');
+
+    // NOWA FUNKCJA ZAMYKAJĄCA
+    const close = () => { 
+        if (history.state && history.state.modalOpen) {
+            history.back(); 
+        } else {
+            modalNode.remove(); 
+            toggleAppDepthEffect(false); 
+        }
+    };
+
+    // --- ZAKTUALIZOWANY RENDER FILMOGRAFII Z KIERUNKAMI ---
+    const renderFilmography = (filterType = 'all', direction = 'none') => {
+        const fc = modalNode.querySelector('#full-filmography-container');
         if (!fc) return;
+
+        // Resetowanie animacji, żeby mogła się odtworzyć
+        fc.classList.remove('filmography-slide-in-right', 'filmography-slide-in-left');
+        void fc.offsetWidth; 
+        if (direction === 'right') fc.classList.add('filmography-slide-in-right');
+        else if (direction === 'left') fc.classList.add('filmography-slide-in-left');
 
         let listToRender = ad.full_filmography;
         if (filterType === 'actor') listToRender = ad.full_filmography.filter(i => i.isActor);
         if (filterType === 'director') listToRender = ad.full_filmography.filter(i => i.isDirector);
 
         if (listToRender.length === 0) {
-            fc.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-secondary);">Brak wyników w tej kategorii.</div>';
+            fc.innerHTML = '<div style="text-align:center; padding: 40px 20px; color: var(--text-secondary);">Brak wyników w tej kategorii.</div>';
             return;
         }
 
@@ -3857,94 +3758,151 @@ async function openActorDetailsModal(actorId) {
             const t = escapeHTML(i.title || i.name);
             
             let roleText = 'Brak informacji';
-            if (i.isActor && i.isDirector) {
-                roleText = `<span style="color: var(--warning-color); font-weight: 800;">Reżyseria & Rola:</span> ${escapeHTML(i.character || 'Nieznana')}`;
-            } else if (i.isDirector) {
-                roleText = `<span style="color: var(--primary-color); font-weight: 800;">Reżyseria</span>`;
-            } else if (i.isActor) {
-                roleText = `Rola: ${escapeHTML(i.character || 'Nieznana')}`;
-            }
+            if (i.isActor && i.isDirector) { roleText = `<span style="color: var(--warning-color); font-weight: 800;">Reżyseria & Rola:</span> ${escapeHTML(i.character || 'Nieznana')}`; } 
+            else if (i.isDirector) { roleText = `<span style="color: var(--primary-color); font-weight: 800;">Reżyseria</span>`; } 
+            else if (i.isActor) { roleText = `Rola: ${escapeHTML(i.character || 'Nieznana')}`; }
 
-            // GWARANCJA POPRAWNYCH ATRYBUTÓW DATA-LIST
-                     // CAŁKOWICIE NOWE KLASY I ATRYBUTY (BY OMINĄĆ STARE BŁĘDY KODU)
+            // Znaczek dodany od razu przy dacie
+            const addedBadge = isAdded ? `<span class="fg-added-badge">✓ W bibliotece</span>` : '';
+
             let act = '';
             if (isAdded) {
                 act = `<span class="already-added-info" style="justify-content: flex-start; margin-top: 8px;"><svg viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Już w kolekcji</span>`;
             } else {
-                act = `
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button class="btn-fg-action" data-dest="toWatch" data-itemid="${i.id}" data-itemtype="${i.media_type}" style="flex: 1; padding: 10px; font-size: 0.8rem; border-radius: var(--radius-md); box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor:pointer; font-weight:bold; background:var(--primary-color); color:white; border:none;">Do obejrzenia</button>
-                    <button class="btn-fg-action" data-dest="watched" data-itemid="${i.id}" data-itemtype="${i.media_type}" style="flex: 1; padding: 10px; font-size: 0.8rem; background: var(--border-color); color: var(--text-color); border-radius: var(--radius-md); cursor:pointer; font-weight:bold; border:none;">Obejrzane</button>
-                </div>`;
+                act = `<div style="display: flex; gap: 8px; margin-top: 12px;"><button class="btn-fg-action" data-dest="toWatch" data-itemid="${i.id}" data-itemtype="${i.media_type}" style="flex: 1; padding: 10px; font-size: 0.8rem; border-radius: var(--radius-md); box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor:pointer; font-weight:bold; background:var(--primary-color); color:white; border:none;">Do obejrzenia</button><button class="btn-fg-action" data-dest="watched" data-itemid="${i.id}" data-itemtype="${i.media_type}" style="flex: 1; padding: 10px; font-size: 0.8rem; background: var(--border-color); color: var(--text-color); border-radius: var(--radius-md); cursor:pointer; font-weight:bold; border:none;">Obejrzane</button></div>`;
             }
-            
-            return `<div class="filmography-item"><div class="filmography-item-header"><img src="${pst}" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="filmography-item-info"><strong>${t}</strong><span>${yr}</span><span class="character">${roleText}</span></div></div><div class="filmography-item-details">${renderCollapsibleText(i.overview)}<div class="filmography-actions">${act}</div></div></div>`;
+            return `<div class="filmography-item"><div class="filmography-item-header"><img src="${pst}" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="filmography-item-info"><strong>${t}</strong><span>${yr}${addedBadge}</span><span class="character">${roleText}</span></div></div><div class="filmography-item-details">${renderCollapsibleText(i.overview)}<div class="filmography-actions">${act}</div></div></div>`;
         }).join('');
     };
 
-    const filterContainer = document.getElementById('filmography-filter');
+    const filterContainer = modalNode.querySelector('#filmography-filter');
+    const tabsOrder = ['all', 'actor', 'director']; // Kolejność dla swipe'ów
+
     if (filterContainer) {
+        // --- KLIKNIĘCIE W FILTR ---
         filterContainer.addEventListener('click', (e) => {
             const btn = e.target.closest('.seg-btn');
             if (btn) {
                 triggerHaptic('light');
+                const currActive = filterContainer.querySelector('.seg-btn.active');
+                const currIdx = currActive ? tabsOrder.indexOf(currActive.dataset.filter) : 0;
+                const nextIdx = tabsOrder.indexOf(btn.dataset.filter);
+                
                 filterContainer.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                renderFilmography(btn.dataset.filter);
+                
+                // Kierunek wjazdu
+                let direction = 'none';
+                if (currActive) { direction = nextIdx > currIdx ? 'right' : 'left'; }
+                
+                renderFilmography(btn.dataset.filter, direction);
+                
+                // Auto-scroll do góry (jeśli użytkownik zjechał głęboko w dół i kliknął Sticky-Tab)
+                const modalScroll = modalNode.querySelector('.modern-modal-scroll');
+                if(modalScroll && modalScroll.scrollTop > filterContainer.offsetTop) {
+                    modalScroll.scrollTo({ top: filterContainer.offsetTop - 10, behavior: 'smooth' });
+                }
             }
         });
     }
 
-    const fgBtn = document.getElementById('toggle-filmography-btn');
+    const fgWrapper = modalNode.querySelector('#full-filmography-wrapper');
+    const fgBtn = modalNode.querySelector('#toggle-filmography-btn');
+    
     if (fgBtn) {
         fgBtn.addEventListener('click', () => {
-            const fWrapper = document.getElementById('full-filmography-wrapper');
-            if (fWrapper.style.display === 'block') { 
-                fWrapper.style.display = 'none'; 
+            if (fgWrapper.style.display === 'block') { 
+                fgWrapper.style.display = 'none'; 
                 fgBtn.textContent = 'Pokaż pełną filmografię'; 
             } else {
-                if (document.getElementById('full-filmography-container').innerHTML === '') {
-                    renderFilmography('all'); 
-                }
-                fWrapper.style.display = 'block'; 
+                if (modalNode.querySelector('#full-filmography-container').innerHTML === '') { renderFilmography('all'); }
+                fgWrapper.style.display = 'block'; 
                 fgBtn.textContent = 'Ukryj filmografię';
-                setTimeout(() => {
-                    const scrollArea = c.querySelector('.modern-modal-scroll');
-                    scrollArea.scrollTo({ top: fWrapper.offsetTop - 20, behavior: 'smooth' });
-                }, 50);
+                setTimeout(() => { const scrollArea = modalNode.querySelector('.modern-modal-scroll'); scrollArea.scrollTo({ top: fgWrapper.offsetTop - 20, behavior: 'smooth' }); }, 50);
             }
         });
     }
 
-    const favBtn = c.querySelector('#actor-fav-btn');
-    favBtn.addEventListener('click', async () => {
-        triggerHaptic('light');
-        data.favoriteActors = data.favoriteActors || [];
-        const idx = data.favoriteActors.findIndex(a => String(a.id) === String(actorId));
-        if (idx > -1) {
-            data.favoriteActors.splice(idx, 1);
-            favBtn.classList.remove('active');
-            showCustomAlert('Usunięto', 'Usunięto z ulubionych.', 'info');
-        } else {
-            data.favoriteActors.unshift({ id: actorId, name: ad.name, profile_path: ad.profile_path });
-            favBtn.classList.add('active');
-            showCustomAlert('Dodano!', 'Twórca dodany do ulubionych.', 'success');
-        }
-        await saveData();
-        if (viewState.activeMainTab === 'profile') renderProfileStats();
-    });
+    // --- GESTY SWIPE ---
+    if(fgWrapper && filterContainer) {
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let isFgDragging = false;
 
-    const randBtn = c.querySelector('#actor-randomize-btn');
+        fgWrapper.addEventListener('touchstart', (e) => {
+            if(e.target.closest('.cast-scroller, .known-for-scroller')) return;
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+            isFgDragging = true;
+        }, { passive: true });
+
+        fgWrapper.addEventListener('touchmove', (e) => {
+            if(!isFgDragging) return;
+            const deltaY = e.touches[0].clientY - swipeStartY;
+            const deltaX = e.touches[0].clientX - swipeStartX;
+            
+            // Jeśli gest jest bardziej pionowy, przerywamy nasłuch swipe na boki
+            if(Math.abs(deltaY) > Math.abs(deltaX)) {
+                isFgDragging = false;
+            }
+        }, { passive: true });
+
+        fgWrapper.addEventListener('touchend', (e) => {
+            if(!isFgDragging) return;
+            isFgDragging = false;
+            
+            const swipeEndX = e.changedTouches[0].clientX;
+            const deltaX = swipeEndX - swipeStartX;
+
+            if(Math.abs(deltaX) > 60) {
+                const activeBtn = filterContainer.querySelector('.seg-btn.active');
+                if(!activeBtn) return;
+                
+                const currIdx = tabsOrder.indexOf(activeBtn.dataset.filter);
+                
+                if(deltaX < 0 && currIdx < tabsOrder.length - 1) {
+                    const nextBtn = filterContainer.querySelector(`.seg-btn[data-filter="${tabsOrder[currIdx + 1]}"]`);
+                    if(nextBtn) nextBtn.click();
+                }
+                else if(deltaX > 0 && currIdx > 0) {
+                    const prevBtn = filterContainer.querySelector(`.seg-btn[data-filter="${tabsOrder[currIdx - 1]}"]`);
+                    if(prevBtn) prevBtn.click();
+                }
+            }
+        }, { passive: true });
+    }
+
+ const favBtn = modalNode.querySelector('#actor-fav-btn');
+favBtn.addEventListener('click', async () => {
+    triggerHaptic('light'); data.favoriteActors = data.favoriteActors || [];
+    const idx = data.favoriteActors.findIndex(a => String(a.id) === String(actorId));
+    if (idx > -1) { 
+        data.favoriteActors.splice(idx, 1); 
+        favBtn.classList.remove('active'); 
+        showCustomAlert('Usunięto', 'Usunięto z ulubionych.', 'info'); 
+    } 
+    else { 
+        data.favoriteActors.unshift({ 
+            id: actorId, 
+            name: ad.name, 
+            profile_path: ad.profile_path,
+            isActor: hasActing,      // Zapisujemy, czy gra
+            isDirector: hasDirecting // Zapisujemy, czy reżyseruje
+        }); 
+        favBtn.classList.add('active'); 
+        showCustomAlert('Dodano!', 'Twórca dodany do ulubionych.', 'success'); 
+    }
+    await saveData(); 
+    if (viewState.activeMainTab === 'profile') renderProfileStats();
+});
+
+    const randBtn = modalNode.querySelector('#actor-randomize-btn');
     if (randBtn) {
         randBtn.addEventListener('click', () => {
             triggerHaptic('heavy');
             const pool = ad.full_filmography;
             const winner = pool[Math.floor(Math.random() * pool.length)];
             
-            c.innerHTML = ''; 
-            toggleAppDepthEffect(false); 
-            if (history.state && history.state.modalOpen) history.back();
-
             showCustomAlert('Losowanie...', `Z filmografii: ${ad.name}`, 'info');
             setTimeout(() => {
                 const inLib = Object.values(data).flat().some(i => String(i.id) === String(winner.id) && i.type === winner.media_type);
@@ -3954,26 +3912,19 @@ async function openActorDetailsModal(actorId) {
         });
     }
 
-    const modal = c.querySelector('.modal-overlay');
-    const close = () => { c.innerHTML = ''; toggleAppDepthEffect(false); if (history.state && history.state.modalOpen) history.back(); };
-    setupSwipeToClose(modal, close);
-
     modal.addEventListener('click', e => {
-        if (e.target === modal) close();
-        
+        if (e.target === modal) { close(); return; }
         if (e.target.closest('.segmented-control')) return;
 
         const kfItem = e.target.closest('.known-for-item');
         if (kfItem && kfItem.dataset.id && kfItem.dataset.type) {
             const rId = kfItem.dataset.id; const rType = kfItem.dataset.type;
-            close();
-            setTimeout(() => {
-                const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType);
-                if (isInLibrary) openDetailsModal(rId, rType);
-                else openPreviewModal(rId, rType);
-            }, 50);
+            const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType);
+            if (isInLibrary) openDetailsModal(rId, rType);
+            else openPreviewModal(rId, rType);
             return;
         }
+        
         const h = e.target.closest('.filmography-item-header'); 
         if (h) { 
             const d = h.nextElementSibling; 
@@ -3982,13 +3933,12 @@ async function openActorDetailsModal(actorId) {
             } 
         }
         
-               // NOWY NASŁUCHIWACZ KLIKNIĘCIA
         const fgBtnAction = e.target.closest('.btn-fg-action'); 
-        if (fgBtnAction) {
-            processFilmographyAdd(fgBtnAction);
-        }
+        if (fgBtnAction) { processFilmographyAdd(fgBtnAction); }
     });
-    modal.querySelector('.modal-top-close-btn').addEventListener('click', close);
+
+    modalNode.querySelector('.modal-top-close-btn').addEventListener('click', close); 
+    setupSwipeToClose(modal, close);
 }
 
 
