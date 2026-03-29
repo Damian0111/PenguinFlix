@@ -19,6 +19,8 @@
     --radius-md: 8px;
     --radius-lg: 12px;
     --radius-pill: 50px;
+  --spring-soft: cubic-bezier(0.32, 0.72, 0, 1);
+  --spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 [data-theme="light"] {
@@ -120,37 +122,19 @@
 }
 
 @keyframes scaleIn {
-    from {
-        transform: scale(0.95);
-        opacity: 0;
-    }
-
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
+    0% { transform: scale(0.85); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes slideUpSheet {
-    from {
-        transform: translateY(100%);
-    }
-
-    to {
-        transform: translateY(0);
-    }
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
 }
 
 @keyframes alertPop {
-    0% {
-        transform: scale(0.9);
-        opacity: 0;
-    }
-
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
+    0% { transform: scale(0.7); opacity: 0; }
+    50% { transform: scale(1.05); } /* Lekkie "przestrzelenie" */
+    100% { transform: scale(1); opacity: 1; }
 }
 
 * {
@@ -1917,7 +1901,7 @@ body[data-active-tab="profile"] .scroll-to-top {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: scaleIn 0.4s var(--spring-bouncy); 
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
     border: 1px solid var(--border-color);
     border-top: 1px solid rgba(255, 255, 255, 0.15);
@@ -1945,7 +1929,7 @@ body[data-active-tab="profile"] .scroll-to-top {
         border-radius: 24px 24px 0 0;
         margin-top: auto;
         max-height: 94vh;
-        animation: slideUpSheet 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+        animation: slideUpSheet 0.5s var(--spring-soft); 
         border-bottom: none;
     }
 
@@ -2530,7 +2514,8 @@ body[data-active-tab="profile"] .scroll-to-top {
 }
 
 .modal-btn:active {
-    transform: scale(0.97);
+    transform: scale(0.92);
+    transition: transform 0.2s var(--spring-soft);
 }
 
 .modal-btn.primary {
@@ -2909,7 +2894,7 @@ body[data-active-tab="profile"] .scroll-to-top {
     box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
     
     /* Sprężysta animacja "wyskoku" jak w iOS */
-    animation: toastEnter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+   animation: toastEnter 0.5s var(--spring-bouncy) forwards;
     pointer-events: auto;
     cursor: pointer;
 }
@@ -3004,7 +2989,7 @@ body[data-active-tab="profile"] .scroll-to-top {
     text-align: center;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    animation: alertPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: alertPop 0.4s var(--spring-bouncy);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -3974,7 +3959,8 @@ body[data-active-tab="profile"] .scroll-to-top {
 }
 
 .config-btn:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
+    transition: transform 0.2s var(--spring-soft);
 }
 
 /* FADE-IN OBRAZKÓW & SKELETONS SHIMMER */
@@ -4291,7 +4277,7 @@ body[data-active-tab="profile"] .scroll-to-top {
     right: 0;
     bottom: 0;
     width: 100%;
-    max-width: 400px;
+    max-width: 100%; /* <-- TUTAJ ZMIANA Z 400px na 100% */
     background: color-mix(in srgb, var(--bg-color) 70%, transparent);
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -5960,4 +5946,151 @@ img {
     margin-bottom: 20px;
     text-align: center;
     padding: 0 20px;
+}
+/* Przycisk szybkiego zamykania całego stosu okien */
+.modal-close-all-btn {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 6px 12px 6px 8px;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.modal-close-all-btn:active {
+    transform: scale(0.95);
+}
+
+.modal-close-all-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+/* 1. Przyklejone filtry w filmografii (Sticky Tabs) */
+#filmography-filter {
+    position: sticky;
+    top: -1px; /* Zapobiega przenikaniu linii */
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 12px 0;
+    margin: 16px 0 0 0 !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 2. Animacja "wjazdu" nowej listy przy zmianie filtru */
+.filmography-slide-in-right {
+    animation: fgSlideRight 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.filmography-slide-in-left {
+    animation: fgSlideLeft 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes fgSlideRight {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+@keyframes fgSlideLeft {
+    from { opacity: 0; transform: translateX(-30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* 3. Subtelny znaczek "W kolekcji" na zwiniętej liście */
+.fg-added-badge {
+    color: var(--success-color);
+    background: color-mix(in srgb, var(--success-color) 15%, transparent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+/* ==========================================
+   WYRÓŻNIENIE PROFESJI W ULUBIONYCH (PREMIUM UI)
+========================================== */
+/* Usunięcie domyślnej białej ramki przy ulubionych, by zrobić miejsce na kolory profesji */
+.cast-member.draggable-actor img {
+    border-width: 2px !important;
+    transition: all 0.3s ease;
+}
+
+/* 1. Tylko Aktor */
+.cast-member.role-actor img {
+    border-color: color-mix(in srgb, var(--border-color) 80%, transparent) !important;
+}
+
+/* 2. Tylko Reżyser */
+.cast-member.role-director img {
+    border-color: var(--info-color) !important;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--info-color) 30%, transparent) !important;
+}
+
+/* 3. Aktor i Reżyser (Multitalent) */
+.cast-member.role-both img {
+    border-color: var(--warning-color) !important;
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--warning-color) 30%, transparent) !important;
+}
+
+/* Etykiety tekstowe pod nazwiskiem */
+.role-label {
+    display: block;
+    font-size: 0.65rem !important;
+    font-weight: 800 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px !important;
+}
+
+.cast-member.role-actor .role-label { color: var(--text-secondary); }
+.cast-member.role-director .role-label { color: var(--info-color); }
+.cast-member.role-both .role-label {
+    /* Złoty gradient dla twórców i aktorów w jednym */
+    background: linear-gradient(90deg, #F5C518, #f59e0b);
+    -webkit-background-clip: text;
+    color: transparent;
+}
+/* ==========================================
+   OCHRONA PRZED RUBBER-BANDINGIEM (OVERSCROLL)
+========================================== */
+/* Całkowita blokada odrywania się tła aplikacji */
+html, body {
+    overscroll-behavior-x: none !important;
+    overscroll-behavior-y: none !important;
+}
+
+/* Modale, szuflady i listy mają mieć własną, wewnętrzną "sprężynę", 
+   ale NIE MOGĄ ciągnąć za sobą całej aplikacji (contain) */
+.modern-modal-scroll, 
+.fp-content, 
+#searchResults, 
+.notification-list,
+.control-modal-options {
+    overscroll-behavior: contain !important; 
+    -webkit-overflow-scrolling: touch !important; /* Zwraca płynność na iOS */
+}
+
+/* Ochrona dolnego paska i górnego nagłówka (nie da się ich "przeciągnąć") */
+#fixed-header, 
+.bottom-nav, 
+#sub-header {
+    touch-action: none !important; 
 }
