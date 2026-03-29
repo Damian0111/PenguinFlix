@@ -438,7 +438,7 @@ function setupEventListeners() {
 
     // --- NATYWNY GEST WSTECZ (TELEFONY I PRZEGLĄDARKI) ---
     
-     window.addEventListener('popstate', (e) => {
+      window.addEventListener('popstate', (e) => {
         currentModalDepth = Math.max(0, currentModalDepth - 1);
         // 1. Szukamy WSZYSTKICH otwartych okien na ekranie
         const allOverlays = document.querySelectorAll('.modal-overlay, .modern-alert-overlay, #trailerModalOverlay');
@@ -453,15 +453,29 @@ function setupEventListeners() {
             
             const topmost = sorted[sorted.length - 1];
             
-            // Usuwamy tylko najwyższe okno!
-            if (topmost.parentElement && topmost.parentElement.style.display === 'contents') {
-                topmost.parentElement.remove(); // Usuwa kartę ze stosu (Filmy/Aktorzy)
-            } else {
-                topmost.remove(); // Usuwa zwykłe modale (Zwiastuny, Alerty)
+            // --- NAPRAWA MIGANIA: Płynne zanikanie tła zamiast twardego usunięcia ---
+            topmost.style.transition = 'opacity 0.25s ease-out';
+            topmost.style.opacity = '0';
+            
+            // Upewniamy się, że biała karta zjeżdża w dół (jeśli użytkownik kliknął X zamiast swipe'a)
+            const wrapper = topmost.querySelector('.modern-modal-wrapper, .modern-alert-card');
+            if (wrapper && !wrapper.style.transform.includes('100%')) {
+                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
+                if (wrapper.classList.contains('modern-alert-card')) wrapper.style.transform = 'scale(0.8)';
+                else wrapper.style.transform = 'translateY(100%)';
             }
             
-            toggleAppDepthEffect(false); // Wyłączy tło, tylko jeśli to było ostatnie okno
-            return; // Przerwanie - cofnęliśmy jedno okno
+            // Dopiero po zakończeniu animacji (250ms) usuwamy kod z HTML
+            setTimeout(() => {
+                if (topmost.parentElement && topmost.parentElement.style.display === 'contents') {
+                    topmost.parentElement.remove(); 
+                } else {
+                    topmost.remove(); 
+                }
+                toggleAppDepthEffect(false);
+            }, 250);
+            
+            return; 
         }
 
         const statsPage = document.getElementById('full-stats-page'); 
@@ -3644,6 +3658,9 @@ async function openActorDetailsModal(actorId) {
     history.pushState({ modalOpen: true }, '');
     currentModalDepth++;
     
+    // Ustawiamy głębokość w body dla CSS (żeby wyłączyć mordercze dla GPU podwójne rozmycie tła)
+    document.body.setAttribute('data-modal-depth', currentModalDepth);
+    
     const c = document.getElementById('actorModalContainer');
     
     // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
@@ -3658,10 +3675,19 @@ async function openActorDetailsModal(actorId) {
     const zIndex = globalModalZIndex;
     // ----------------------------------------------
 
-    modalNode.innerHTML = `<div class="modal-overlay actor-modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
+    // TWORZYMY GŁÓWNE TŁO (Overlay) TYLKO RAZ! Zawiera specjalne ID dla zawartości.
+    modalNode.innerHTML = `<div class="modal-overlay actor-modal-overlay" style="z-index: ${zIndex};"><div id="wrapper-target-${zIndex}" class="modern-modal-wrapper"><div style="display:flex; flex-direction:column; align-items:center; margin-top:30px;"><div class="skeleton-box" style="width:150px; height:150px; border-radius:50%; margin-bottom:20px;"></div><div class="skeleton-box skeleton-title" style="width:200px; margin:0 auto 20px;"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line"></div><div class="skeleton-box skeleton-text-line short"></div></div></div></div>`;
 
     const ad = await getActorDetails(actorId);
-    if (!ad) { modalNode.remove(); toggleAppDepthEffect(false); showCustomAlert('Błąd', 'Brak danych.', 'error'); history.back(); return; }
+    if (!ad) { 
+        modalNode.remove(); 
+        currentModalDepth = Math.max(0, currentModalDepth - 1);
+        document.body.setAttribute('data-modal-depth', currentModalDepth);
+        toggleAppDepthEffect(false); 
+        showCustomAlert('Błąd', 'Brak danych.', 'error'); 
+        history.back(); 
+        return; 
+    }
 
     data.favoriteActors = data.favoriteActors || [];
     const isFav = data.favoriteActors.some(a => String(a.id) === String(actorId));
@@ -3682,7 +3708,6 @@ async function openActorDetailsModal(actorId) {
         });
     }
 
-    const hasBothRoles = hasActing && hasDirecting;
     const progressPct = totalCredits > 0 ? Math.round((watchedCount / totalCredits) * 100) : 0;
     let progressHTML = '';
 
@@ -3698,26 +3723,30 @@ async function openActorDetailsModal(actorId) {
         progressHTML = `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;"><div style="display: flex; align-items: center; gap: 12px;"><div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><div style="display: flex; flex-direction: column;"><span style="font-size: 0.95rem; font-weight: 700; color: var(--text-color);">${levelText}</span><span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span></div></div><div style="text-align: right; flex-shrink: 0; padding-left: 8px;"><span style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span></div></div><div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;"><div style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div></div></div>`;
     }
 
-  // Zawsze generujemy pasek! Jeśli nie był reżyserem, po prostu zakładka pokaże informację o braku wyników (co i tak jest fajne dla użytkownika, bo wie na pewno).
-const filterHTML = `<div class="segmented-control" id="filmography-filter" style="margin: 16px 0; max-width: 100%;">
-    <button class="seg-btn active" data-filter="all">Wszystko</button>
-    <button class="seg-btn" data-filter="actor">Tylko rola</button>
-    <button class="seg-btn" data-filter="director">Tylko reżyseria</button>
-</div>`;
+    // Usunięto warunek hasBothRoles - filtry renderują się zawsze, by można było ich używać jako Sticky Tabs
+    const filterHTML = `<div class="segmented-control" id="filmography-filter" style="margin: 16px 0; max-width: 100%;">
+        <button class="seg-btn active" data-filter="all">Wszystko</button>
+        <button class="seg-btn" data-filter="actor">Tylko rola</button>
+        <button class="seg-btn" data-filter="director">Tylko reżyseria</button>
+    </div>`;
 
     const closeAllBtnActor = currentModalDepth >= 2 ? `<button class="modal-close-all-btn" onclick="closeAllModals()"><svg viewBox="0 0 24 24"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg> Powrót do panelu głównego</button>` : '';
 
-    modalNode.innerHTML = `<div class="modal-overlay actor-modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div>${closeAllBtnActor}<button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
-        <div class="actor-header" style="position: relative;">
-            <button id="actor-fav-btn" class="hero-fav-btn ${isFav ? 'active' : ''}" style="position: absolute; top: 0; right: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: var(--card-color);">${ICONS.star}</button>
-            ${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
-            <h2>${sName}</h2>
-        </div>
-        ${progressHTML} 
-        <div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>
-        ${kfHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${kfHTML}</div></div>` : ''}
-        ${totalCredits > 0 ? `<div class="filmography-controls" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;"><button id="actor-randomize-btn" class="filmography-button" style="background: var(--primary-color); color: white; border: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(229,9,20,0.3);"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg> Wylosuj tytuł</button><button id="toggle-filmography-btn" class="filmography-button">Pełna filmografia</button></div><div id="full-filmography-wrapper" style="display: none;">${filterHTML}<div id="full-filmography-container"></div></div>` : ''}
-    </div></div></div>`;
+    // PODMIANA TYLKO ŚRODKA (żeby nie mrugnęło czarne tło pod spodem)
+    const targetWrapper = modalNode.querySelector(`#wrapper-target-${zIndex}`);
+    if (targetWrapper) {
+        targetWrapper.outerHTML = `<div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div>${closeAllBtnActor}<button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
+            <div class="actor-header" style="position: relative;">
+                <button id="actor-fav-btn" class="hero-fav-btn ${isFav ? 'active' : ''}" style="position: absolute; top: 0; right: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: var(--card-color);">${ICONS.star}</button>
+                ${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
+                <h2>${sName}</h2>
+            </div>
+            ${progressHTML} 
+            <div class="actor-bio">${renderCollapsibleText(ad.biography)}</div>
+            ${kfHTML ? `<div class="known-for-section"><h3>Znany/a z</h3><div class="known-for-scroller">${kfHTML}</div></div>` : ''}
+            ${totalCredits > 0 ? `<div class="filmography-controls" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;"><button id="actor-randomize-btn" class="filmography-button" style="background: var(--primary-color); color: white; border: none; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(229,9,20,0.3);"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z"/></svg> Wylosuj tytuł</button><button id="toggle-filmography-btn" class="filmography-button">Pełna filmografia</button></div><div id="full-filmography-wrapper" style="display: none;">${filterHTML}<div id="full-filmography-container"></div></div>` : ''}
+        </div></div>`;
+    }
 
     const modal = modalNode.querySelector('.modal-overlay');
 
@@ -3727,11 +3756,13 @@ const filterHTML = `<div class="segmented-control" id="filmography-filter" style
             history.back(); 
         } else {
             modalNode.remove(); 
+            currentModalDepth = Math.max(0, currentModalDepth - 1);
+            document.body.setAttribute('data-modal-depth', currentModalDepth);
             toggleAppDepthEffect(false); 
         }
     };
 
-    // --- ZAKTUALIZOWANY RENDER FILMOGRAFII Z KIERUNKAMI ---
+    // --- ZAKTUALIZOWANY RENDER FILMOGRAFII Z KIERUNKAMI I ZNACZNIKIEM ---
     const renderFilmography = (filterType = 'all', direction = 'none') => {
         const fc = modalNode.querySelector('#full-filmography-container');
         if (!fc) return;
@@ -3841,7 +3872,6 @@ const filterHTML = `<div class="segmented-control" id="filmography-filter" style
             const deltaY = e.touches[0].clientY - swipeStartY;
             const deltaX = e.touches[0].clientX - swipeStartX;
             
-            // Jeśli gest jest bardziej pionowy, przerywamy nasłuch swipe na boki
             if(Math.abs(deltaY) > Math.abs(deltaX)) {
                 isFgDragging = false;
             }
@@ -3872,29 +3902,29 @@ const filterHTML = `<div class="segmented-control" id="filmography-filter" style
         }, { passive: true });
     }
 
- const favBtn = modalNode.querySelector('#actor-fav-btn');
-favBtn.addEventListener('click', async () => {
-    triggerHaptic('light'); data.favoriteActors = data.favoriteActors || [];
-    const idx = data.favoriteActors.findIndex(a => String(a.id) === String(actorId));
-    if (idx > -1) { 
-        data.favoriteActors.splice(idx, 1); 
-        favBtn.classList.remove('active'); 
-        showCustomAlert('Usunięto', 'Usunięto z ulubionych.', 'info'); 
-    } 
-    else { 
-        data.favoriteActors.unshift({ 
-            id: actorId, 
-            name: ad.name, 
-            profile_path: ad.profile_path,
-            isActor: hasActing,      // Zapisujemy, czy gra
-            isDirector: hasDirecting // Zapisujemy, czy reżyseruje
-        }); 
-        favBtn.classList.add('active'); 
-        showCustomAlert('Dodano!', 'Twórca dodany do ulubionych.', 'success'); 
-    }
-    await saveData(); 
-    if (viewState.activeMainTab === 'profile') renderProfileStats();
-});
+    const favBtn = modalNode.querySelector('#actor-fav-btn');
+    favBtn.addEventListener('click', async () => {
+        triggerHaptic('light'); data.favoriteActors = data.favoriteActors || [];
+        const idx = data.favoriteActors.findIndex(a => String(a.id) === String(actorId));
+        if (idx > -1) { 
+            data.favoriteActors.splice(idx, 1); 
+            favBtn.classList.remove('active'); 
+            showCustomAlert('Usunięto', 'Usunięto z ulubionych.', 'info'); 
+        } 
+        else { 
+            data.favoriteActors.unshift({ 
+                id: actorId, 
+                name: ad.name, 
+                profile_path: ad.profile_path,
+                isActor: hasActing,
+                isDirector: hasDirecting
+            }); 
+            favBtn.classList.add('active'); 
+            showCustomAlert('Dodano!', 'Twórca dodany do ulubionych.', 'success'); 
+        }
+        await saveData(); 
+        if (viewState.activeMainTab === 'profile') renderProfileStats();
+    });
 
     const randBtn = modalNode.querySelector('#actor-randomize-btn');
     if (randBtn) {
@@ -3940,7 +3970,6 @@ favBtn.addEventListener('click', async () => {
     modalNode.querySelector('.modal-top-close-btn').addEventListener('click', close); 
     setupSwipeToClose(modal, close);
 }
-
 
 // --- NOWOŚĆ: Rozbudowana funkcja dodająca z Filmografii ---
 
