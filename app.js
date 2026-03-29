@@ -72,18 +72,67 @@ let viewState = {
     seriesWatched: { sortBy: 'dateAdded_desc', filterByGenre: 'all', filterByCustomTag: 'all', filterByVod: 'all', filterFavoritesOnly: false, localSearch: '', displayLimit: 30 },
 };
 
-const ICONS = {
-    quickTrack: `<svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>`,
-    person: `<svg class="placeholder-svg" viewBox="0 0 24 24"><path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" /></svg>`,
-    list: `<svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`,
-    grid: `<svg viewBox="0 0 24 24"><path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/></svg>`,
-    star: `<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`,
-    delete: `<svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`,
-    close: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
-    share: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>`,
-    pin: `<svg viewBox="0 0 24 24"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></svg>`,
-};
+// ==========================================
+// SYSTEM GLOBALNYCH IKON (HYBRYDOWY: MASKI I RAW)
+// ==========================================
+function getSystemIcon(id, defaultSvg, type = 'raw') {
+    const savedBase64 = localStorage.getItem(`global_icon_${id}`);
+    if (savedBase64) {
+        let classes = defaultSvg.match(/class="([^"]+)"/) ? defaultSvg.match(/class="([^"]+)"/)[1] : '';
+        let styles = defaultSvg.match(/style="([^"]+)"/) ? defaultSvg.match(/style="([^"]+)"/)[1] : '';
+        
+        if (type === 'mask') {
+            // Maska - Przejmuje kolor przycisku (żółty dla gwiazdki, niebieski dla pinezki)
+            return `<div class="sys-custom-icon ${classes}" style="-webkit-mask-image: url('${savedBase64}'); ${styles}"></div>`;
+        } else {
+            // Raw - Oryginalne kolory obrazka (dla Ustawień)
+            return `<img src="${savedBase64}" class="sys-custom-raw-icon ${classes}" style="${styles}" alt="icon">`;
+        }
+    }
+    return defaultSvg;
+}
 
+const ICONS = {
+    // Nawigacja (Maska)
+    get navMovies() { return getSystemIcon('nav_movies', `<svg viewBox="0 0 24 24"><path d="M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z" /></svg>`, 'mask'); },
+    get navSeries() { return getSystemIcon('nav_series', `<svg viewBox="0 0 24 24"><path d="M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3M21,17H3V5H21V17Z" /></svg>`, 'mask'); },
+    get navDiscover() { return getSystemIcon('nav_discover', `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" /></svg>`, 'mask'); },
+    
+    // Akcje Interaktywne - MUSZĄ BYĆ MASKAMI, by zmieniać kolor!
+    get quickTrack() { return getSystemIcon('act_quick', `<svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>`, 'mask'); },
+    get star() { return getSystemIcon('act_star', `<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`, 'mask'); },
+    get delete() { return getSystemIcon('act_delete', `<svg viewBox="0 0 24 24"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`, 'mask'); },
+    get pin() { return getSystemIcon('act_pin', `<svg viewBox="0 0 24 24"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></svg>`, 'mask'); },
+      get share() { return getSystemIcon('act_share', `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>`, 'mask'); },
+    get note() { return getSystemIcon('act_note', `<svg viewBox="0 0 24 24" style="width:16px;height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`, 'mask'); },
+    get tag() { return getSystemIcon('act_tag', `<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>`, 'mask'); },
+    
+    // Interfejs (Maska)
+       // Interfejs (Maska)
+    get list() { return getSystemIcon('ui_list', `<svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>`, 'mask'); },
+    get grid() { return getSystemIcon('ui_grid', `<svg viewBox="0 0 24 24"><path d="M4 11h5V5H4v6zm0 7h5v-6H4v6zm6 0h5v-6h-5v6zm6 0h5v-6h-5v6zm-6-7h5V5h-5v6zm6-6v6h5V5h-5z"/></svg>`, 'mask'); },
+    get close() { return getSystemIcon('ui_close', `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`, 'mask'); },
+    get dice() { return getSystemIcon('ui_dice', `<svg viewBox="0 0 24 24"><path d="M16 4h2v2h-2V4zm-4 4h2v2h-2V8zm-4 4h2v2H8v-2zm-4 4h2v2H4v-2zm12-4h2v2h-2v-2zm-4-4h2v2h-2V8zm-4-4h2v2H8V4zm4 12h2v2h-2v-2zm-4-4h2v2H8v-2zm4-4h2v2h-2V8zM19 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM5 20V4h14v16H5z" /></svg>`, 'mask'); },
+    
+    get person() { return getSystemIcon('act_person', `<svg class="placeholder-svg" viewBox="0 0 24 24"><path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" /></svg>`); },
+
+    // Ustawienia aplikacji (RAW - Zwykłe obrazki)
+    get set_theme() { return getSystemIcon('set_theme', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`); },
+    get set_accent() { return getSystemIcon('set_accent', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 0 1 0 -18c4.97 0 9 3.582 9 8c0 1.06 -.474 2.078 -1.318 2.828c-.844 .75 -1.989 1.172 -3.182 1.172h-2.5a2 2 0 0 0 -1 3.75a1.3 1.3 0 0 1 -1 2.25"></path><circle cx="8.5" cy="10.5" r="1"></circle><circle cx="12.5" cy="7.5" r="1"></circle><circle cx="16.5" cy="10.5" r="1"></circle></svg>`); },
+    get set_avatar() { return getSystemIcon('set_avatar', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`); },
+    get set_bg() { return getSystemIcon('set_bg', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`); },
+    get set_icons() { return getSystemIcon('set_icons', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`); },
+    get set_vibes() { return getSystemIcon('set_vibes', `<svg class="icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>`); },
+    get set_notif() { return getSystemIcon('set_notif', `<svg class="icon" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`); },
+    get set_wake() { return getSystemIcon('set_wake', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`); },
+    get set_grid() { return getSystemIcon('set_grid', `<svg class="icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"></rect><rect x="14" y="3" width="7" height="18" rx="1"></rect></svg>`); },
+    get set_backup_rem() { return getSystemIcon('set_backup_rem', `<svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`); },
+    get set_manual() { return getSystemIcon('set_manual', `<svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`); },
+    get set_export() { return getSystemIcon('set_export', `<svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`); },
+    get set_import() { return getSystemIcon('set_import', `<svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>`); },
+    get set_refresh() { return getSystemIcon('set_refresh', `<svg class="icon" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.13 15.57a9 9 0 1 0 3.84-10.36L2 8"></path></svg>`); },
+    get set_info() { return getSystemIcon('set_info', `<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`); }
+};
 // ==========================================
 // 2. BAZA DANYCH (IndexedDB)
 // ==========================================
@@ -215,17 +264,14 @@ const toggleAppDepthEffect = (isActive) => {
         document.body.classList.add('modal-active');
         if (themeMeta) themeMeta.setAttribute('content', '#000000');
     } else {
-        setTimeout(() => {
-            const anyModalLeft = document.querySelectorAll('.modal-overlay, .modern-alert-overlay, #trailerModalOverlay').length > 0;
-            
-            if (!anyModalLeft) {
-                document.body.classList.remove('modal-active');
-                if (themeMeta) themeMeta.setAttribute('content', defaultColor);
-                
-                // DODAJ TĘ LINIJKĘ: Resetujemy licznik, bo ekran jest czysty
-                globalModalZIndex = 2000;
-            }
-        }, 50);
+        // ZABILIŚMY setTimeout! Teraz powrót do ekranu głównego jest NATYCHMIASTOWY.
+        const anyModalLeft = document.querySelectorAll('.modal-overlay, .modern-alert-overlay, #trailerModalOverlay').length > 0;
+        
+        if (!anyModalLeft) {
+            document.body.classList.remove('modal-active');
+            if (themeMeta) themeMeta.setAttribute('content', defaultColor);
+            globalModalZIndex = 2000;
+        }
     }
 };
 function closeAllModals() {
@@ -2942,7 +2988,7 @@ async function openPreviewModal(id, type) {
     let fHTML = isAlreadyAdded ? `<div class="modal-sticky-footer" style="justify-content: center;"><span style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--success-color);"><svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" /></svg> Tytuł w kolekcji</span></div>` : canWatch ? `<div class="modal-sticky-footer"><button id="previewAddToWatchedBtn" class="modal-btn secondary">Do Obejrzanych</button><button id="previewAddToWatchBtn" class="modal-btn primary">Do Obejrzenia</button></div>` : `<div class="modal-sticky-footer"><button id="previewAddToWatchBtn" class="modal-btn primary" style="width: 100%;">Dodaj do Obejrzenia</button></div>`;
     const tagsHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
 
-    let addTagBtnHTML = isAlreadyAdded ? `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>` : '';
+    let addTagBtnHTML = isAlreadyAdded ? `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag">${ICONS.tag}</button>` : '';
     let pinBtnHTML = isAlreadyAdded ? `<button id="modal-pin-btn" style="background:${localItem && localItem.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${localItem && localItem.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${localItem && localItem.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>` : '';
     let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
 
@@ -3118,12 +3164,12 @@ async function openDetailsModal(id, type) {
         rewatchHTML = `<div class="rewatch-section"><div class="rewatch-accordion-header"><h3 class="rewatch-accordion-title"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Historia seansów<span class="rewatch-badge">${item.watchDates.length}</span></h3><svg class="rewatch-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></div><div class="rewatch-accordion-content"><div class="rewatch-list">${datesList}<button id="add-rewatch-btn" class="rewatch-add-btn"><svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Obejrzano dzisiaj</button></div></div></div>`;
     }
 
-    let addTagBtnHTML = `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg></button>`;
+   let addTagBtnHTML = `<button id="modal-manage-tags-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0;" title="Dodaj Tag">${ICONS.tag}</button>`;
     let pinBtnHTML = `<button id="modal-pin-btn" style="background:${item.isPinned ? 'var(--info-color)' : 'var(--card-color)'}; border:1px solid ${item.isPinned ? 'var(--info-color)' : 'var(--border-color)'}; color:${item.isPinned ? '#ffffff' : 'var(--text-secondary)'}; width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Przypnij na górę listy">${ICONS.pin.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;
     let shareBtnHTML = `<button id="modal-share-btn" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-color); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:color 0.2s;" data-title="${encodeURIComponent(item.title || '')}" data-poster="${item.poster || ''}" data-year="${item.year || ''}" data-rating="${item.tmdbRating || ''}" data-overview="${encodeURIComponent(item.overview || '')}" title="Udostępnij">${ICONS.share.replace('viewBox="0 0 24 24"', 'viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"')}</button>`;    
     
     const hasNote = item.privateNote && item.privateNote.trim() !== '';
-    let noteBtnHTML = `<button id="modal-note-btn" class="${hasNote ? 'note-btn-active' : ''}" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-secondary); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Prywatna Notatka"><svg viewBox="0 0 24 24" style="width:16px;height:16px; fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>`;
+   let noteBtnHTML = `<button id="modal-note-btn" class="${hasNote ? 'note-btn-active' : ''}" style="background:var(--card-color); border:1px solid var(--border-color); color:var(--text-secondary); width:36px; height:36px; border-radius:50%; display:flex; justify-content:center; align-items:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.2); flex-shrink:0; transition:all 0.2s ease;" title="Prywatna Notatka">${ICONS.note}</button>`;
 
     let tmdbRatingInfo = item.tmdbRating && item.tmdbRating > 0 ? `<div style="display:flex; align-items:center; gap:12px;"><svg class="tmdb-rating-star" viewBox="0 0 24 24" style="width:32px;height:32px;fill:var(--warning-color);filter:drop-shadow(0 4px 8px rgba(255, 193, 7, 0.3));"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg><div class="tmdb-rating-info" style="display:flex;flex-direction:column;justify-content:center;"><div class="tmdb-rating-score" style="font-size:1.4rem;font-weight:800;color:var(--text-color);line-height:1;">${item.tmdbRating} <span class="max-score" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">/ 10</span></div><div class="tmdb-rating-label" style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px;font-weight:700;">Ocena TMDb</div></div></div>` : `<div></div>`;
     let actionRowHTML = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:0 4px;">${tmdbRatingInfo}<div style="display:flex; align-items:center; gap:8px;">${noteBtnHTML}${addTagBtnHTML}${pinBtnHTML}${shareBtnHTML}</div></div>`;
@@ -5952,6 +5998,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('accent-color-preview').style.backgroundColor = localStorage.getItem('penguinAccentColor') || '#e50914';
         btnAc.onclick = () => openColorModal('accent');
     }
+            // --- Otwieranie menedżera własnych ikon nawigacji ---
+    const btnCustomIcons = document.getElementById('btn-custom-icons-modal');
+    if (btnCustomIcons) {
+        btnCustomIcons.addEventListener('click', () => {
+            GlobalIconManager.openModal(); // <-- ZMIANA NAZWY OBIEKTU
+        });
+    }
+  
     const btnAv = document.getElementById('btn-avatar-color-modal'); if(btnAv) {
         document.getElementById('avatar-color-preview').style.backgroundColor = localStorage.getItem('penguinAvatarColor') || '#e50914';
         btnAv.onclick = () => openColorModal('avatar');
@@ -6360,3 +6414,229 @@ async function processFilmographyAdd(btn) {
         
     showCustomAlert('Sukces!', targetList === 'watched' ? 'Tytuł trafił do Twojej historii!' : 'Tytuł trafił do kolejki.', 'success');
 }
+// ==========================================
+// ZAAWANSOWANY MENEDŻER WSZYSTKICH IKON W APLIKACJI
+// ==========================================
+const GlobalIconManager = {
+    registry: [
+        { category: 'Nawigacja Dolna', items: [
+            { id: 'nav_movies', label: 'Filmy', iconCode: 'navMovies' },
+            { id: 'nav_series', label: 'Seriale', iconCode: 'navSeries' },
+            { id: 'nav_discover', label: 'Odkrywaj', iconCode: 'navDiscover' }
+        ]},
+                    { category: 'Akcje na listach', items: [
+            { id: 'act_delete', label: 'Usuń (Kosz)', iconCode: 'delete' },
+            { id: 'act_star', label: 'Ulubione', iconCode: 'star' },
+            { id: 'act_pin', label: 'Przypnij (Pinezka)', iconCode: 'pin' },
+            { id: 'act_quick', label: 'Odcinek (Błyskawica)', iconCode: 'quickTrack' },
+            { id: 'act_share', label: 'Udostępnij', iconCode: 'share' },
+            { id: 'act_note', label: 'Prywatna Notatka', iconCode: 'note' },
+            { id: 'act_tag', label: 'Tagi', iconCode: 'tag' }
+        ]},
+              { category: 'Interfejs', items: [
+            { id: 'ui_list', label: 'Widok Listy', iconCode: 'list' },
+            { id: 'ui_grid', label: 'Widok Kafelków', iconCode: 'grid' },
+            { id: 'ui_close', label: 'Zamknij (Krzyżyk)', iconCode: 'close' },
+            { id: 'ui_dice', label: 'Kostka losowania', iconCode: 'dice' }
+        ]},
+        { category: 'Ustawienia (Personalizacja)', items: [
+            { id: 'set_theme', label: 'Motyw', iconCode: 'set_theme' },
+            { id: 'set_accent', label: 'Wygląd interfejsu', iconCode: 'set_accent' },
+            { id: 'set_avatar', label: 'Kolor domyślnego awatara', iconCode: 'set_avatar' },
+            { id: 'set_bg', label: 'Ustaw baner profilu', iconCode: 'set_bg' },
+            { id: 'set_icons', label: 'Własne ikony', iconCode: 'set_icons' }
+        ]},
+        { category: 'Ustawienia (Preferencje)', items: [
+            { id: 'set_vibes', label: 'Wibracje', iconCode: 'set_vibes' },
+            { id: 'set_notif', label: 'Panel powiadomień', iconCode: 'set_notif' },
+            { id: 'set_wake', label: 'Nie usypiaj ekranu', iconCode: 'set_wake' },
+            { id: 'set_grid', label: 'Duże kafelki', iconCode: 'set_grid' }
+        ]},
+        { category: 'Ustawienia (Zarządzanie)', items: [
+            { id: 'set_backup_rem', label: 'Przypomnij o backupie', iconCode: 'set_backup_rem' },
+            { id: 'set_manual', label: 'Dodaj tytuł ręcznie', iconCode: 'set_manual' },
+            { id: 'set_export', label: 'Eksportuj', iconCode: 'set_export' },
+            { id: 'set_import', label: 'Importuj', iconCode: 'set_import' },
+            { id: 'set_refresh', label: 'Odśwież dane (Narzędzia)', iconCode: 'set_refresh' },
+            { id: 'set_info', label: 'O aplikacji', iconCode: 'set_info' }
+        ]}
+    ],
+
+    openModal() {
+        toggleAppDepthEffect(true);
+        triggerHaptic('light');
+
+        let rowsHTML = this.registry.map(group => {
+            const itemsHTML = group.items.map(tab => {
+                const savedIcon = localStorage.getItem(`global_icon_${tab.id}`);
+                const defaultSvgHTML = ICONS[tab.iconCode] || '';
+                
+                const isMasked = tab.id.startsWith('nav_');
+                const previewElement = savedIcon 
+                    ? (isMasked 
+                        ? `<div class="icon-manager-preview" style="-webkit-mask-image: url(${savedIcon}); background-color: var(--primary-color);"></div>` 
+                        : `<img src="${savedIcon}" style="width:32px; height:32px; object-fit:contain;">`)
+                    : `<div style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; color: var(--text-secondary); fill: currentColor; stroke: currentColor;">${defaultSvgHTML}</div>`;
+
+                return `
+                <div class="icon-manager-row">
+                    <div style="display:flex; align-items:center; gap: 12px; max-width: 60%;">
+                        ${previewElement}
+                        <span style="font-weight: 700; color: var(--text-color); font-size: 0.85rem; line-height: 1.2;">${tab.label}</span>
+                    </div>
+                    <div style="display:flex; gap: 8px; align-items:center;">
+                        <label style="background: color-mix(in srgb, var(--primary-color) 15%, transparent); color: var(--primary-color); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 800; cursor: pointer; white-space: nowrap;">
+                            Zmień
+                            <input type="file" accept="image/png, image/svg+xml" style="display:none;" data-id="${tab.id}" class="upload-global-icon-input">
+                        </label>
+                        ${savedIcon ? `<button class="reset-global-icon-btn" data-id="${tab.id}" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px; border-radius: var(--radius-sm); cursor: pointer;">✕</button>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+
+            return `
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size:0.75rem; font-weight:800; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; border-bottom:1px solid var(--border-color); padding-bottom:6px;">${group.category}</div>
+                    ${itemsHTML}
+                </div>
+            `;
+        }).join('');
+
+        const mHTML = `
+        <div class="modal-overlay" id="globalIconOverlay" style="z-index: 5000;">
+            <div class="modern-alert-card" style="padding: 24px; max-width: 500px; width: 95%;">
+                <h2 style="margin-bottom: 8px; font-size: 1.3rem;">Personalizacja Ikon</h2>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">Wgraj pliki PNG (z przezroczystością) lub SVG. Kolor ikony dopasuje się do aplikacji automatycznie.</p>
+                
+                <div class="modern-modal-scroll" style="max-height: 60vh; padding-right: 8px; text-align: left;">
+                    ${rowsHTML}
+                </div>
+                
+                <button class="modal-btn primary" id="close-global-icon-btn" style="width: 100%; margin-top: 24px;">Zakończ i Odśwież</button>
+            </div>
+        </div>`;
+
+        const cont = document.getElementById('customAlertContainer');
+        cont.innerHTML = mHTML;
+        
+        const overlay = document.getElementById('globalIconOverlay');
+        const close = () => { 
+            overlay.style.opacity = '0'; 
+            setTimeout(() => { 
+                cont.innerHTML = ''; 
+                toggleAppDepthEffect(false); 
+                this.forceRefreshAppUI(); 
+            }, 200); 
+        };
+        
+        document.getElementById('close-global-icon-btn').onclick = close;
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+        // Obsługa wgrania nowej ikony
+        overlay.querySelectorAll('.upload-global-icon-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                triggerHaptic('medium');
+
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 64; canvas.height = 64;
+                        ctx.clearRect(0, 0, 64, 64);
+                        ctx.drawImage(img, 0, 0, 64, 64);
+                        const compressedBase64 = canvas.toDataURL('image/png'); 
+                        
+                        localStorage.setItem(`global_icon_${e.target.dataset.id}`, compressedBase64);
+                        this.openModal(); 
+                        showCustomAlert('Sukces', 'Ikona podmieniona.', 'success');
+                    };
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        // Obsługa usuwania wgranej ikony
+        overlay.querySelectorAll('.reset-global-icon-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                triggerHaptic('light');
+                localStorage.removeItem(`global_icon_${e.currentTarget.dataset.id}`);
+                this.openModal(); 
+            });
+        });
+    },
+
+    forceRefreshAppUI() {
+        // 1. Nawigacja Dolna
+        const nMovies = document.querySelector('.nav-item[data-maintab="movies"]');
+        if (nMovies) nMovies.innerHTML = `${ICONS.navMovies}<span>Filmy</span>`;
+        const nSeries = document.querySelector('.nav-item[data-maintab="series"]');
+        if (nSeries) nSeries.innerHTML = `${ICONS.navSeries}<span>Seriale</span>`;
+        const nDiscover = document.querySelector('.nav-item[data-maintab="discover"]');
+        if (nDiscover) nDiscover.innerHTML = `${ICONS.navDiscover}<span>Odkrywaj</span>`;
+        updateBottomNavAvatar();
+
+        // 2. Przeładowanie aktualnej listy (Kosze, Pioruny, Gwiazdki, Pinezki)
+        const activeListId = getActiveListId();
+        if (activeListId && data[activeListId]) renderList(data[activeListId], activeListId, true);
+        
+        // 3. Przeładowanie przycisku widoku Siatki/Listy
+        const activeTab = document.getElementById(`tab-${viewState.activeMainTab}`);
+        if(activeTab) {
+            const btnView = activeTab.querySelector('.btn-view-toggle');
+            if(btnView) btnView.innerHTML = viewState.globalViewMode === 'grid' ? ICONS.list : ICONS.grid;
+        }
+                // 3.5. Przeładowanie Kostki Losowania
+        const fabBtn = document.getElementById('fab-randomize');
+        if (fabBtn) {
+            fabBtn.innerHTML = ICONS.dice;
+        }
+
+        // 4. MAPOWANIE: Odświeżanie ikon w PANELU USTAWIEŃ (Wstrzykiwanie w HTML)
+        const settingsMapping = [
+            { selector: '#btn-theme-modal', key: 'set_theme' },
+            { selector: '#btn-accent-color-modal', key: 'set_accent' },
+            { selector: '#btn-avatar-color-modal', key: 'set_avatar' },
+            { selector: 'label[for="profile-bg-upload"]', key: 'set_bg' },
+            { selector: '#btn-custom-icons-modal', key: 'set_icons' },
+            
+            // Uwaga, checkboxy "chowają się" pod labelem, więc szukamy rodzica:
+            { selector: '#haptics-checkbox', isCheckboxParent: true, key: 'set_vibes' },
+            { selector: '#smart-notifications-checkbox', isCheckboxParent: true, key: 'set_notif' },
+            { selector: '#wakelock-checkbox', isCheckboxParent: true, key: 'set_wake' },
+            { selector: '#large-grid-checkbox', isCheckboxParent: true, key: 'set_grid' },
+            
+            { selector: '#btn-backup-settings', key: 'set_backup_rem' },
+            { selector: '#btn-custom-add', key: 'set_manual' },
+            { selector: '#btn-backup', key: 'set_export' },
+            { selector: 'label[for="restoreInput"]', key: 'set_import' },
+            { selector: '#btn-hard-refresh-movies', key: 'set_refresh' },
+            { selector: '#btn-hard-refresh', key: 'set_refresh' },
+            { selector: '#btn-info', key: 'set_info' }
+        ];
+
+                settingsMapping.forEach(map => {
+            let container = document.querySelector(map.selector);
+            if (map.isCheckboxParent && container) {
+                container = container.closest('.settings-item');
+            }
+            if (container) {
+                // ZMIANA: Szuka też naszego wgranego tagu <img>
+                const oldIcon = container.querySelector('svg.icon, div.sys-custom-icon, img.sys-custom-raw-icon');
+                if (oldIcon) {
+                    oldIcon.outerHTML = ICONS[map.key];
+                }
+            }
+        });
+    }
+};
+
+// Aplikujemy ikony natychmiast po starcie aplikacji
+document.addEventListener('DOMContentLoaded', () => {
+    // Wymuszamy załadowanie nowych ikon w interfejsie
+    GlobalIconManager.forceRefreshAppUI();
+});
