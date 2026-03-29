@@ -6106,3 +6106,32 @@ body[data-modal-depth="4"] #actorModalContainer .modal-overlay {
     -webkit-backdrop-filter: none !important;
     background: rgba(0, 0, 0, 0.4) !important; /* Lżejsze przyciemnienie */
 }
+/* ==========================================
+   HARDWARE ACCELERATION (FIX NA MIGOTANIE I PRZEBIJANIE TŁA)
+========================================== */
+.modal-overlay {
+    /* Wymusza na telefonie osobną warstwę GPU dla rozmytego tła */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: opacity;
+}
+
+.modern-modal-wrapper {
+    /* Blokuje "przebijanie" warstw pod spodem podczas przesuwania palcem */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+    
+    /* Dodatkowe zabezpieczenie: nieprzezroczysty cień ukrywa ewentualne niedoskonałości renderowania krawędzi */
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 24px 48px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Lżejsze dla procesora przejście tła pod spodem */
+#fixed-header,
+#sub-header,
+main#app,
+.bottom-nav {
+    will-change: transform, filter;
+}
