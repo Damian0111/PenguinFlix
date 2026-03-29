@@ -6259,3 +6259,7 @@ main#app,
 .fab-randomizer.rolling .sys-custom-raw-icon {
     animation: rollDice 0.6s ease-in-out forwards !important;
 }
+/* USYPIANIE OKIEN W TLE (OPTYMALIZACJA NIESKOŃCZONEJ NAWIGACJI) */
+.modal-stacked-hidden {
+    display: none !important;
+}
