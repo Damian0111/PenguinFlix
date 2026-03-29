@@ -451,30 +451,16 @@ function setupEventListeners() {
                 return zA - zB;
             });
             
-            const topmost = sorted[sorted.length - 1];
+                       const topmost = sorted[sorted.length - 1];
             
-            // --- NAPRAWA MIGANIA: Płynne zanikanie tła zamiast twardego usunięcia ---
-            topmost.style.transition = 'opacity 0.25s ease-out';
-            topmost.style.opacity = '0';
-            
-            // Upewniamy się, że biała karta zjeżdża w dół (jeśli użytkownik kliknął X zamiast swipe'a)
-            const wrapper = topmost.querySelector('.modern-modal-wrapper, .modern-alert-card');
-            if (wrapper && !wrapper.style.transform.includes('100%')) {
-                wrapper.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)';
-                if (wrapper.classList.contains('modern-alert-card')) wrapper.style.transform = 'scale(0.8)';
-                else wrapper.style.transform = 'translateY(100%)';
+            // Wracamy do natychmiastowego, szybkiego usuwania węzła!
+            if (topmost.parentElement && topmost.parentElement.style.display === 'contents') {
+                topmost.parentElement.remove(); 
+            } else {
+                topmost.remove(); 
             }
             
-            // Dopiero po zakończeniu animacji (250ms) usuwamy kod z HTML
-            setTimeout(() => {
-                if (topmost.parentElement && topmost.parentElement.style.display === 'contents') {
-                    topmost.parentElement.remove(); 
-                } else {
-                    topmost.remove(); 
-                }
-                toggleAppDepthEffect(false);
-            }, 250);
-            
+            toggleAppDepthEffect(false); 
             return; 
         }
 
