@@ -11,6 +11,46 @@ let currentModalDepth = 0;
 let largeGridEnabled = localStorage.getItem('largeGridEnabled') === 'true';
 let API_KEY = localStorage.getItem('tmdbApiKey') || '';
 // ==========================================
+// SYSTEM WIRTUALNEGO STOSU (NIESKOŃCZONE OKNA)
+// ==========================================
+window.pushModalToStack = function() {
+    // Szukamy wszystkich kontenerów okien, które nie są uśpione
+    const wrappers = document.querySelectorAll('#detailsModalContainer > div:not(.modal-stacked-hidden), #actorModalContainer > div:not(.modal-stacked-hidden)');
+    
+    wrappers.forEach(w => {
+        // Zapisujemy scroll
+        const scrollArea = w.querySelector('.modern-modal-scroll');
+        if (scrollArea) w.dataset.savedScroll = scrollArea.scrollTop;
+        
+        // Usypiamy okno
+        w.classList.add('modal-stacked-hidden');
+        w.style.display = 'none'; // Twarde ukrycie
+    });
+};
+
+window.popModalFromStack = function() {
+    // Szukamy uśpionych okien
+    const hiddenWrappers = document.querySelectorAll('#detailsModalContainer > div.modal-stacked-hidden, #actorModalContainer > div.modal-stacked-hidden');
+    
+    if (hiddenWrappers.length > 0) {
+        // Bierzemy OSTATNIE uśpione okno i je wybudzamy
+        const lastHidden = hiddenWrappers[hiddenWrappers.length - 1];
+        lastHidden.classList.remove('modal-stacked-hidden');
+        lastHidden.style.display = 'contents';
+        
+        // Przywracamy scrolla (wymaga requestAnimationFrame żeby zadziałało po pokazaniu elementu)
+        requestAnimationFrame(() => {
+            const scrollArea = lastHidden.querySelector('.modern-modal-scroll');
+            if (scrollArea && lastHidden.dataset.savedScroll) {
+                scrollArea.scrollTop = lastHidden.dataset.savedScroll;
+            }
+        });
+    } else {
+        // Brak okien = wyłączamy przyciemnienie apki
+        toggleAppDepthEffect(false);
+    }
+};
+// ==========================================
 // INTELIGENTNY MANAGER BLOKADY EKRANU (WAKE LOCK)
 // ==========================================
 const WakeLockManager = {
@@ -484,33 +524,30 @@ function setupEventListeners() {
 
     // --- NATYWNY GEST WSTECZ (TELEFONY I PRZEGLĄDARKI) ---
     
-      window.addEventListener('popstate', (e) => {
+            window.addEventListener('popstate', (e) => {
         currentModalDepth = Math.max(0, currentModalDepth - 1);
-        // 1. Szukamy WSZYSTKICH otwartych okien na ekranie
-        const allOverlays = document.querySelectorAll('.modal-overlay, .modern-alert-overlay, #trailerModalOverlay');
         
-        if (allOverlays.length > 0) {
-            // Sortujemy je po z-index, żeby znaleźć to na samym wierzchu
-            const sorted = Array.from(allOverlays).sort((a, b) => {
-                const zA = parseInt(window.getComputedStyle(a).zIndex) || 0;
-                const zB = parseInt(window.getComputedStyle(b).zIndex) || 0;
+        // 1. Szukamy TYLKO aktywnego okna na ekranie
+        const activeWrappers = document.querySelectorAll('#detailsModalContainer > div:not(.modal-stacked-hidden), #actorModalContainer > div:not(.modal-stacked-hidden)');
+        
+        if (activeWrappers.length > 0) {
+            // Sortujemy je po z-index, żeby ubić to na samym wierzchu
+            const sorted = Array.from(activeWrappers).sort((a, b) => {
+                const zA = parseInt(window.getComputedStyle(a.firstElementChild || a).zIndex) || 0;
+                const zB = parseInt(window.getComputedStyle(b.firstElementChild || b).zIndex) || 0;
                 return zA - zB;
             });
             
-                       const topmost = sorted[sorted.length - 1];
+            const topmost = sorted[sorted.length - 1];
+            topmost.remove(); 
             
-            // Wracamy do natychmiastowego, szybkiego usuwania węzła!
-            if (topmost.parentElement && topmost.parentElement.style.display === 'contents') {
-                topmost.parentElement.remove(); 
-            } else {
-                topmost.remove(); 
-            }
-            
-            toggleAppDepthEffect(false); 
+            // BUDZIMY OKNO, KTÓRE BYŁO POD SPODEM
+            window.popModalFromStack();
             return; 
         }
 
         const statsPage = document.getElementById('full-stats-page'); 
+        // ... (reszta kodu popstate pozostaje tak jak była)
 
         // 2. Obsługa cofania w Pełnoekranowych Statystykach
         if (statsPage && statsPage.classList.contains('active')) {
@@ -2956,19 +2993,17 @@ async function openFullReviewsModal(id, type) {
 async function openPreviewModal(id, type) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
-        currentModalDepth++;
+    currentModalDepth++;
 
     const dModal = document.getElementById('detailsModalContainer');
     
-    // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
-    if (dModal.children.length >= 15) {
-        showCustomAlert('Limit okien', 'Osiągnięto limit zakładek. Cofnij się, aby przeglądać dalej.', 'info');
-        history.back(); return;
-    }
+    // USYPIAMY STARE OKNA!
+    window.pushModalToStack(); 
+    
     const modalNode = document.createElement('div');
     modalNode.style.display = 'contents';
     dModal.appendChild(modalNode);
-        globalModalZIndex += 10;
+    globalModalZIndex += 10;
     const zIndex = globalModalZIndex;
     // ----------------------------------------------
 
@@ -3015,10 +3050,10 @@ async function openPreviewModal(id, type) {
     // NOWA FUNKCJA ZAMYKAJĄCA (Bez usuwania tła, jeśli jest więcej okien)
     const close = () => { 
         if (history.state && history.state.modalOpen) {
-            history.back(); // Gest usunie okno i naprawi tło
+            history.back(); 
         } else {
             modalNode.remove(); 
-            toggleAppDepthEffect(false); 
+            window.popModalFromStack(); // WYBUDZAMY POPRZEDNIE!
         }
     };
 
@@ -3092,6 +3127,7 @@ async function openDetailsModal(id, type) {
     if (!item) { toggleAppDepthEffect(false); history.back(); return; }
 
     const dModal = document.getElementById('detailsModalContainer');
+    window.pushModalToStack(); 
     
     // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
     if (dModal.children.length >= 15) {
@@ -3195,14 +3231,14 @@ async function openDetailsModal(id, type) {
     const modal = modalNode.querySelector('.modal-overlay');
     
     // NOWA FUNKCJA ZAMYKAJĄCA
-    const close = () => { 
+       const close = () => { 
         if (typeof listName !== 'undefined' && listName) renderList(data[listName], listName, true); 
         
         if (history.state && history.state.modalOpen) {
             history.back(); 
         } else {
             modalNode.remove(); 
-            toggleAppDepthEffect(false); 
+            window.popModalFromStack(); // WYBUDZAMY POPRZEDNIE!
         }
     };
 
@@ -3689,6 +3725,7 @@ async function openActorDetailsModal(actorId) {
     toggleAppDepthEffect(true);
     history.pushState({ modalOpen: true }, '');
     currentModalDepth++;
+
     
     // Ustawiamy głębokość w body dla CSS (żeby wyłączyć mordercze dla GPU podwójne rozmycie tła)
     document.body.setAttribute('data-modal-depth', currentModalDepth);
@@ -3696,10 +3733,8 @@ async function openActorDetailsModal(actorId) {
     const c = document.getElementById('actorModalContainer');
     
     // --- ZABEZPIECZENIE RAM ORAZ NOWY STOS OKIEN ---
-    if (c.children.length >= 6) {
-        showCustomAlert('Limit okien', 'Osiągnięto limit zakładek. Cofnij się, aby przeglądać dalej.', 'info');
-        history.back(); return;
-    }
+       // USYPIAMY STARE OKNA!
+    window.pushModalToStack(); 
     const modalNode = document.createElement('div');
     modalNode.style.display = 'contents';
     c.appendChild(modalNode);
@@ -3783,14 +3818,14 @@ async function openActorDetailsModal(actorId) {
     const modal = modalNode.querySelector('.modal-overlay');
 
     // NOWA FUNKCJA ZAMYKAJĄCA
-    const close = () => { 
+     const close = () => { 
         if (history.state && history.state.modalOpen) {
             history.back(); 
         } else {
             modalNode.remove(); 
             currentModalDepth = Math.max(0, currentModalDepth - 1);
             document.body.setAttribute('data-modal-depth', currentModalDepth);
-            toggleAppDepthEffect(false); 
+            window.popModalFromStack(); // WYBUDZAMY POPRZEDNIE!
         }
     };
 
