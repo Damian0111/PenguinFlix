@@ -29,24 +29,25 @@ window.pushModalToStack = function() {
 };
 
 window.popModalFromStack = function() {
-    // Szukamy uśpionych okien
     const hiddenWrappers = document.querySelectorAll('#detailsModalContainer > div.modal-stacked-hidden, #actorModalContainer > div.modal-stacked-hidden');
     
     if (hiddenWrappers.length > 0) {
-        // Bierzemy OSTATNIE uśpione okno i je wybudzamy
         const lastHidden = hiddenWrappers[hiddenWrappers.length - 1];
         lastHidden.classList.remove('modal-stacked-hidden');
         lastHidden.style.display = 'contents';
         
-        // Przywracamy scrolla (wymaga requestAnimationFrame żeby zadziałało po pokazaniu elementu)
         requestAnimationFrame(() => {
             const scrollArea = lastHidden.querySelector('.modern-modal-scroll');
             if (scrollArea && lastHidden.dataset.savedScroll) {
                 scrollArea.scrollTop = lastHidden.dataset.savedScroll;
             }
         });
+
+        // --- ZMIANA: Jeśli wracamy do aktora, każemy mu odświeżyć pasek! ---
+        if (lastHidden.querySelector('.actor-modal-overlay') && typeof updateActorProgressInModal === 'function') {
+            updateActorProgressInModal(lastHidden);
+        }
     } else {
-        // Brak okien = wyłączamy przyciemnienie apki
         toggleAppDepthEffect(false);
     }
 };
@@ -96,12 +97,8 @@ const WakeLockManager = {
 
 // System sam wyłącza Wake Lock po wyjściu z aplikacji, 
 // więc musimy go odnowić, gdy użytkownik wraca:
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && WakeLockManager.enabled) {
-        WakeLockManager.request();
-    }
-});
-let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [] };
+
+let data = { moviesToWatch: [], moviesWatched: [], seriesToWatch: [], seriesWatched: [], calendarEvents: [] };
 let fullSearchResults = [];
 
 let viewState = {
@@ -474,7 +471,7 @@ function setupEventListeners() {
         // --- ŻELAZNA TARCZA 4.0: BLOKADA RUBBER-BANDINGU (OVERSCROLL) ---
     document.addEventListener('touchmove', function(e) {
         // Sprawdzamy, czy użytkownik dotyka elementu, który FAKTYCZNIE jest przewijalny
-        const isScrollableContainer = e.target.closest('.modern-modal-scroll, .fp-content, #searchResults, .notification-list, .cast-scroller, .known-for-scroller, .discover-categories-wrapper, .stats-poster-wall, .control-modal-options');
+        const isScrollableContainer = e.target.closest('.modern-modal-scroll, .fp-content, #searchResults, .notification-list, .cast-scroller, .known-for-scroller, .discover-categories-wrapper, .stats-poster-wall, .control-modal-options, .genres, .existing-tags-group');
         
         // Zostawiamy w spokoju główny kontener (mainContent ma własną obsługę Pull-to-Refresh w innej części kodu)
         const isMainContent = e.target.closest('#mainContent');
@@ -916,7 +913,7 @@ function setupEventListeners() {
     const ptrSpinner = document.getElementById('ptr-spinner');
 
     // Lista elementów, na których GESTY ZAKŁADEK są ZABLOKOWANE
-    const noSwipeElements = '.sortable-chosen, .discover-categories-wrapper, .stats-poster-wall, .cast-scroller, .known-for-scroller, .recommendations-scroller, .reviews-scroller';
+  const noSwipeElements = '.sortable-chosen, .discover-categories-wrapper, .stats-poster-wall, .cast-scroller, .known-for-scroller, .recommendations-scroller, .reviews-scroller, .genres';
 
     const handleSwipeGesture = () => {
         const deltaX = touchendX - touchstartX; const deltaY = touchendY - touchstartY;
@@ -1174,7 +1171,11 @@ function setupEventListeners() {
         }
         rollFromTMDB();
     });
-
+document.addEventListener('load', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.classList.contains('fade-image')) {
+        e.target.classList.add('loaded');
+    }
+}, true);
 } // <-- ZAMKNIĘCIE CAŁEJ FUNKCJI setupEventListeners()
 // ==========================================
 // 7. NAWIGACJA I RENDEROWANIE LIST
@@ -1276,7 +1277,7 @@ function switchMainTab(tabId, isGoingBack = false) {
         }
     }
     
-    saveData();
+    debouncedSaveData();
 }
 
 function switchSubTab(subTabId, isGoingBack = false) {
@@ -1313,53 +1314,71 @@ function updateToolbarUI(mainTabId) {
     parentTab.querySelector('.btn-view-toggle').innerHTML = viewState.globalViewMode === 'grid' ? ICONS.list : ICONS.grid;
 }
 
+// ==========================================
+// ZASTĄP CAŁY TEN BLOK (od "let listIntersectionObserver"
+// do końca funkcji renderList, linia ~1316–1553)
+// ==========================================
+
+// --- DEBOUNCED SAVE (wklej zaraz po definicji saveData lub zaraz przed renderList) ---
+// Zamienia saveData() w renderList i switchMainTab na wersję z debounce,
+// żeby nie pisać do IndexedDB po każdej zmianie zakładki/filtru.
+const debouncedSaveData = debounce(() => saveData(), 600);
+
+// ==========================================
+// CACHE KLUCZY LIST — diff-patch bez Full Re-render
+// ==========================================
+// Przechowuje ostatnio wyrenderowany klucz każdej listy.
+// Format: { listId: "id1:type1|id2:type2|...|viewMode|limit" }
+const _listRenderCache = {};
+
 let listIntersectionObserver = null;
+
 function renderList(originalItems, listId, preserveLimit = false) {
-    const container = document.getElementById(`${listId}ListContainer`); if (!container) return;
+    const container = document.getElementById(`${listId}ListContainer`);
+    if (!container) return;
+
     const state = viewState[listId];
     if (!preserveLimit) state.displayLimit = 30;
 
-    // --- ZOPTYMALIZOWANE FILTROWANIE (JEDNO PRZEJŚCIE) ---
-    const searchQuery = state.localSearch ? state.localSearch.toLowerCase() : null;
-    const targetVod = (state.filterByVod && state.filterByVod !== 'all') ? state.filterByVod.toLowerCase() : null;
-    const checkRuntime = state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies');
-    const checkTBA = state.hideTBA && listId === 'seriesToWatch';
+    // ── FILTROWANIE ──────────────────────────────────────────
+    const searchQuery   = state.localSearch ? state.localSearch.toLowerCase() : null;
+    const targetVod     = (state.filterByVod && state.filterByVod !== 'all') ? state.filterByVod.toLowerCase() : null;
+    const checkRuntime  = state.maxRuntime && state.maxRuntime < 240 && listId.includes('movies');
+    const checkTBA      = state.hideTBA && listId === 'seriesToWatch';
 
     let itemsToRender = (originalItems || []).filter(item => {
         if (checkRuntime && (!item.runtime || item.runtime > state.maxRuntime)) return false;
-        
+
         if (checkTBA) {
-            const hasNow = getNextEpisodeInfo(item);
+            const hasNow    = getNextEpisodeInfo(item);
             const hasFuture = item.nextEpisodeToAir && item.nextEpisodeToAir.date;
-            if (!hasNow && !hasFuture) return false; 
+            if (!hasNow && !hasFuture) return false;
         }
-        
+
         if (searchQuery) {
-            const titleMatch = item.title && item.title.toLowerCase().includes(searchQuery);
-            const descMatch = item.overview && item.overview.toLowerCase().includes(searchQuery);
+            const titleMatch = item.title   && item.title.toLowerCase().includes(searchQuery);
+            const descMatch  = item.overview && item.overview.toLowerCase().includes(searchQuery);
             if (!titleMatch && !descMatch) return false;
         }
-        
+
         if (state.filterFavoritesOnly && !item.isFavorite) return false;
         if (state.filterByGenre !== 'all' && (!item.genres || !item.genres.includes(state.filterByGenre))) return false;
         if (state.filterByCustomTag && state.filterByCustomTag !== 'all' && (!item.customTags || !item.customTags.includes(state.filterByCustomTag))) return false;
-        
-        // Działa w tle (bez plakietek na UI!)
         if (targetVod && (!item.vod || !item.vod.some(v => v.toLowerCase().includes(targetVod)))) return false;
-        
-        return true; 
+
+        return true;
     });
 
-    // --- SORTOWANIE ---
+    // ── SORTOWANIE ─────────────────────────────────────────────────────────────
     const [sortBy, direction] = state.sortBy.split('_');
-    
+
     const collectionTitles = {};
     if (sortBy === 'title') {
         originalItems.forEach(item => {
             if (item.collectionName && item.collectionName !== 'none') {
                 const year = parseInt(item.year) || 9999;
                 if (!collectionTitles[item.collectionName] || year < collectionTitles[item.collectionName].year) {
-                    collectionTitles[item.collectionName] = { title: (item.title || '').toLowerCase(), year: year };
+                    collectionTitles[item.collectionName] = { title: (item.title || '').toLowerCase(), year };
                 }
             }
         });
@@ -1370,187 +1389,293 @@ function renderList(originalItems, listId, preserveLimit = false) {
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
         }
-        
-        const dir = direction === 'asc' ? 1 : -1;
-        const titleA = (a.title || '').toLowerCase(); const titleB = (b.title || '').toLowerCase();
-        const yearA = parseInt(a.year) || 0; const yearB = parseInt(b.year) || 0;
 
-        switch (sortBy) { 
+        const dir    = direction === 'asc' ? 1 : -1;
+        const titleA = (a.title || '').toLowerCase();
+        const titleB = (b.title || '').toLowerCase();
+        const yearA  = parseInt(a.year) || 0;
+        const yearB  = parseInt(b.year) || 0;
+
+        switch (sortBy) {
             case 'title': {
-                let sortTitleA = titleA; let sortTitleB = titleB;
+                let sortTitleA = titleA, sortTitleB = titleB;
                 if (a.collectionName && a.collectionName !== 'none' && collectionTitles[a.collectionName]) sortTitleA = collectionTitles[a.collectionName].title;
                 if (b.collectionName && b.collectionName !== 'none' && collectionTitles[b.collectionName]) sortTitleB = collectionTitles[b.collectionName].title;
-                const titleCmp = sortTitleA.localeCompare(sortTitleB, 'pl');
-                if (titleCmp !== 0) return titleCmp * dir;
+                const cmp = sortTitleA.localeCompare(sortTitleB, 'pl');
+                if (cmp !== 0) return cmp * dir;
                 if (yearA !== yearB) return (yearA - yearB) * dir;
                 return titleA.localeCompare(titleB, 'pl') * dir;
             }
-            case 'year': { 
-                if (yearA !== yearB) return (yearA - yearB) * dir; 
-                return titleA.localeCompare(titleB, 'pl'); 
-            }
-            case 'rating': 
+            case 'year':
+                if (yearA !== yearB) return (yearA - yearB) * dir;
+                return titleA.localeCompare(titleB, 'pl');
+            case 'rating':
             case 'dateAdded': {
-                const valA = a[sortBy] || 0; const valB = b[sortBy] || 0; 
+                const valA = a[sortBy] || 0, valB = b[sortBy] || 0;
                 if (valA !== valB) return (valA - valB) * dir;
                 return titleA.localeCompare(titleB, 'pl');
             }
             case 'tmdb': {
-                const valA = parseFloat(a.tmdbRating) || 0; 
-                const valB = parseFloat(b.tmdbRating) || 0; 
+                const valA = parseFloat(a.tmdbRating) || 0;
+                const valB = parseFloat(b.tmdbRating) || 0;
                 if (valA === 0 && valB === 0) return titleA.localeCompare(titleB, 'pl');
                 if (valA === 0) return 1;
                 if (valB === 0) return -1;
                 if (valA !== valB) return (valA - valB) * dir;
                 return titleA.localeCompare(titleB, 'pl');
             }
-            default: return 0;  
-        } 
+            default: return 0;
+        }
     });
 
-    const limit = state.displayLimit || 30;
+    const limit      = state.displayLimit || 30;
     const pagedItems = itemsToRender.slice(0, limit);
 
-    // --- RENDEROWANIE KART ---
-    const listHTML = pagedItems.map(item => {
-        const isWatched = listId.includes('Watched'); const isToWatchList = listId.includes('ToWatch');
-        let isUnreleased = false; let unreleasedBadgeList = ''; let unreleasedBadgeGrid = '';
-        const safeTitle = escapeHTML(item.title); const safeOverview = escapeHTML(item.overview);
-        const posterSize = viewState.globalViewMode === 'grid' ? 'w185' : 'w92';
-        const listPosterSrc = item.poster ? item.poster.replace('w500', posterSize) : POSTER_PLACEHOLDER;
-        
-        const pinClass = item.isPinned ? 'is-pinned' : '';
-        const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
-        const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
+    // ── CACHE & DZIŚ ─────────────────────────────────────────────
+    const viewMode   = viewState.globalViewMode;
+    
+    // TYLKO JEDNA deklaracja 'today' na całą funkcję!
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayString = today.toDateString();
 
-        const uniqueId = `${item.id}_${item.type}`;
-        const isBulkSelected = (typeof bulkModeActive !== 'undefined' && bulkModeActive && bulkSelectedItems.has(uniqueId)) ? 'bulk-selected' : '';
+    // Do klucza dodajemy dzisiejszą datę oraz nową datę z TMDB (i.nextEpisodeToAir)
+    const newCacheKey = pagedItems.map(i => `${i.id}:${i.type}:${i.isFavorite ? 1 : 0}:${i.isPinned ? 1 : 0}:${i.rating || 0}:${i.tmdbRating || 0}:${JSON.stringify(i.progress || null)}:${JSON.stringify(i.nextEpisodeToAir || null)}`).join('|')
+        + `|${viewMode}|${limit}|${typeof bulkModeActive !== 'undefined' && bulkModeActive}|${todayString}`;
 
-        if (isToWatchList) {
-            if (!item.releaseDate || item.releaseDate === '') {
-                isUnreleased = true; unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Brak daty premiery</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Zapowiedź</div>`;
-            } else {
-                const today = new Date(); today.setHours(0, 0, 0, 0); const releaseDate = new Date(item.releaseDate);
-                if (releaseDate > today) { isUnreleased = true; const formattedDate = releaseDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }); unreleasedBadgeList = `<div class="unreleased-badge" style="background-color: color-mix(in srgb, var(--info-color) 15%, transparent); border-left-color: var(--info-color); color: var(--info-color);">Premiera: ${formattedDate}</div>`; unreleasedBadgeGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`; }
-            }
-        }
+    if (_listRenderCache[listId] === newCacheKey && container.querySelector('ul')) {
+        _updateSentinel(container, listId, itemsToRender, limit);
+        return;
+    }
+    _listRenderCache[listId] = newCacheKey;
 
-        if (viewState.globalViewMode === 'grid') {
-            let favoriteBadge = item.isFavorite ? `<div class="grid-badge-favorite">${ICONS.star}</div>` : '';
-            let infoBadge = ''; let quickTrackBtnGrid = ''; let nextAirDateHTMLGrid = '';
-            
-            if (isWatched && item.rating > 0) { infoBadge = `<div class="grid-badge-info">★ ${item.rating}</div>`; }
-            else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
-                const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
-                if (watchedCount > 0) { const pct = Math.round((watchedCount/item.numberOfEpisodes)*100); infoBadge = `<div class="grid-badge-info">${pct}%</div>`; }
-                const nextEpInfo = getNextEpisodeInfo(item);
-                
-                if (nextEpInfo && !isUnreleased) {
-                    let isEpisodeReleased = true;
-                    if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === nextEpInfo.season && item.nextEpisodeToAir.episode === nextEpInfo.episode) {
-                         const today = new Date(); today.setHours(0,0,0,0);
-                         const airDate = new Date(item.nextEpisodeToAir.date); 
-                         airDate.setHours(0,0,0,0);
-                         if (airDate.getTime() > today.getTime()) {
-                             isEpisodeReleased = false; 
-                         }
-                    }
-
-                    if (isEpisodeReleased) {
-                        quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
-                    } else {
-                        nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
-                    }
-                }
-                else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background: rgba(59, 130, 246, 0.9);">🕒 Wkrótce</div>`;
-            }
-            let deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
-            
-            return `
-            <li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
-                <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
-                <div class="grid-title-fallback">${safeTitle}</div>
-                <img class="fade-image" src="${listPosterSrc}" alt="${safeTitle}" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.opacity=0;">
-                ${pinGridHTML}${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}
-            </li>`;
-            
-        } else {
-            let extraInfo = '';
-            if (isWatched && item.rating) { extraInfo = generateStarRatingDisplay(item.rating); }
-            else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
-                const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0); 
-                const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
-                const nextEpInfo = getNextEpisodeInfo(item); let nextEpHTML = '';
-                
-                if (nextEpInfo) { 
-                    let isEpisodeReleased = true;
-                    if (item.nextEpisodeToAir && item.nextEpisodeToAir.season === nextEpInfo.season && item.nextEpisodeToAir.episode === nextEpInfo.episode) {
-                         const today = new Date(); today.setHours(0,0,0,0);
-                         const airDate = new Date(item.nextEpisodeToAir.date); 
-                         airDate.setHours(0,0,0,0);
-                         if (airDate.getTime() > today.getTime()) {
-                             isEpisodeReleased = false;
-                         }
-                    }
-
-                    if (isEpisodeReleased) {
-                        nextEpHTML = `<button class="quick-track-btn" data-action="quick-track">${ICONS.quickTrack} Obejrzano ${nextEpInfo.string}</button>`; 
-                    } else {
-                        const airStr = getNextAirDateString(item.nextEpisodeToAir);
-                        nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Premiera: ${airStr}</div>`;
-                    }
-                }
-                else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) {
-                    const airStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
-                    if (airStr) nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Premiera: ${airStr}</div>`;
-                    else nextEpHTML = `<div style="font-size:0.8rem; font-weight:bold; color:var(--info-color); margin-top:4px; margin-bottom:4px;">Na bieżąco! Czekamy na datę premiery.</div>`;
-                }
-                
-                // Zoptymalizowany GPU pasek postępu (z transform: scaleX zamiast width)
-                extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top: 8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="transform: scaleX(${progressPercent / 100});"></div></div></div>`;
-            }
-            
-            return `
-            <li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
-                <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
-                <img class="fade-image" src="${listPosterSrc}" alt="Okładka" onload="this.classList.add('loaded')" onerror="this.onerror=null; this.src='${POSTER_PLACEHOLDER}';">
-                <div class="info">
-                    <strong>${safeTitle}</strong>
-                    <span class="meta">${item.year}${pinListHTML}</span>
-                    ${unreleasedBadgeList}
-                    <p class="overview">${safeOverview}</p>
-                    ${extraInfo}
-                </div>
-                <div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div>
-            </li>`;
-        }
-    }).join('');
+    // ── BUDOWANIE HTML I ZAPIS ─────────────────────────────────────────
+    const listHTML = pagedItems.map(item => _buildItemHTML(item, listId, today)).join('');
 
     let ul = container.querySelector('ul');
-    if (!ul) { ul = document.createElement('ul'); container.appendChild(ul); }
-    ul.className = viewState.globalViewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
-    ul.innerHTML = itemsToRender.length > 0 ? listHTML : `<div class="empty-state-simple">Brak pozycji do wyświetlenia.</div>`;
+    if (!ul) {
+        ul = document.createElement('ul');
+        container.appendChild(ul);
+    }
+    ul.className = viewMode === 'grid' ? 'grid-view-container' : 'list-view-container';
 
-    let oldSentinel = container.querySelector('.infinite-scroll-sentinel');
+    if (itemsToRender.length > 0) {
+        ul.innerHTML = listHTML;
+    } else {
+        ul.innerHTML = '<div class="empty-state-simple">Brak pozycji do wyświetlenia.</div>';
+    }
+
+    _updateSentinel(container, listId, itemsToRender, limit);
+}
+
+// ── BUDOWANIE HTML POJEDYNCZEGO ELEMENTU ──────────────────────────────────────
+function _buildItemHTML(item, listId, today) {
+    const isWatched    = listId.includes('Watched');
+    const isToWatchList = listId.includes('ToWatch');
+    const viewMode     = viewState.globalViewMode;
+
+    const safeTitle    = escapeHTML(item.title);
+    const safeOverview = escapeHTML(item.overview);
+    const posterSize   = viewMode === 'grid' ? 'w185' : 'w92';
+    const posterSrc    = item.poster ? item.poster.replace('w500', posterSize) : POSTER_PLACEHOLDER;
+
+    const pinClass    = item.isPinned ? 'is-pinned' : '';
+    const pinGridHTML = item.isPinned ? `<div class="grid-badge-pin">${ICONS.pin}</div>` : '';
+    const pinListHTML = item.isPinned ? `<span class="list-badge-pin">${ICONS.pin} Przypięty</span>` : '';
+
+    const uniqueId = `${item.id}_${item.type}`;
+    const isBulkSelected = (typeof bulkModeActive !== 'undefined' && bulkModeActive && bulkSelectedItems.has(uniqueId))
+        ? 'bulk-selected' : '';
+
+    // Obliczamy status "niezapremiowanego" raz — używamy przekazanego `today`
+    let isUnreleased       = false;
+    let unreleasedBadgeList = '';
+    let unreleasedBadgeGrid = '';
+
+    if (isToWatchList) {
+        if (!item.releaseDate || item.releaseDate === '') {
+            isUnreleased = true;
+            unreleasedBadgeList = `<div class="unreleased-badge" style="background-color:color-mix(in srgb,var(--info-color) 15%,transparent);border-left-color:var(--info-color);color:var(--info-color);">Brak daty premiery</div>`;
+            unreleasedBadgeGrid = `<div class="grid-unreleased" style="background:rgba(59,130,246,0.9);">🕒 Zapowiedź</div>`;
+        } else {
+            const releaseDate = new Date(item.releaseDate);
+            if (releaseDate > today) {
+                isUnreleased = true;
+                const formattedDate = releaseDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+                unreleasedBadgeList = `<div class="unreleased-badge" style="background-color:color-mix(in srgb,var(--info-color) 15%,transparent);border-left-color:var(--info-color);color:var(--info-color);">Premiera: ${formattedDate}</div>`;
+                unreleasedBadgeGrid = `<div class="grid-unreleased" style="background:rgba(59,130,246,0.9);">🕒 Wkrótce</div>`;
+            }
+        }
+    }
+
+    if (viewMode === 'grid') {
+        return _buildGridItem(item, listId, {
+            safeTitle, posterSrc, pinClass, pinGridHTML, isBulkSelected,
+            isWatched, isUnreleased, unreleasedBadgeGrid, today
+        });
+    } else {
+        return _buildListItem(item, listId, {
+            safeTitle, safeOverview, posterSrc, pinClass, pinListHTML, isBulkSelected,
+            isWatched, isUnreleased, unreleasedBadgeList, today
+        });
+    }
+}
+
+function _buildGridItem(item, listId, { safeTitle, posterSrc, pinClass, pinGridHTML, isBulkSelected, isWatched, isUnreleased, unreleasedBadgeGrid, today }) {
+    let favoriteBadge    = item.isFavorite ? `<div class="grid-badge-favorite">${ICONS.star}</div>` : '';
+    let infoBadge        = '';
+    let quickTrackBtnGrid = '';
+    let nextAirDateHTMLGrid = '';
+
+    if (isWatched && item.rating > 0) {
+        infoBadge = `<div class="grid-badge-info">★ ${item.rating}</div>`;
+    } else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
+        const watchedCount = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
+        if (watchedCount > 0) {
+            const pct = Math.round((watchedCount / item.numberOfEpisodes) * 100);
+            infoBadge = `<div class="grid-badge-info">${pct}%</div>`;
+        }
+
+        const nextEpInfo = getNextEpisodeInfo(item);
+
+        if (nextEpInfo && !isUnreleased) {
+            const episodeReleased = _isEpisodeReleased(item, nextEpInfo, today);
+            if (episodeReleased) {
+                quickTrackBtnGrid = `<button class="quick-track-btn-grid" data-action="quick-track">${ICONS.quickTrack} <span>${nextEpInfo.string}</span></button>`;
+            } else {
+                nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background:rgba(59,130,246,0.9);">🕒 Wkrótce</div>`;
+            }
+        } else if (!nextEpInfo && !isSeriesFinished(item) && !isUnreleased) {
+            nextAirDateHTMLGrid = `<div class="grid-unreleased" style="background:rgba(59,130,246,0.9);">🕒 Wkrótce</div>`;
+        }
+    }
+
+    const deleteBadge = `<button class="grid-badge-delete delete-btn" title="Usuń">${ICONS.delete}</button>`;
+
+    return `
+    <li class="grid-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
+        <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+        <div class="grid-title-fallback">${safeTitle}</div>
+        <img class="fade-image" src="${posterSrc}" alt="${safeTitle}" loading="lazy" decoding="async">
+        ${pinGridHTML}${favoriteBadge}${infoBadge}${unreleasedBadgeGrid}${quickTrackBtnGrid}${nextAirDateHTMLGrid}${deleteBadge}
+    </li>`;
+}
+
+function _buildListItem(item, listId, { safeTitle, safeOverview, posterSrc, pinClass, pinListHTML, isBulkSelected, isWatched, isUnreleased, unreleasedBadgeList, today }) {
+    let extraInfo = '';
+
+    if (isWatched && item.rating) {
+        extraInfo = generateStarRatingDisplay(item.rating);
+    } else if (listId === 'seriesToWatch' && item.progress && item.numberOfEpisodes > 0) {
+        const watchedCount    = Object.values(item.progress).reduce((acc, eps) => acc + eps.length, 0);
+        const progressPercent = (watchedCount / item.numberOfEpisodes) * 100;
+        const nextEpInfo      = getNextEpisodeInfo(item);
+        let nextEpHTML        = '';
+
+        if (nextEpInfo) {
+            const episodeReleased = _isEpisodeReleased(item, nextEpInfo, today);
+            if (episodeReleased) {
+                nextEpHTML = `<button class="quick-track-btn" data-action="quick-track">${ICONS.quickTrack} Obejrzano ${nextEpInfo.string}</button>`;
+            } else {
+                const airStr = getNextAirDateString(item.nextEpisodeToAir);
+                nextEpHTML = `<div style="font-size:0.8rem;font-weight:bold;color:var(--info-color);margin-top:4px;margin-bottom:4px;">Premiera: ${airStr}</div>`;
+            }
+        } else if (!isSeriesFinished(item) && !isUnreleased) {
+            const airStr = item.nextEpisodeToAir ? getNextAirDateString(item.nextEpisodeToAir) : null;
+            nextEpHTML = airStr
+                ? `<div style="font-size:0.8rem;font-weight:bold;color:var(--info-color);margin-top:4px;margin-bottom:4px;">Premiera: ${airStr}</div>`
+                : `<div style="font-size:0.8rem;font-weight:bold;color:var(--info-color);margin-top:4px;margin-bottom:4px;">Na bieżąco! Czekamy na datę premiery.</div>`;
+        }
+
+        extraInfo = `<div class="progress-container">${nextEpHTML}<div class="progress-text" style="${nextEpHTML ? 'margin-top:8px;' : ''}">Obejrzano: ${watchedCount} / ${item.numberOfEpisodes}</div><div class="progress-bar"><div class="progress-bar-inner" style="transform:scaleX(${progressPercent / 100});"></div></div></div>`;
+    }
+
+    return `
+    <li class="list-item ${pinClass} ${isUnreleased ? 'unreleased' : ''} ${isBulkSelected}" data-id="${item.id}" data-type="${item.type}">
+        <div class="bulk-checkbox"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+        <img class="fade-image" src="${posterSrc}" alt="Okładka" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${POSTER_PLACEHOLDER}';">
+        <div class="info">
+            <strong>${safeTitle}</strong>
+            <span class="meta">${item.year}${pinListHTML}</span>
+            ${unreleasedBadgeList}
+            <p class="overview">${safeOverview}</p>
+            ${extraInfo}
+        </div>
+        <div class="item-actions"><button class="icon-button delete-btn" title="Usuń">${ICONS.delete}</button></div>
+    </li>`;
+}
+
+// ── POMOCNIK: sprawdza czy odcinek jest już dostępny (używa przekazanego today) ─
+function _isEpisodeReleased(item, nextEpInfo, today) {
+    if (
+        item.nextEpisodeToAir &&
+        item.nextEpisodeToAir.season  === nextEpInfo.season &&
+        item.nextEpisodeToAir.episode === nextEpInfo.episode
+    ) {
+        const airDate = new Date(item.nextEpisodeToAir.date);
+        airDate.setHours(0, 0, 0, 0);
+        return airDate.getTime() <= today.getTime();
+    }
+    return true;
+}
+
+// ── SENTINEL (infinite scroll) — wydzielony, żeby diff-check też go obsługiwał ─
+function _updateSentinel(container, listId, itemsToRender, limit) {
+    const oldSentinel = container.querySelector('.infinite-scroll-sentinel');
     if (oldSentinel) oldSentinel.remove();
     if (listIntersectionObserver) listIntersectionObserver.disconnect();
 
     if (itemsToRender.length > limit) {
-        let sentinel = document.createElement('div');
-        sentinel.className = 'infinite-scroll-sentinel';
-        sentinel.style.cssText = 'height: 20px; width: 100%; margin-top: 10px;';
+        const sentinel       = document.createElement('div');
+        sentinel.className   = 'infinite-scroll-sentinel';
+        sentinel.style.cssText = 'height:20px;width:100%;margin-top:10px;';
         container.appendChild(sentinel);
-        
-        listIntersectionObserver = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) { 
-                viewState[listId].displayLimit += 20; 
-                renderList(data[listId], listId, true); 
+
+        listIntersectionObserver = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting) {
+                viewState[listId].displayLimit += 20;
+                renderList(data[listId], listId, true);
             }
-        }, { rootMargin: "150px" }); 
-        
+        }, { rootMargin: '150px' });
+
         listIntersectionObserver.observe(sentinel);
     }
 }
+
+// ==========================================
+// KONIEC BLOKU DO WKLEJENIA
+// ==========================================
+
+
+// ==========================================
+// DODATKOWE POPRAWKI — WKLEJ W ODPOWIEDNICH MIEJSCACH
+// ==========================================
+
+// 1. W switchMainTab i switchSubTab: zamień saveData() na debouncedSaveData()
+//    Przykład — szukaj: `saveData();` NA KOŃCU switchMainTab (linia ~1279)
+//    i zamień na: debouncedSaveData();
+//    To samo w switchSubTab (linia ~1292).
+
+// 2. Dodaj CSS dla fade-image bez inline JS onload/onerror.
+//    Wklej do styles.css (lub <style> w index.html):
+/*
+.fade-image {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.fade-image.loaded {
+    opacity: 1;
+}
+*/
+//    Następnie dodaj do setupEventListeners() jeden globalny listener
+//    (zamiast onload="..." na każdym elemencie):
+/*
+document.addEventListener('load', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.classList.contains('fade-image')) {
+        e.target.classList.add('loaded');
+    }
+}, true); // capture = true, żeby łapać przed bubbling
+*/
 
 
 
@@ -1589,24 +1714,21 @@ async function handleQuickTrack(id) {
     const next = getNextEpisodeInfo(item); 
     if (!next) return;
 
-    // --- KROK 1: OPTYMISITC UI (Natychmiastowe działanie dla użytkownika!) ---
-    // Zapisujemy postęp od razu, bo ufamy naszej lokalnej blokadzie z getNextEpisodeInfo
     if (!item.progress[next.season]) item.progress[next.season] = [];
     item.progress[next.season].push(next.episode);
 
-    // Kasujemy stary wskaźnik premiery
+    // Po prostu czyścimy starą datę. 
+    // Przez ułamek sekundy pojawi się "Czekamy na premierę", a potem wjedzie nowa data z funkcji wyżej.
     item.nextEpisodeToAir = null;
 
-    // Natychmiastowy zapis i powiadomienie - użytkownik ma wrażenie, że apka ma 0ms opóźnienia
     await saveData(); 
     triggerHaptic('success');
     showCustomAlert('Obejrzano', `Odcinek ${next.string} oznaczony.`, 'success');
 
-    // Sprawdzamy czy to finał
     const totalWatched = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
     const isFinished = totalWatched >= item.numberOfEpisodes;
 
-    renderList(data[listName], listName, true); // Odświeżamy listę błyskawicznie
+    renderList(data[listName], listName, true); 
 
     if (isFinished && isSeriesFinished(item)) {
         setTimeout(async () => {
@@ -1614,67 +1736,121 @@ async function handleQuickTrack(id) {
                 await handleMoveItem(item.id, 'tv');
             }
         }, 400);
-        return; // Jeśli serial się skończył, nie szukamy w tle dat kolejnych odcinków.
+        return; 
     }
 
-    // --- KROK 2: MAGIA W TLE (Szukamy kolejnego odcinka, NIE blokując ekranu) ---
-    // Wywołujemy funkcję asynchroniczną, ale celowo bez słowa 'await', żeby działała w tle!
     fetchNextEpisodeDataInBackground(item, listName);
 }
-
-// Funkcja pomocnicza do cichej pracy z TMDB po kliknięciu
 async function fetchNextEpisodeDataInBackground(item, listName) {
-    const newNext = getNextEpisodeInfo(item); 
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const formatLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    try {
+        const d = await fetchFromTMDB(`/tv/${item.id}`);
+        if (!d) return;
 
-    if (newNext) {
-        try {
-            const sData = await getSeasonDetails(item.id, newNext.season);
-            if (sData && sData.episodes) {
-                const newEpData = sData.episodes.find(e => e.episode_number === newNext.episode);
-                if (newEpData && newEpData.air_date) {
-                    const nDate = new Date(newEpData.air_date);
-                    nDate.setDate(nDate.getDate() + 1); // Strefa EU +1
-                    nDate.setHours(0, 0, 0, 0);
+        let realSeasons = d.seasons ? d.seasons.filter(s => s.season_number > 0) : item.seasons;
+        let freshNext = null;
 
-                    // Jeśli kolejny odcinek wychodzi w przyszłości - aktualizujemy na cicho bazę
-                    if (nDate.getTime() > today.getTime()) {
-                        item.nextEpisodeToAir = {
-                            date: formatLocal(nDate),
-                            season: newNext.season,
-                            episode: newNext.episode
-                        };
-                        await saveData();
-                        renderList(data[listName], listName, true); // Ciche przerysowanie daty na kafelku
+        let startSeason = 1;
+        if (item.progress) {
+            const seasons = Object.keys(item.progress).map(Number);
+            if (seasons.length > 0) startSeason = Math.max(...seasons);
+        }
+
+        const sortedSeasons = [...realSeasons].sort((a,b) => a.season_number - b.season_number);
+        
+        for (let seasonObj of sortedSeasons) {
+            const sNum = seasonObj.season_number;
+            if (sNum < startSeason) continue;
+            
+            // OMIJAMY CACHE! Pobieramy listę odcinków prosto z serwera.
+            const seasonRes = await fetchFromTMDB(`/tv/${item.id}/season/${sNum}`);
+            if (seasonRes && seasonRes.episodes) {
+                // KRYTYCZNA NAPRAWA: Naprawiamy opóźniony licznik TMDB prawdziwą liczbą odcinków!
+                seasonObj.episode_count = Math.max(seasonObj.episode_count, seasonRes.episodes.length);
+
+                const watchedInSeason = (item.progress && item.progress[sNum]) ? item.progress[sNum] : [];
+                const unwatchedEpisodes = seasonRes.episodes.filter(ep => !watchedInSeason.includes(ep.episode_number));
+                
+                if (unwatchedEpisodes.length > 0) {
+                    const nextEp = unwatchedEpisodes[0];
+                    let adjustedAirDate = null;
+                    if (nextEp.air_date) {
+                        const tempDate = new Date(nextEp.air_date);
+                        tempDate.setDate(tempDate.getDate() + 1); 
+                        adjustedAirDate = tempDate.toISOString().split('T')[0];
                     }
+                    freshNext = { date: adjustedAirDate, season: sNum, episode: nextEp.episode_number };
+                    break; // Mamy to!
                 }
             }
-        } catch (e) {
-            console.error("Błąd pobierania nowej daty w tle:", e);
         }
-    } else {
-         // Jeśli wyklikaliśmy S03E10, a sezonu 4 jeszcze nie było w bazie, pytamy TMDB, czy go ogłosili
-         if (item.status === 'Returning Series') {
-             try {
-                 const freshData = await getItemDetails(item.id, 'tv');
-                 if (freshData && freshData.nextEpisodeToAir) {
-                     item.nextEpisodeToAir = freshData.nextEpisodeToAir;
-                     await saveData();
-                     renderList(data[listName], listName, true);
-                 }
-             } catch(e) {}
-         }
+
+        // Jeśli wyczerpaliśmy obecny sezon, sprawdzamy czy TMDB dodało już następny:
+        if (!freshNext) {
+            const nextSeasonNum = sortedSeasons.length > 0 ? sortedSeasons[sortedSeasons.length - 1].season_number + 1 : 1;
+            const nextSeasonRes = await fetchFromTMDB(`/tv/${item.id}/season/${nextSeasonNum}`);
+            if (nextSeasonRes && nextSeasonRes.episodes && nextSeasonRes.episodes.length > 0) {
+                realSeasons.push({ season_number: nextSeasonNum, episode_count: nextSeasonRes.episodes.length });
+                
+                const nextEp = nextSeasonRes.episodes[0];
+                let adjustedAirDate = null;
+                if (nextEp.air_date) {
+                    const tempDate = new Date(nextEp.air_date);
+                    tempDate.setDate(tempDate.getDate() + 1); 
+                    adjustedAirDate = tempDate.toISOString().split('T')[0];
+                }
+                freshNext = { date: adjustedAirDate, season: nextSeasonNum, episode: nextEp.episode_number };
+            }
+        }
+
+        // Ostateczne zabezpieczenie dla bardzo dziwnych anomalii serwerowych
+        if (!freshNext && d.next_episode_to_air && d.status !== 'Ended' && d.status !== 'Canceled') {
+            const epNum = d.next_episode_to_air.episode_number;
+            const sNum = d.next_episode_to_air.season_number;
+            const isStale = item.progress && item.progress[sNum] && item.progress[sNum].includes(epNum);
+            
+            if (!isStale) {
+                const backupDate = new Date(d.next_episode_to_air.air_date);
+                backupDate.setDate(backupDate.getDate() + 1);
+                freshNext = { date: backupDate.toISOString().split('T')[0], season: sNum, episode: epNum };
+                
+                // Wymuszamy dodanie odcinka, by wygenerował się przycisk!
+                let targetSeason = realSeasons.find(s => s.season_number === sNum);
+                if (targetSeason) targetSeason.episode_count = Math.max(targetSeason.episode_count, epNum);
+                else realSeasons.push({ season_number: sNum, episode_count: epNum });
+            }
+        }
+
+        item.nextEpisodeToAir = freshNext;
+        item.status = d.status || item.status;
+        item.seasons = realSeasons;
+        item.numberOfEpisodes = realSeasons.reduce((acc, s) => acc + s.episode_count, 0);
+
+        await saveData();
+        renderList(data[listName], listName, true); 
+    } catch (e) {
+        console.error("Błąd pobierania nowej daty w tle:", e);
     }
 }
 async function handleMoveItem(id, type) {
-    const fList = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; const tList = `${type === 'movie' ? 'movies' : 'series'}Watched`;
+    const fList = `${type === 'movie' ? 'movies' : 'series'}ToWatch`; 
+    const tList = `${type === 'movie' ? 'movies' : 'series'}Watched`;
     const iIdx = data[fList].findIndex(i => String(i.id) === String(id) && i.type == type);
+    
     if (iIdx > -1) {
         const [item] = data[fList].splice(iIdx, 1);
-        item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder;
+        item.rating = null; 
+        item.review = ""; 
+        delete item.progress; 
+        delete item.seasons; 
+        delete item.customOrder;
+        
         item.watchDates = [Date.now()];
-        data[tList].unshift(item); await saveData(); switchSubTab('watched');
+        item.dateAdded = Date.now(); // <--- TA LINIJKA ZAŁATWIA SPRAWĘ! (Resetuje datę na "teraz")
+        
+        data[tList].unshift(item); 
+        await saveData(); 
+        switchSubTab('watched');
+        
         showCustomAlert('Obejrzane!', `"${escapeHTML(item.title)}" oznaczono jako obejrzane.`, 'success');
     }
 }
@@ -1900,6 +2076,7 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
 function renderProfileStats() {
     const c = document.getElementById('profile-stats-container');
     
+    // Skeleton loading (wyświetlany przez ułamek sekundy podczas kalkulacji)
     c.innerHTML = `
         <div style="grid-column: 1/-1; margin-bottom: 8px;">
             <div class="skeleton-box" style="height: 88px; width: 100%; border-radius: var(--radius-lg);"></div>
@@ -1921,6 +2098,7 @@ function renderProfileStats() {
         let dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }; let decades = {};
         let tCol = data.moviesToWatch.length + tMovies + data.seriesToWatch.length + tSeries; let tComp = tMovies + tSeries;
 
+        // Obliczenia dla obejrzanych filmów
         data.moviesWatched.forEach(m => {
             if (m.runtime) runtime += m.runtime;
             if (m.rating > 0) { sumRat += m.rating; ratCount++; let b = Math.ceil(m.rating); if(b>0 && b<=5) dist[b]++; }
@@ -1928,12 +2106,14 @@ function renderProfileStats() {
             if (m.genres) m.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; });
         });
 
+        // Obliczenia dla seriali
         [...data.seriesWatched, ...data.seriesToWatch].forEach(s => {
             if (s.rating > 0) { sumRat += s.rating; ratCount++; let b = Math.ceil(s.rating); if(b>0 && b<=5) dist[b]++; }
             if (data.seriesWatched.includes(s) && s.year) { let d = Math.floor(parseInt(s.year)/10)*10; decades[d] = (decades[d] || 0) + 1; }
         });
         data.seriesWatched.forEach(s => { if(s.genres) s.genres.forEach(g => { gCounts[g] = (gCounts[g] || 0) + 1; }); });
 
+        // Formatowanie wyciągniętych danych
         let timeStr = '0h';
         if (runtime > 0) { const hrs = Math.floor(runtime / 60); const days = Math.floor(hrs / 24); if (days > 0) timeStr = `<span class="highlight">${days}d</span> ${hrs % 24}h`; else timeStr = `<span class="highlight">${hrs}h</span>`; }
 
@@ -1953,35 +2133,36 @@ function renderProfileStats() {
         }
         chart += `</div><div class="chart-labels"><span class="chart-label">★</span><span class="chart-label">★★</span><span class="chart-label">★★★</span><span class="chart-label">★★★★</span><span class="chart-label">★★★★★</span></div>`;
 
-        // --- SEKCJA ULUBIONYCH AKTORÓW (ORYGINALNY WYGLĄD + KLASY DO DRAG & DROP) ---
+        // SEKCJA ULUBIONYCH AKTORÓW
         data.favoriteActors = data.favoriteActors || [];
         let favActorsHTML = '';
         if (data.favoriteActors.length > 0) {
           const actorCards = data.favoriteActors.map(a => {
-    // Fallback: jeśli ktoś dodał ulubieńca na starej wersji apki, domyślnie ustawiamy go jako Aktora
-    const isDir = a.isDirector === true;
-    const isAct = a.isActor !== false; 
-
-    let rClass = 'role-actor';
-    let rText = 'Aktor';
-    if (isDir && isAct) { rClass = 'role-both'; rText = 'Reżyseria & Rola'; }
-    else if (isDir) { rClass = 'role-director'; rText = 'Reżyser'; }
-
-    return `
-    <div class="cast-member draggable-actor ${rClass}" data-actor-id="${a.id}">
-        <img src="${a.profile_path ? IMAGE_BASE_URL.replace('w500', 'w200') + a.profile_path : POSTER_PLACEHOLDER}" style="pointer-events: none;" onerror="this.outerHTML = ICONS.person;">
-        <strong style="pointer-events: none;">${escapeHTML(a.name)}</strong>
-        <span class="role-label" style="pointer-events: none;">${rText}</span>
-    </div>
-    `;
-}).join('');
+                const isDir = a.isDirector === true; const isAct = a.isActor !== false; 
+                let rClass = 'role-actor'; let rText = 'Aktor';
+                if (isDir && isAct) { rClass = 'role-both'; rText = 'Reżyseria & Rola'; }
+                else if (isDir) { rClass = 'role-director'; rText = 'Reżyser'; }
+                return `
+                <div class="cast-member draggable-actor ${rClass}" data-actor-id="${a.id}">
+                    <img src="${a.profile_path ? IMAGE_BASE_URL.replace('w500', 'w200') + a.profile_path : POSTER_PLACEHOLDER}" style="pointer-events: none;" onerror="this.outerHTML = ICONS.person;">
+                    <strong style="pointer-events: none;">${escapeHTML(a.name)}</strong>
+                    <span class="role-label" style="pointer-events: none;">${rText}</span>
+                </div>`;
+            }).join('');
             favActorsHTML = `<div class="cast-scroller" id="fav-actors-container" style="margin-top: 12px; padding-bottom: 4px;">${actorCards}</div>`;
         } else {
             favActorsHTML = '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:8px; line-height: 1.4;">Brak ulubionych aktorów. Kliknij gwiazdkę przy zdjęciu aktora, aby go tu dodać!</div>';
         }
 
+        // LICZNIK ZAPLANOWANYCH SEANSÓW
+        data.calendarEvents = data.calendarEvents || [];
+        const upcomingCount = data.calendarEvents.filter(e => !e.notified).length;
+        const calBadge = upcomingCount > 0 ? `<span style="background:var(--info-color);color:#fff;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:bold;margin-left:8px;">${upcomingCount}</span>` : '';
+
+        // GENEROWANIE STRUKTURY PROFILU
         c.innerHTML = `
-            <div style="grid-column: 1/-1; margin-bottom: 8px;">
+            <div style="grid-column: 1/-1; display:flex; flex-direction:column; gap:12px; margin-bottom: 8px;">
+                <!-- PRZYCISK: CENTRUM STATYSTYK -->
                 <button id="btn-open-advanced-stats" style="width: 100%; background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); color: var(--text-color); border-radius: var(--radius-lg); padding: 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
                     <div style="display:flex; align-items:center; gap:16px;">
                         <div style="width:48px; height:48px; border-radius:50%; background:color-mix(in srgb, var(--primary-color) 15%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
@@ -1994,8 +2175,23 @@ function renderProfileStats() {
                     </div>
                     <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </button>
+                
+                <!-- PRZYCISK: HARMONOGRAM SEANSÓW -->
+                <button id="btn-open-calendar-modal" style="width: 100%; background: linear-gradient(135deg, color-mix(in srgb, var(--info-color) 20%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--info-color) 30%, transparent); color: var(--text-color); border-radius: var(--radius-lg); padding: 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div style="width:48px; height:48px; border-radius:50%; background:color-mix(in srgb, var(--info-color) 15%, transparent); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:var(--info-color); stroke-width:2.5; stroke-linecap:round;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        </div>
+                        <div style="text-align:left;">
+                            <div style="font-size:1.1rem; font-weight:800; margin-bottom:4px; display:flex; align-items:center;">Harmonogram ${calBadge}</div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary);">Planuj i organizuj swoje seanse</div>
+                        </div>
+                    </div>
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
             </div>
             
+            <!-- Kafelki podstawowych statystyk -->
             <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M19.8 3.2L12 11 4.2 3.2 3.5 4l7.8 7.8-7.8 7.8.7.7 7.8-7.8 7.8 7.8.7-.7-7.8-7.8L19.8 4z"/></svg><div class="label">Filmy</div><div class="value">${formatNum(tMovies)}</div></div>
             <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg><div class="label">Czas (Filmy)</div><div class="value">${timeStr}</div></div>
             <div class="stat-card"><svg class="icon-bg" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/></svg><div class="label">Seriale</div><div class="value">${formatNum(tSeries)}</div></div>
@@ -2004,7 +2200,7 @@ function renderProfileStats() {
             <div class="stat-card"><div class="label">Ukończono</div><div class="value">${compRate}<span style="font-size:1rem; color:var(--text-secondary)">%</span></div></div>
             <div class="stat-card full-width"><div class="label">Ulubione Gatunki</div>${topGHTML}</div>
             
-            <!-- SEKCJA ULUBIONYCH AKTORÓW -->
+            <!-- Obsada i wykres -->
             <div class="stat-card full-width">
                 <div class="label" style="display:flex; justify-content:space-between;">
                     <span>Twoi Ulubieńcy</span>
@@ -2016,27 +2212,256 @@ function renderProfileStats() {
             <div class="stat-card full-width"><div class="label" style="margin-bottom:0;">Rozkład ocen</div><div class="rating-chart-wrap">${chart}</div></div>
         `;
 
-        // --- INICJALIZACJA DRAG & DROP DLA AKTORÓW ---
+        // Inicjalizacja drag & drop dla aktorów
         initActorDragAndDrop();
 
-        c.onclick = (e) => {
+        // Podpięcie eventów kliknięcia w profilu
+        c.onclick = async (e) => {
+            // Otwieranie zaawansowanych statystyk
             const advBtn = e.target.closest('#btn-open-advanced-stats');
             if (advBtn) {
-                triggerHaptic('medium');
+                triggerHaptic('medium'); 
                 advBtn.style.transform = 'scale(0.96)';
-                setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150);
+                setTimeout(() => { advBtn.style.transform = 'none'; openFullStatsPage(); }, 150); 
+                return;
+            }
+
+            // Otwieranie pełnego kalendarza
+            const calBtn = e.target.closest('#btn-open-calendar-modal');
+            if (calBtn) {
+                triggerHaptic('medium'); 
+                calBtn.style.transform = 'scale(0.96)';
+                setTimeout(() => { calBtn.style.transform = 'none'; openFullCalendarModal(); }, 150); 
                 return;
             }
             
-            // Kliknięcie aktora otwiera jego szczegóły, ALE ignorujemy to, jeśli właśnie skończyliśmy go przesuwać
+            // Obsługa kliknięcia w aktora
             const actorCard = e.target.closest('.draggable-actor');
             if (actorCard && !actorCard.classList.contains('was-dragged')) {
-                triggerHaptic('light');
+                triggerHaptic('light'); 
                 openActorDetailsModal(actorCard.dataset.actorId);
             }
         };
 
     }, 250);
+}
+// ==========================================
+// NAPRAWIONA FUNKCJA: W PEŁNI MOBILNY MODAL PLANOWANIA
+// ==========================================
+function openCalendarPlannerModal(selectedDateObj, onSuccessCallback) {
+    toggleAppDepthEffect(true);
+    
+    // Zabezpieczenie modali na stosie
+    if (!document.getElementById('calendarPlannerModal')) {
+        window.pushModalToStack();
+    }
+    
+    const backlogItems = [...(data.moviesToWatch || []), ...(data.seriesToWatch || [])];
+    
+    // Generowanie poziomej listy filmów (dodane data-title dla wyszukiwarki)
+    let moviesRowHTML = '';
+    if (backlogItems.length === 0) {
+        moviesRowHTML = `<div style="text-align:center; padding: 20px; color:var(--text-secondary); width:100%;">Brak tytułów do obejrzenia.</div>`;
+    } else {
+        moviesRowHTML = backlogItems.map(i => `
+            <div class="movie-picker-item" data-val="${i.id}_${i.type}" data-title="${escapeHTML(i.title).toLowerCase()}">
+                <img src="${i.poster ? i.poster.replace('w500', 'w154') : POSTER_PLACEHOLDER}" alt="Poster" loading="lazy">
+                <div style="font-size:0.7rem; font-weight:700; text-align:center; padding:4px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(i.title)}</div>
+            </div>
+        `).join('');
+    }
+
+    // MAGIA NIESKOŃCZONOŚCI: Pula 50 kopii godzin i DOKŁADNIE 60 MINUT (00-59)
+    const REPEATS = 50;
+    const baseHours = Array.from({length: 24}, (_, i) => `<li>${String(i).padStart(2, '0')}</li>`).join('');
+    const baseMinutes = Array.from({length: 60}, (_, i) => `<li>${String(i).padStart(2, '0')}</li>`).join(''); 
+    
+    const hourList = Array(REPEATS).fill(baseHours).join('');
+    const minuteList = Array(REPEATS).fill(baseMinutes).join('');
+
+    const formattedDateTitle = selectedDateObj.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    const dModal = document.getElementById('detailsModalContainer');
+    const modalNode = document.createElement('div');
+    modalNode.style.display = 'contents';
+    dModal.appendChild(modalNode);
+    globalModalZIndex += 10;
+
+    modalNode.innerHTML = `
+    <div class="modal-overlay" id="calendarPlannerModal" style="z-index: ${globalModalZIndex};">
+        <div class="modern-modal-wrapper" style="max-width: 450px; padding:0;">
+            <div class="modal-drag-handle"></div>
+            <button class="modal-top-close-btn" title="Zamknij" style="top:12px;">${ICONS.close}</button>
+            <div style="padding: 24px 20px 12px; text-align: center; border-bottom: 1px solid var(--border-color);">
+                <h3 style="margin: 0 0 4px 0; font-size: 1.3rem; color: var(--info-color);">Zaplanuj Seans</h3>
+                <p style="margin:0; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">${formattedDateTitle}</p>
+            </div>
+            
+            <div class="modern-modal-scroll" style="padding: 20px;">
+                <div style="font-size:0.8rem; font-weight:800; color:var(--text-secondary); margin-bottom:8px; text-transform:uppercase;">1. Co chcesz obejrzeć?</div>
+                
+                <!-- Wyszukiwarka -->
+                <div style="position: relative; margin-bottom: 16px;">
+                    <input type="text" id="cal-movie-search" class="custom-input" placeholder="Wyszukaj lub wpisz własny tytuł..." style="width: 100%; padding-left: 36px; box-sizing: border-box; background: var(--bg-color);">
+                    <svg viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; stroke: var(--text-secondary); fill: none; stroke-width: 2.5;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+
+                <div class="movie-picker-row" id="cal-movie-picker">
+                    ${moviesRowHTML}
+                </div>
+                
+                <div style="font-size:0.8rem; font-weight:800; color:var(--text-secondary); margin-top:20px; margin-bottom:12px; text-transform:uppercase;">2. Wybierz godzinę</div>
+                
+                <!-- MOBILNE KOŁA ZĘBATE -->
+                <div class="time-wheel-container">
+                    <div class="time-wheel-overlay"></div>
+                    <div class="time-wheel-selection-bar"></div>
+                    <ul class="time-wheel" id="wheel-hours">${hourList}</ul>
+                    <div style="font-size:1.5rem; font-weight:800; color:var(--text-color); z-index:4; position:relative; margin-bottom: 4px;">:</div>
+                    <ul class="time-wheel" id="wheel-minutes">${minuteList}</ul>
+                </div>
+                
+                <button id="cal-save-event-btn" class="modal-btn primary" style="width:100%; margin-top: 24px; background: var(--info-color); box-shadow:0 4px 12px color-mix(in srgb, var(--info-color) 30%, transparent);" disabled>Gotowe</button>
+            </div>
+        </div>
+    </div>`;
+    
+    const modal = modalNode.querySelector('.modal-overlay'); 
+    const close = () => { modalNode.remove(); window.popModalFromStack(); };
+    
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
+    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
+    setupSwipeToClose(modal, close);
+
+    // --- LOGIKA WYSZUKIWARKI ---
+    const searchInput = modalNode.querySelector('#cal-movie-search');
+    const saveBtn = modalNode.querySelector('#cal-save-event-btn');
+    let selectedItemVal = null;
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            
+            // Filtrowanie plakatów
+            modalNode.querySelectorAll('.movie-picker-item').forEach(item => {
+                const title = item.dataset.title || '';
+                item.style.display = title.includes(query) ? 'block' : 'none';
+            });
+
+            modalNode.querySelectorAll('.movie-picker-item').forEach(i => i.classList.remove('active'));
+            selectedItemVal = null;
+
+            // Odblokuj przycisk, jeśli jest wpisany jakiś tekst (własny wpis)
+            if (query.length > 0) saveBtn.disabled = false;
+            else saveBtn.disabled = true;
+        });
+    }
+
+    // LOGIKA WYBORU Z PLAKATU
+    modalNode.querySelectorAll('.movie-picker-item').forEach(item => {
+        item.addEventListener('click', () => {
+            triggerHaptic('light');
+            modalNode.querySelectorAll('.movie-picker-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            selectedItemVal = item.dataset.val;
+            if(searchInput) searchInput.value = ''; // Czyszczenie wyszukiwarki
+            saveBtn.disabled = false;
+        });
+    });
+
+    // --- LOGIKA NIESKOŃCZONYCH KÓŁ ZĘBATYCH ---
+    const wheelHours = modalNode.querySelector('#wheel-hours');
+    const wheelMinutes = modalNode.querySelector('#wheel-minutes');
+    
+    const now = new Date();
+    now.setHours(now.getHours() + 1); // Domyślnie proponuje godzinę do przodu
+    
+    // Ustawiamy się na środku ogromnej listy
+    const centerHourOffset = 25 * 24; 
+    const centerMinuteOffset = 25 * 60; 
+    
+    setTimeout(() => {
+        if(wheelHours) wheelHours.scrollTop = (centerHourOffset + now.getHours()) * 44; 
+        if(wheelMinutes) wheelMinutes.scrollTop = (centerMinuteOffset + 0) * 44; // domyślnie pełna godzina :00
+    }, 50);
+
+    const updateWheelHighlight = (wheel) => {
+        const index = Math.round(wheel.scrollTop / 44);
+        const items = wheel.children;
+        if (wheel.lastIndex !== undefined && items[wheel.lastIndex]) {
+            items[wheel.lastIndex].style.opacity = '0.3';
+            items[wheel.lastIndex].style.transform = 'scale(1)';
+        }
+        if (items[index]) {
+            items[index].style.opacity = '1';
+            items[index].style.transform = 'scale(1.2)';
+        }
+        wheel.lastIndex = index;
+    };
+
+    // Pętla powrotu do środka (Infinite loop)
+    let tH, tM;
+    wheelHours.addEventListener('scroll', () => {
+        updateWheelHighlight(wheelHours);
+        clearTimeout(tH);
+        tH = setTimeout(() => {
+            const idx = Math.round(wheelHours.scrollTop / 44);
+            if (idx < 24 || idx > (REPEATS * 24) - 24) { wheelHours.scrollTop = (centerHourOffset + (idx % 24)) * 44; }
+        }, 200);
+    });
+
+    wheelMinutes.addEventListener('scroll', () => {
+        updateWheelHighlight(wheelMinutes);
+        clearTimeout(tM);
+        tM = setTimeout(() => {
+            const idx = Math.round(wheelMinutes.scrollTop / 44);
+            if (idx < 60 || idx > (REPEATS * 60) - 60) { wheelMinutes.scrollTop = (centerMinuteOffset + (idx % 60)) * 44; }
+        }, 200);
+    });
+
+    // --- ZAPISYWANIE ---
+    saveBtn.addEventListener('click', async () => {
+        triggerHaptic('success');
+        
+        let targetId, targetType, targetTitle, targetImage;
+
+        if (selectedItemVal) {
+            [targetId, targetType] = selectedItemVal.split('_');
+            const targetItem = backlogItems.find(i => String(i.id) === String(targetId) && i.type === targetType);
+            targetTitle = targetItem.title;
+            targetImage = targetItem.poster || POSTER_PLACEHOLDER;
+        } else if (searchInput && searchInput.value.trim() !== '') {
+            targetId = `custom_cal_${Date.now()}`;
+            targetType = 'movie'; 
+            targetTitle = searchInput.value.trim();
+            targetImage = POSTER_PLACEHOLDER;
+        } else { return; }
+        
+        const hourIdx = Math.round(wheelHours.scrollTop / 44);
+        const minIdx = Math.round(wheelMinutes.scrollTop / 44);
+        const selectedHour = parseInt(wheelHours.children[hourIdx].textContent);
+        const selectedMinute = parseInt(wheelMinutes.children[minIdx].textContent);
+        
+        const finalDate = new Date(selectedDateObj);
+        finalDate.setHours(selectedHour, selectedMinute, 0, 0);
+        
+        data.calendarEvents.push({
+            id: `cal_event_${Date.now()}`,
+            targetId: targetId,
+            targetType: targetType,
+            title: targetTitle,
+            image: targetImage,
+            dateTime: finalDate.toISOString(),
+            notified: false
+        });
+
+        await saveData();
+        close();
+        if (onSuccessCallback) onSuccessCallback(); // Odświeża siatkę modala kalendarza pod spodem
+        
+        showCustomAlert('Zaplanowano!', `Przypomnimy o: ${escapeHTML(targetTitle)}`, 'success');
+        if (typeof NotificationManager !== 'undefined') NotificationManager.checkCalendarEvents();
+    });
 }
 // ==========================================
 // 1. ZAKTUALIZOWANA FUNKCJA POBIERANIA DANYCH
@@ -2435,16 +2860,15 @@ function getStatusBadge(status) {
 }
 
 function getNextAirDateString(nextEpData) { 
-    if (!nextEpData || !nextEpData.date) return null; 
+    // Magia blokująca sztuczną datę (tarczę) podczas ładowania
+    if (!nextEpData || !nextEpData.date || nextEpData.isDummy) return null; 
     
-    // Tworzymy datę i ucinamy godziny, by Polska strefa czasowa nie psuła dni
     const airDate = new Date(nextEpData.date); 
     airDate.setHours(0, 0, 0, 0); 
     
     const today = new Date(); 
     today.setHours(0, 0, 0, 0); 
     
-    // Zmiana z ceil na round - koniec z przekłamywaniem dni o jeden w górę!
     const diffDays = Math.round((airDate - today) / (1000 * 60 * 60 * 24)); 
     
     const epString = `S${String(nextEpData.season).padStart(2, '0')}E${String(nextEpData.episode).padStart(2, '0')}`; 
@@ -2456,7 +2880,6 @@ function getNextAirDateString(nextEpData) {
     if (diffDays > 1 && diffDays <= 7) return `${epString} za ${diffDays} dni`; 
     return `${epString}: ${dateString}`; 
 }
-
 const formatRuntime = (minutes) => { if (!minutes || minutes <= 0) return ''; const hours = Math.floor(minutes / 60); const remainingMinutes = minutes % 60; let formatted = []; if (hours > 0) formatted.push(`${hours}h`); if (remainingMinutes > 0) formatted.push(`${remainingMinutes}min`); return formatted.join(' '); };
 
 const generateStarRatingDisplay = (rating) => { let starsHTML = ''; const starPath = "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"; for (let i = 1; i <= 5; i++) { if (rating >= i) { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--warning-color)"><path d="${starPath}"/></svg>`; } else if (rating >= i - 0.5) { starsHTML += `<svg viewBox="0 0 24 24"><defs><linearGradient id="half_grad_${i}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="50%" stop-color="var(--warning-color)"/><stop offset="50%" stop-color="var(--border-color)"/></linearGradient></defs><path d="${starPath}" fill="url(#half_grad_${i})"/></svg>`; } else { starsHTML += `<svg viewBox="0 0 24 24" fill="var(--border-color)"><path d="${starPath}"/></svg>`; } } return `<div class="star-rating-display">${starsHTML}</div>`; };
@@ -3046,6 +3469,15 @@ async function openPreviewModal(id, type) {
     modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, isAlreadyAdded)}<div class="modern-modal-scroll"><div class="modal-body-content">${actionRowHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div></div></div>${fHTML}</div></div>`;
 
     const modal = modalNode.querySelector('.modal-overlay');
+        // --- NOWOŚĆ: Funkcja do dynamicznego odświeżania tagów ---
+    const refreshTagsUI = () => {
+        const container = modalNode.querySelector('.genres');
+        if (container) {
+            const gHTML = (item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('');
+            const tHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
+            container.innerHTML = gHTML + tHTML;
+        }
+    };
     
     // NOWA FUNKCJA ZAMYKAJĄCA (Bez usuwania tła, jeśli jest więcej okien)
     const close = () => { 
@@ -3068,16 +3500,21 @@ async function openPreviewModal(id, type) {
             if (Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType)) openDetailsModal(rId, rType); else openPreviewModal(rId, rType);
             return;
         }
-        const removeIcon = e.target.closest('.remove-tag');
+             const removeIcon = e.target.closest('.remove-tag');
         if (removeIcon) {
-            if (localItem) { localItem.customTags = localItem.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); }
-            openPreviewModal(id, type); return; // Uwaga, odświeżenie tu tworzy nową kartę. Możesz to zoptymalizować w przyszłości.
+            if (localItem) { 
+                localItem.customTags = localItem.customTags.filter(t => t !== removeIcon.dataset.tag); 
+                item.customTags = localItem.customTags; // Aktualizujemy też obiekt w widoku
+                await saveData(); 
+            }
+            refreshTagsUI(); // Dynamiczne odświeżenie zamiast nowej karty!
+            return; 
         }
     });
     modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
 
     const mngBtn = modal.querySelector('#modal-manage-tags-btn');
-    if (mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openPreviewModal(id, type)));
+        if (mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => refreshTagsUI()));
 
     const pinBtn = modal.querySelector('#modal-pin-btn');
     if (pinBtn && localItem) {
@@ -3229,6 +3666,15 @@ async function openDetailsModal(id, type) {
     modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${zIndex};"><div class="modern-modal-wrapper">${getModalHeaderHTML(item, true)}<div class="modern-modal-scroll"><div class="modal-body-content">${nxBanner}${actionRowHTML}${privateNoteAreaHTML}<div class="genres">${(item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('')}${tagsHTML}</div><div>${taglineHTML}<h3>Opis</h3>${renderCollapsibleText(item.overview)}</div>${triviaSectionHTML}<div id="providers-container"></div><div id="seasons-container"></div><div id="cast-container"></div><div id="recommendations-container"></div><div id="reviews-container"></div>${rewatchHTML}${isWatched ? `<div class="review-card" style="margin-top: 24px;"><h3>Twoja ocena</h3><div class="star-rating-interactive"></div><div class="rating-controls"><button id="rating-decrement">-</button><span id="rating-display" class="rating-display"></span><button id="rating-increment">+</button></div><textarea id="reviewText" class="modern-textarea" placeholder="Napisz co myślisz..."></textarea></div>` : ''}</div></div>${fHTML}</div></div>`;
 
     const modal = modalNode.querySelector('.modal-overlay');
+        // --- NOWOŚĆ: Funkcja do dynamicznego odświeżania tagów ---
+    const refreshTagsUI = () => {
+        const container = modalNode.querySelector('.genres');
+        if (container) {
+            const gHTML = (item.genres || []).map(g => `<span class="genre-tag">${escapeHTML(g)}</span>`).join('');
+            const tHTML = (item.customTags || []).map(t => `<span class="custom-tag">${escapeHTML(t)} <svg class="remove-tag" data-tag="${escapeHTML(t)}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>`).join('');
+            container.innerHTML = gHTML + tHTML;
+        }
+    };
     
     // NOWA FUNKCJA ZAMYKAJĄCA
        const close = () => { 
@@ -3257,8 +3703,8 @@ async function openDetailsModal(id, type) {
         });
     }
 
-    const mngBtn = modalNode.querySelector('#modal-manage-tags-btn');
-    if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => openDetailsModal(id, type)));
+       const mngBtn = modalNode.querySelector('#modal-manage-tags-btn');
+    if(mngBtn) mngBtn.addEventListener('click', () => openManageTagsModal(item, () => refreshTagsUI()));
 
     const pinBtn = modalNode.querySelector('#modal-pin-btn');
     if (pinBtn) {
@@ -3290,14 +3736,43 @@ async function openDetailsModal(id, type) {
             if (Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType)) openDetailsModal(rId, rType); else openPreviewModal(rId, rType);
             return; 
         }
-        const removeIcon = e.target.closest('.remove-tag');
-        if (removeIcon) { item.customTags = item.customTags.filter(t => t !== removeIcon.dataset.tag); await saveData(); openDetailsModal(id, type); return; } // UWAGA: tu odświeża budując na nowo
+              const removeIcon = e.target.closest('.remove-tag');
+        if (removeIcon) { 
+            item.customTags = item.customTags.filter(t => t !== removeIcon.dataset.tag); 
+            await saveData(); 
+            refreshTagsUI(); // Dynamiczne odświeżenie!
+            return; 
+        }
+             const refreshRewatchUI = () => {
+            const datesList = item.watchDates.map((ts, idx) => {
+                const dateStr = new Date(ts).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
+                return `<div class="rewatch-item"><span class="rewatch-item-date"><svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:var(--info-color);"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10A10 10 0 0 1 2 12 10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7h1.5z"/></svg> ${dateStr}</span><button class="icon-button delete-rewatch-btn" data-idx="${idx}" title="Usuń ten seans">${ICONS.delete}</button></div>`;
+            }).join('');
+            const rContainer = modalNode.querySelector('.rewatch-list');
+            if (rContainer) rContainer.innerHTML = datesList + `<button id="add-rewatch-btn" class="rewatch-add-btn"><svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Obejrzano dzisiaj</button>`;
+            const badge = modalNode.querySelector('.rewatch-badge');
+            if (badge) badge.textContent = item.watchDates.length;
+        };
+
         const addRewatchBtn = e.target.closest('#add-rewatch-btn');
-        if (addRewatchBtn) { triggerHaptic('success'); item.watchDates.push(Date.now()); await saveData(); openDetailsModal(id, type); showCustomAlert('Świetnie!', 'Dodano dzisiejszy seans do pamiętnika.', 'success'); return; }
+        if (addRewatchBtn) { 
+            triggerHaptic('success'); 
+            item.watchDates.push(Date.now()); 
+            await saveData(); 
+            refreshRewatchUI(); 
+            showCustomAlert('Świetnie!', 'Dodano dzisiejszy seans do pamiętnika.', 'success'); 
+            return; 
+        }
+        
         const delRewatchBtn = e.target.closest('.delete-rewatch-btn');
         if (delRewatchBtn) {
             if (item.watchDates.length <= 1) { showCustomAlert('Uwaga', 'Nie możesz usunąć jedynego seansu z wpisu.', 'info'); return; }
-            if (await showCustomConfirm('Usunąć seans?', 'Czy na pewno chcesz usunąć tę datę z historii oglądania?')) { item.watchDates.splice(parseInt(delRewatchBtn.dataset.idx), 1); await saveData(); openDetailsModal(id, type); } return;
+            if (await showCustomConfirm('Usunąć seans?', 'Czy na pewno chcesz usunąć tę datę z historii oglądania?')) { 
+                item.watchDates.splice(parseInt(delRewatchBtn.dataset.idx), 1); 
+                await saveData(); 
+                refreshRewatchUI(); 
+            } 
+            return;
         }
     });
     modalNode.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
@@ -3326,9 +3801,14 @@ async function openDetailsModal(id, type) {
         setupInteractiveStars(item);
         const sv = modalNode.querySelector('#saveReviewBtn');
         if (sv) sv.onclick = async () => { const rat = modalNode.querySelector('.star-rating-interactive'); item.rating = rat ? parseFloat(rat.dataset.rating) : null; item.review = modalNode.querySelector('#reviewText').value; await saveData(); close(); showCustomAlert('Zapisano!', `Ocena zaktualizowana.`, 'success'); };
-    } else {
+       } else {
         const mv = modalNode.querySelector('#moveToWatchedBtn');
-        if (mv) mv.onclick = async () => { await handleMoveItem(id, type); close(); };
+        if (mv) mv.onclick = async () => { 
+            history.back(); // Zamykamy modal 
+            setTimeout(async () => {
+                await handleMoveItem(id, type); // Czekamy aż animacja modala zjedzie i przenosimy
+            }, 300);
+        };
     }
 
     if (isToWatch && item.type === 'tv' && isTimeCalc) {
@@ -3427,12 +3907,17 @@ function renderSeasonsProgress(item, container) {
                     globalBtn.textContent = 'Czyszczenie...';
                     globalBtn.style.pointerEvents = 'none';
 
-                    item.seasons.forEach(s => {
+                                      item.seasons.forEach(s => {
                         if (s.season_number > 0) item.progress[s.season_number] = [];
                     });
 
                     await saveData();
-                    openDetailsModal(item.id, item.type);
+                    
+                    // ZAMIAST TWORZYĆ NOWE OKNO, ODŚWIEŻAMY UI DYNAMICZNIE:
+                    renderSeasonsProgress(item, container); // Odświeża listę sezonów
+                    if (typeof updateExactRemainingTime === 'function') updateExactRemainingTime(item); // Odświeża czas na dole
+                    renderList(data['seriesToWatch'], 'seriesToWatch', true); // Odświeża listę pod oknem
+                    
                     showCustomAlert('Wyzerowano', 'Postęp serialu został usunięty.', 'info');
                 }
             } else {
@@ -3457,20 +3942,26 @@ function renderSeasonsProgress(item, container) {
                         }
                     });
 
-                    if (changed) {
+                                       if (changed) {
                         await saveData();
-                        openDetailsModal(item.id, item.type);
+                        
+                        // ZAMIAST TWORZYĆ NOWE OKNO, ODŚWIEŻAMY UI DYNAMICZNIE:
+                        renderSeasonsProgress(item, container); 
+                        if (typeof updateExactRemainingTime === 'function') updateExactRemainingTime(item);
+                        renderList(data['seriesToWatch'], 'seriesToWatch', true);
                         
                         const totW = Object.values(item.progress).reduce((acc, arr) => acc + arr.length, 0);
-                        if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { 
-                            setTimeout(async () => { 
-                                if(await showCustomConfirm('Ukończono! 🎉', 'Obejrzałeś wszystko. Przenieść do obejrzanych?')) { 
-                                    await handleMoveItem(item.id, 'tv'); 
-                                    document.getElementById('detailsModalContainer').innerHTML = ''; 
-                                    toggleAppDepthEffect(false); 
-                                } 
-                            }, 500); 
-                        } else {
+                    // Zmień ten fragment:
+if(totW >= item.numberOfEpisodes && !item.nextEpisodeToAir && isSeriesFinished(item)) { 
+    setTimeout(async () => { 
+        if(await showCustomConfirm('Ukończono! 🎉', 'Obejrzałeś wszystko. Przenieść do obejrzanych?')) { 
+            history.back(); // NAJPIERW ZAMYKAMY MODAL
+            setTimeout(async () => {
+                await handleMoveItem(item.id, 'tv'); 
+            }, 300); // PO 0.3s PRZENOSIMY DO ZAKŁADKI
+        } 
+    }, 500); 
+} else {
                             showCustomAlert('Gotowe!', 'Zaznaczono całą wydaną historię.', 'success');
                         }
                     }
@@ -3787,7 +4278,7 @@ async function openActorDetailsModal(actorId) {
         else if (progressPct < 100) levelText = 'Znasz tę filmografię na wylot';
         else levelText = 'Obejrzano absolutnie wszystko! 👑';
 
-        progressHTML = `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;"><div style="display: flex; align-items: center; gap: 12px;"><div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><div style="display: flex; flex-direction: column;"><span style="font-size: 0.95rem; font-weight: 700; color: var(--text-color);">${levelText}</span><span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span></div></div><div style="text-align: right; flex-shrink: 0; padding-left: 8px;"><span style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span></div></div><div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;"><div style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div></div></div>`;
+               progressHTML = `<div style="margin-bottom: 24px;"><div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;"><div style="display: flex; align-items: center; gap: 12px;"><div style="width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--primary-color) 15%, transparent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><div style="display: flex; flex-direction: column;"><span class="actor-level-text-el" style="font-size: 0.95rem; font-weight: 700; color: var(--text-color);">${levelText}</span><span style="font-size: 0.75rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Obejrzane produkcje</span></div></div><div style="text-align: right; flex-shrink: 0; padding-left: 8px;"><span class="actor-watched-count-el" style="font-size: 1.1rem; font-weight: 900; color: var(--text-color);">${watchedCount}</span><span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);"> / ${totalCredits}</span></div></div><div style="height: 6px; width: 100%; background: color-mix(in srgb, var(--border-color) 60%, transparent); border-radius: 6px; overflow: hidden;"><div class="actor-progress-bar-el" style="height: 100%; width: ${progressPct}%; background: var(--primary-color); border-radius: 6px; transition: width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div></div></div>`;
     }
 
     // Usunięto warunek hasBothRoles - filtry renderują się zawsze, by można było ich używać jako Sticky Tabs
@@ -3801,8 +4292,8 @@ async function openActorDetailsModal(actorId) {
 
     // PODMIANA TYLKO ŚRODKA (żeby nie mrugnęło czarne tło pod spodem)
     const targetWrapper = modalNode.querySelector(`#wrapper-target-${zIndex}`);
-    if (targetWrapper) {
-        targetWrapper.outerHTML = `<div class="modern-modal-wrapper" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div>${closeAllBtnActor}<button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
+      if (targetWrapper) {
+        targetWrapper.outerHTML = `<div class="modern-modal-wrapper" data-current-actor="${actorId}" style="padding:0; border-radius:var(--radius-lg);"><div class="modal-drag-handle"></div>${closeAllBtnActor}<button class="modal-top-close-btn" title="Zamknij" style="top:12px; right:12px;">${ICONS.close}</button><div class="modern-modal-scroll" style="padding: 24px;">
             <div class="actor-header" style="position: relative;">
                 <button id="actor-fav-btn" class="hero-fav-btn ${isFav ? 'active' : ''}" style="position: absolute; top: 0; right: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); background: var(--card-color);">${ICONS.star}</button>
                 ${ad.profile_path ? `<img src="${IMAGE_BASE_URL}${ad.profile_path}" alt="${sName}">` : ICONS.person.replace('class="placeholder-svg"', 'class="placeholder-svg" style="width:150px; height:150px; border-radius:50%;"')}
@@ -4174,6 +4665,8 @@ async function loadData() {
 }
 
 function migrateData(dt) {
+    if (!dt.calendarEvents) dt.calendarEvents = [];
+    if (!dt.calendarNotes) dt.calendarNotes = {};
     Object.keys(dt).forEach(k => {
         if (Array.isArray(dt[k])) {
             dt[k].forEach(i => {
@@ -4216,30 +4709,59 @@ async function restoreData(e) {
     const f = e.target.files[0]; if (!f) return;
     const cf = await showCustomConfirm('Przywracanie kopii', 'Ta operacja nadpisze obecne dane. Kontynuować?');
     if (!cf) { e.target.value = ''; return; }
+    
     const r = new FileReader();
     r.onload = async (evt) => {
         try {
             const res = JSON.parse(evt.target.result);
             if (res.data && res.data.moviesToWatch !== undefined) {
                 viewState = res.viewState || viewState;
-                viewState.activeMainTab = 'movies'; viewState.moviesSubTab = 'toWatch';
-                migrateData(res.data); data = res.data; await saveData();
-                switchMainTab('movies'); switchSubTab('toWatch');
+                viewState.activeMainTab = 'movies'; 
+                viewState.moviesSubTab = 'toWatch';
 
-                // --- POCZĄTEK ZMIANY: Czyszczenie i restart powiadomień ---
-                localStorage.removeItem('penguinNotifs'); // Kasujemy stare powiadomienia
-                document.getElementById('notification-badge').style.display = 'none'; // Chowamy kropkę
-                if (typeof NotificationManager !== 'undefined') {
-                    // Natychmiast odpalamy silnik na NOWYCH danych z pliku
-                    NotificationManager.runEngine();
+                // --- NAPRAWA KALENDARZA: Reset flag powiadomień ---
+                if (res.data.calendarEvents) {
+                    const now = new Date();
+                    const todayStr = now.toDateString();
+                    
+                    res.data.calendarEvents.forEach(ev => {
+                        const evDate = new Date(ev.dateTime);
+                        // Jeśli wydarzenie jest dzisiaj lub w przyszłości, resetujemy pamięć powiadomienia!
+                        if (evDate >= now || evDate.toDateString() === todayStr) {
+                            ev.notifiedMorning = false;
+                            ev.notified = false;
+                        }
+                    });
                 }
-                // --- KONIEC ZMIANY ---
+
+                migrateData(res.data); 
+                data = res.data; 
+                await saveData();
+                
+                switchMainTab('movies'); 
+                switchSubTab('toWatch');
+
+                // --- CAŁKOWITY RESET PAMIĘCI POWIADOMIEŃ ---
+                localStorage.removeItem('penguinNotifs'); // Kasujemy wizualne powiadomienia
+                localStorage.removeItem('penguinNotifsBlacklist'); // Kasujemy pamięć odrzuconych ("x") powiadomień!
+                localStorage.removeItem('penguinLastSync'); // Wymuszamy na nowo sync z TMDB
+                document.getElementById('notification-badge').style.display = 'none';
+
+                if (typeof NotificationManager !== 'undefined') {
+                    // Dodano 'await', aby dzwoneczek zapalił się zanim wyskoczy alert "Sukces"
+                    await NotificationManager.runEngine();
+                }
 
                 showCustomAlert('Sukces!', `Przywrócono dane z pliku "${f.name}".`, 'success');
-            } else throw new Error();
-        } catch { showCustomAlert('Błąd', 'Zły format pliku.', 'error'); }
+            } else {
+                throw new Error();
+            }
+        } catch { 
+            showCustomAlert('Błąd', 'Zły format pliku.', 'error'); 
+        }
     };
-    r.readAsText(f); e.target.value = '';
+    r.readAsText(f); 
+    e.target.value = '';
 }
 async function refreshStaleSeries(forceAll = false) {
     const today = new Date(); today.setHours(0,0,0,0); 
@@ -4524,9 +5046,73 @@ const NotificationManager = {
         this.checkPremieres();
         await this.generateRecommendations();
         await this.checkActorPremieres(); 
+        this.checkCalendarEvents(); // <-- TO JEST NOWA LINIJKA!
         this.updateBadge();
     },
+       checkCalendarEvents() {
+        if (!data.calendarEvents) return;
+        
+        const now = new Date();
+        const todayStr = now.toDateString(); 
+        let needsSave = false;
+        
+        data.calendarEvents.forEach(ev => {
+            const evDate = new Date(ev.dateTime);
+            const isPastOrNow = now >= evDate;
+            
+            // 1. ZWYKŁE POWIADOMIENIE W PANELU (Rano, przed godziną seansu)
+            if (!ev.notifiedMorning && !isPastOrNow && evDate.toDateString() === todayStr) {
+                const timeStr = evDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+                this.add({
+                    id: `cal_event_day_${ev.id}`, 
+                    dismissId: `cal_event_day_${ev.id}`, 
+                    title: '🗓️ Dzisiejszy Seans',
+                    desc: `O godzinie ${timeStr} masz w planach "${escapeHTML(ev.title)}".`,
+                    image: ev.image,
+                    targetId: ev.targetId,
+                    targetType: ev.targetType
+                });
+                
+                ev.notifiedMorning = true; 
+                needsSave = true;
+            }
 
+            // 2. ALERT NA ŻYWO + AKTUALIZACJA POWIADOMIENIA (Gdy wybije godzina)
+            if (!ev.notified && isPastOrNow) {
+                ev.notified = true; 
+                // Zabezpieczenie: jeśli ktoś odpalił apkę po czasie, odhaczamy też poranne
+                ev.notifiedMorning = true; 
+                needsSave = true;
+                
+                triggerHaptic('heavy');
+                showCustomAlert('🍿 Czas na seans!', escapeHTML(ev.title), 'success');
+
+                // USUNIĘCIE STAREGO POWIADOMIENIA (żeby nie było bałaganu w panelu)
+                if (data.notifications) {
+                    const oldId = `cal_event_day_${ev.id}`;
+                    data.notifications = data.notifications.filter(n => n.id !== oldId && n.dismissId !== oldId);
+                }
+
+                // DODANIE NOWEGO, ZAKTUALIZOWANEGO POWIADOMIENIA DO PANELU
+                this.add({
+                    id: `cal_event_now_${ev.id}`, 
+                    dismissId: `cal_event_now_${ev.id}`, 
+                    title: '🍿 Czas na seans!',
+                    desc: `Właśnie wybiła godzina Twojego seansu: "${escapeHTML(ev.title)}". Miłego oglądania!`,
+                    image: ev.image,
+                    targetId: ev.targetId,
+                    targetType: ev.targetType
+                });
+            }
+        });
+
+        if (needsSave) {
+            saveData(); 
+            // Odświeżamy widok centrum powiadomień, żeby usunięcie i dodanie było widoczne
+            if (typeof renderNotifications === 'function') renderNotifications();
+            this.updateBadge(); 
+        }
+    },
     checkPremieres() {
         const getDaysToPremiere = (dateString) => {
             const utcPremiere = this.parseDateToUTC(dateString);
@@ -4756,10 +5342,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const recNotifs = notifs.filter(n => String(n.id).startsWith('rec_'));
                 const resurrectNotifs = notifs.filter(n => String(n.id).startsWith('resurrect_')); // <-- NOWOŚĆ: Wyłapujemy zmartwychwstania
                 const actorNotifs = notifs.filter(n => String(n.id).startsWith('actor_radar_')); // NOWE
+                const calNotifs = notifs.filter(n => String(n.id).startsWith('cal_event_'));
 
-// Renderowanie grup w panelu
-if (actorNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🌟 Ulubieni Aktorzy</div>${actorNotifs.map(renderCard).join('')}</div>`; // NOWE
-
+                   if (calNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🗓️ Przypomnienia o seansach</div>${calNotifs.map(renderCard).join('')}</div>`;
+                if (actorNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🌟 Ulubieni Aktorzy</div>${actorNotifs.map(renderCard).join('')}</div>`; // NOWE
                 // Renderowanie grup w panelu
                 if (movieNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">🎬 Premiery Filmowe</div>${movieNotifs.map(renderCard).join('')}</div>`;
                 if (seriesNotifs.length > 0) listHTML += `<div class="notif-group"><div class="notif-group-title">📺 Nowe Odcinki</div>${seriesNotifs.map(renderCard).join('')}</div>`;
@@ -4953,16 +5539,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('bulk-move-btn').addEventListener('click', async () => {
+     document.getElementById('bulk-move-btn').addEventListener('click', async () => {
         if(bulkSelectedItems.size === 0) return;
         const listId = getActiveListId();
         if(!listId.includes('ToWatch')) { showCustomAlert('Błąd', 'Tę akcję wykonasz tylko w "Do obejrzenia"', 'error'); return; }
         
         if(await showCustomConfirm('Przenieść?', `Czy chcesz oznaczyć wybrane pozycje jako obejrzane?`)) {
             let movedCount = 0;
-            let skippedCount = 0; // Licznik odrzuconych pozycji
+            let skippedCount = 0; 
             
-            // Pobieramy identyfikatory zanim zaczną się przesuwać w tablicy
             const itemsToProcess = Array.from(bulkSelectedItems);
             
             for(let uniqueId of itemsToProcess) {
@@ -4973,27 +5558,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     const itemToMove = data[listId][iIdx];
                     let canMove = true;
 
-                    // 1. Zabezpieczenie przed trwającymi serialami
                     if (type === 'tv' && !isSeriesFinished(itemToMove)) {
                         canMove = false;
                     } 
-                    // 2. Zabezpieczenie przed niewydanymi filmami
                     else if (type === 'movie' && itemToMove.releaseDate) {
                         const td = new Date(); td.setHours(0, 0, 0, 0); 
                         const rd = new Date(itemToMove.releaseDate); rd.setHours(0, 0, 0, 0); 
                         if (rd > td) canMove = false;
                     }
 
-                    // Jeśli przeszedł filtry, przenosimy!
                     if (canMove) {
                         const [item] = data[listId].splice(iIdx, 1);
                         item.rating = null; item.review = ""; delete item.progress; delete item.seasons; delete item.customOrder;
+                        
                         item.watchDates = [Date.now()];
+                        item.dateAdded = Date.now(); // <--- TUTAJ TEŻ RESETUJEMY DATĘ!
+                        
                         const targetList = type === 'movie' ? 'moviesWatched' : 'seriesWatched';
                         data[targetList].unshift(item);
                         movedCount++;
                     } else {
-                        // Jeśli zablokowany, zostaje w "Do obejrzenia"
                         skippedCount++;
                     }
                 }
@@ -5001,7 +5585,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             await saveData();
             
-            // Inteligentne powiadomienie
             if (skippedCount > 0) {
                 showCustomAlert('Gotowe!', `Przeniesiono: ${movedCount}. Pominięto: ${skippedCount} (wciąż trwają lub czekają na premierę).`, 'info');
             } else {
@@ -5602,7 +6185,7 @@ let didMoveWhileDragging = false; // Flaga blokująca przypadkowe kliknięcie
 
 document.addEventListener('mousedown', (e) => {
     // Sprawdzamy czy kliknięto w element, który ma być przewijany poziomo
-    const scroller = e.target.closest('.discover-categories-wrapper, .cast-scroller, .known-for-scroller, .recommendations-scroller, .reviews-scroller, .stats-poster-wall');
+    const scroller = e.target.closest('.discover-categories-wrapper, .cast-scroller, .known-for-scroller, .recommendations-scroller, .reviews-scroller, .stats-poster-wall, .genres');
     if (!scroller) return;
     
     isMouseDragging = true;
@@ -6260,11 +6843,7 @@ function initActorDragAndDrop() {
     document.addEventListener('touchcancel', stopDrag, { passive: true });
 }
 // Wymuszenie odświeżania silnika powiadomień po powrocie do aplikacji/otwarciu zakładki
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-        NotificationManager.runEngine();
-    }
-});
+
 async function silentBackgroundSync() {
     let updated = false;
     const todayStr = new Date().toISOString().split('T')[0]; // np. "2024-05-15"
@@ -6304,50 +6883,48 @@ async function silentBackgroundSync() {
 // ==========================================
 // AKTUALIZACJA DAT I START POWIADOMIEŃ W TLE
 // ==========================================
-// ==========================================
-// AKTUALIZACJA DAT I START POWIADOMIEŃ W TLE (ZOPTYMALIZOWANA)
-// ==========================================
 async function updateDatesAndRunNotifications() {
     if (!smartNotificationsEnabled || !data) return;
 
-    // OPTYMALIZACJA 1: Cooldown. Sprawdzamy TMDB maksymalnie raz na 6 godzin.
     const lastSync = localStorage.getItem('penguinLastSync') || 0;
     const now = Date.now();
     if (now - lastSync < 6 * 60 * 60 * 1000) {
-        // Jeśli minęło mniej niż 6h, tylko przeliczamy dni (UI) i kończymy, ZERO zapytań do TMDB!
         if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
         return; 
     }
 
     let libraryUpdated = false;
-    // Tworzymy datę idealnie dopasowaną do strefy czasowej urządzenia (Lokalną)
-const d = new Date();
-const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     try {
         if (data.seriesToWatch && data.seriesToWatch.length > 0) {
             for (let i = 0; i < data.seriesToWatch.length; i++) {
                 let s = data.seriesToWatch[i];
                 
-                // OPTYMALIZACJA 2: Pomijamy seriale oznaczone jako "Zakończone"
                 if (s.status === 'Ended' || s.status === 'Canceled') continue; 
 
-                // Sprawdzamy tylko, jeśli data minęła lub jej brak
                 if (!s.nextEpisodeToAir || s.nextEpisodeToAir.date < todayStr) {
                     if (typeof fetchFromTMDB === 'function') {
                         const freshData = await fetchFromTMDB(`/tv/${s.id}`);
                         
                         if (freshData && freshData.next_episode_to_air) {
-                            s.nextEpisodeToAir = {
+                            const freshNext = {
                                 date: freshData.next_episode_to_air.air_date,
                                 episode: freshData.next_episode_to_air.episode_number,
                                 season: freshData.next_episode_to_air.season_number
                             };
+
+                            // OCHRONA PRZED STARYMI DANYMI TMDB W TLE:
+                            if (s.progress && s.progress[freshNext.season] && s.progress[freshNext.season].includes(freshNext.episode)) {
+                                s.nextEpisodeToAir = null;
+                            } else {
+                                s.nextEpisodeToAir = freshNext;
+                            }
                             libraryUpdated = true;
                         } 
-                        // Jeśli TMDB mówi, że serial się skończył (brak następnego odcinka i status Ended)
                         else if (freshData && (!freshData.next_episode_to_air && (freshData.status === 'Ended' || freshData.status === 'Canceled'))) {
-                            s.status = freshData.status; // Zapisujemy status!
+                            s.status = freshData.status; 
                             s.nextEpisodeToAir = null;
                             libraryUpdated = true;
                         }
@@ -6356,30 +6933,20 @@ const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')
             }
         }
 
-        if (libraryUpdated && typeof saveData === 'function') {
-            saveData(); 
-        }
-        
-        // Zapisujemy czas ostatniej udanej synchronizacji
+        if (libraryUpdated && typeof saveData === 'function') saveData(); 
         localStorage.setItem('penguinLastSync', now.toString());
 
     } catch (e) {
         console.warn("Błąd podczas aktualizacji dat TMDB w tle:", e);
     }
 
-    if (typeof NotificationManager !== 'undefined') {
-        NotificationManager.runEngine();
-    }
+    if (typeof NotificationManager !== 'undefined') NotificationManager.runEngine();
 }
 
 // ==========================================
 // ODŚWIEŻANIE PO POWROCIE DO ZAKŁADKI / TELEFONU
 // ==========================================
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && smartNotificationsEnabled) {
-        updateDatesAndRunNotifications();
-    }
-});
+
 // NOWA, CAŁKOWICIE NIEZALEŻNA FUNKCJA DODAWANIA Z FILMOGRAFII
 async function processFilmographyAdd(btn) {
     // Blokujemy przyciski
@@ -6448,6 +7015,10 @@ async function processFilmographyAdd(btn) {
         </span>`;
         
     showCustomAlert('Sukces!', targetList === 'watched' ? 'Tytuł trafił do Twojej historii!' : 'Tytuł trafił do kolejki.', 'success');
+        // --- NA ŻYWO AKTUALIZUJEMY PASEK AKTORA ---
+    if (typeof updateActorProgressInModal === 'function') {
+        updateActorProgressInModal();
+    }
 }
 // ==========================================
 // ZAAWANSOWANY MENEDŻER WSZYSTKICH IKON W APLIKACJI
@@ -6675,3 +7246,812 @@ document.addEventListener('DOMContentLoaded', () => {
     // Wymuszamy załadowanie nowych ikon w interfejsie
     GlobalIconManager.forceRefreshAppUI();
 });
+// ==========================================
+// INTELIGENTNY MONITOR KALENDARZA (OSZCZĘDZANIE BATERII)
+// ==========================================
+function runSmartCalendarMonitor() {
+    // 1. Sprawdzamy, czy w ogóle MIEJE SENS budzić aplikację:
+    // Czy powiadomienia są włączone? ORAZ czy użytkownik ma w ogóle chociaż jedno wydarzenie w kalendarzu?
+    if (smartNotificationsEnabled && typeof NotificationManager !== 'undefined') {
+        if (data.calendarEvents && data.calendarEvents.length > 0) {
+            NotificationManager.checkCalendarEvents();
+        }
+    }
+    
+    // 2. Zamiast sztywnego, agresywnego setInterval, używamy rekurencyjnego setTimeout.
+    // Oznacza to, że odliczanie 15 sekund zaczyna się dopiero PO ZAKOŃCZENIU poprzedniego sprawdzania,
+    // co całkowicie eliminuje blokowanie wątku.
+    setTimeout(runSmartCalendarMonitor, 15000);
+}
+
+// Uruchamiamy monitor po 5 sekundach od włączenia aplikacji (żeby nie spowalniał startu)
+setTimeout(runSmartCalendarMonitor, 5000);
+// ==========================================
+// PEŁNOEKRANOWY KALENDARZ (ZGODNY Z CSS STATYSTYK)
+// ==========================================
+function openFullCalendarModal() {
+    toggleAppDepthEffect(true);
+    history.pushState({ calendarPageOpen: true }, '');
+
+    let page = document.getElementById('full-calendar-page');
+    if (!page) {
+        page = document.createElement('div');
+        page.id = 'full-calendar-page';
+        
+        const statsPage = document.getElementById('full-stats-page');
+        if (statsPage && statsPage.className) {
+            page.className = statsPage.className.replace('active', '').trim();
+        } else {
+            page.className = 'full-page-modal'; 
+        }
+        
+        page.style.zIndex = '3000';
+        page.style.background = 'var(--bg-color)';
+        page.style.display = 'flex';
+        page.style.flexDirection = 'column';
+        
+        document.body.appendChild(page);
+    }
+
+    window.calCurrentDate = window.calCurrentDate || new Date();
+    window.calSelectedDate = window.calSelectedDate || new Date();
+
+    const getNoteKey = (dateObj) => {
+        return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+    };
+
+    const renderGrid = () => {
+        const year = window.calCurrentDate.getFullYear();
+        const month = window.calCurrentDate.getMonth();
+        const firstDayIndex = new Date(year, month, 1).getDay();
+        const startDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const monthNames = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+        
+        const watchedDaysThisMonth = new Set();
+        const currentMonthStart = new Date(year, month, 1).getTime();
+        const currentMonthEnd = new Date(year, month + 1, 0, 23, 59, 59).getTime();
+
+        const checkWatchDates = (list) => {
+            if(!list) return;
+            list.forEach(item => {
+                if (item.watchDates) {
+                    item.watchDates.forEach(ts => {
+                        if (ts >= currentMonthStart && ts <= currentMonthEnd) {
+                            watchedDaysThisMonth.add(new Date(ts).getDate());
+                        }
+                    });
+                }
+            });
+        };
+        checkWatchDates(data.moviesWatched);
+        checkWatchDates(data.seriesWatched);
+
+        let gridHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding:0 4px;">
+            <button id="cal-prev-month" style="background:transparent; border:none; color:var(--text-color); cursor:pointer; padding:8px;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2.5;"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            
+            <label style="position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; background:color-mix(in srgb, var(--text-secondary) 15%, transparent); padding:6px 16px; border-radius:20px; transition:transform 0.1s;">
+                <div style="font-size:1.1rem; font-weight:800; text-transform:uppercase; color:var(--text-color); display:flex; align-items:center; gap:6px;">
+                    ${monthNames[month]} ${year} 
+                    <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:3;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+                <input type="date" id="cal-fast-picker" style="opacity:0; position:absolute; top:0; left:0; width:100%; height:100%; cursor:pointer;">
+            </label>
+
+            <button id="cal-next-month" style="background:transparent; border:none; color:var(--text-color); cursor:pointer; padding:8px;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+        </div>
+        <div class="full-calendar-grid" style="background:color-mix(in srgb, var(--bg-color) 40%, transparent); border:1px solid var(--border-color); padding:12px; border-radius:var(--radius-lg);">
+            <div class="cal-day-header">Pn</div><div class="cal-day-header">Wt</div><div class="cal-day-header">Śr</div><div class="cal-day-header">Cz</div><div class="cal-day-header">Pt</div><div class="cal-day-header">Sb</div><div class="cal-day-header">Nd</div>`;
+            
+        for (let i = 0; i < startDay; i++) { gridHTML += `<div class="cal-day-cell empty"></div>`; }
+        const today = new Date();
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+            const cellDate = new Date(year, month, day);
+            const cellDateStr = cellDate.toDateString();
+            const noteKey = getNoteKey(cellDate);
+
+            const isToday = today.toDateString() === cellDateStr;
+            const isSelected = window.calSelectedDate.toDateString() === cellDateStr;
+            const hasEvent = data.calendarEvents && data.calendarEvents.some(ev => new Date(ev.dateTime).toDateString() === cellDateStr);
+            const hasNote = data.calendarNotes && data.calendarNotes[noteKey] && data.calendarNotes[noteKey].trim() !== '';
+            const hasHistory = watchedDaysThisMonth.has(day);
+            
+            let classes = ['cal-day-cell'];
+            if (isToday) classes.push('today');
+            if (isSelected) classes.push('selected');
+            if (hasEvent) classes.push('has-event');
+            
+            const noteDotHTML = hasNote ? `<div class="note-dot" style="position:absolute; top:4px; right:4px; width:5px; height:5px; border-radius:50%; background:var(--warning-color); box-shadow: 0 0 4px var(--warning-color);"></div>` : '';
+            
+            // --- ZMIANA: Elastyczny pojemnik na dolne kropki ---
+            let bottomDotsHTML = '';
+            if (hasEvent || hasHistory) {
+                let dots = [];
+                // Kropka zaplanowanego seansu (Niebieska/Info)
+                if (hasEvent) dots.push(`<div style="width:5px; height:5px; border-radius:50%; background:var(--info-color);"></div>`);
+                // Kropka obejrzanego seansu (Czerwona/Primary)
+                if (hasHistory) dots.push(`<div style="width:5px; height:5px; border-radius:50%; background:var(--primary-color);"></div>`);
+                
+                bottomDotsHTML = `<div style="position:absolute; bottom:3px; left:0; width:100%; display:flex; justify-content:center; gap:4px;">${dots.join('')}</div>`;
+            }
+            
+            gridHTML += `<div class="${classes.join(' ')}" data-day="${day}" style="position:relative;">${day}${noteDotHTML}${bottomDotsHTML}</div>`;
+        }
+        gridHTML += `</div>`;
+        return gridHTML;
+    };
+
+    const renderEvents = () => {
+        const selDateStr = window.calSelectedDate.toDateString();
+        const isTodayStr = new Date().toDateString() === selDateStr ? 'Dzisiaj' : window.calSelectedDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
+
+        if (!data.calendarEvents) data.calendarEvents = [];
+        const eventsToday = data.calendarEvents.filter(ev => new Date(ev.dateTime).toDateString() === selDateStr).sort((a,b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+        let plannedHTML = '';
+        if (eventsToday.length === 0) {
+            plannedHTML = `<div style="text-align:center; padding: 20px 0; color:var(--text-secondary); font-size:0.9rem;">Brak planów na ${isTodayStr}.</div>`;
+        } else {
+            plannedHTML = `<div style="font-size:0.85rem; font-weight:800; color:var(--text-secondary); text-transform:uppercase; margin-bottom:12px; margin-top:24px;">Plan na: ${isTodayStr}</div>` + 
+            eventsToday.map(ev => {
+                const timeStr = new Date(ev.dateTime).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+                return `
+                <div class="calendar-event-card" data-target-id="${ev.targetId}" data-target-type="${ev.targetType}" style="display:flex; align-items:center; gap:16px; background:var(--card-color); padding:12px; border-radius:var(--radius-md); margin-bottom:12px; border:1px solid var(--border-color); cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                    <img src="${ev.image}" style="width:48px; height:72px; object-fit:cover; border-radius:4px;" onerror="this.src='${POSTER_PLACEHOLDER}'">
+                    <div style="flex-grow:1; min-width:0;">
+                        <div style="font-weight:800; font-size:1.05rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px;">${escapeHTML(ev.title)}</div>
+                        <div style="font-size:0.85rem; color:var(--info-color); font-weight:700;">🕒 ${timeStr}</div>
+                    </div>
+                    <button class="delete-event-btn" data-event-id="${ev.id}" style="background:color-mix(in srgb, var(--primary-color) 15%, transparent); border:none; color:var(--primary-color); border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer;">✕</button>
+                </div>`;
+            }).join('');
+        }
+
+        const historyToday = [];
+        const checkHistoryForDay = (list, type) => {
+            if(!list) return;
+            list.forEach(item => {
+                if (item.watchDates) {
+                    item.watchDates.forEach(ts => {
+                        if (new Date(ts).toDateString() === selDateStr) {
+                            historyToday.push({ ...item, _type: type, _ts: ts });
+                        }
+                    });
+                }
+            });
+        };
+        checkHistoryForDay(data.moviesWatched, 'movie');
+        checkHistoryForDay(data.seriesWatched, 'tv');
+        historyToday.sort((a,b) => a._ts - b._ts);
+
+        let historyHTML = '';
+        if (historyToday.length > 0) {
+            historyHTML = `<div style="margin-top: 24px; padding-top: 16px; border-top: 1px dashed color-mix(in srgb, var(--border-color) 60%, transparent);">
+                <div style="font-size:0.85rem; font-weight:800; color:var(--success-color); text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> 
+                    Obejrzano tego dnia
+                </div>` +
+            historyToday.map(item => {
+                const timeStr = new Date(item._ts).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+                return `
+                <div class="calendar-history-card" data-target-id="${item.id}" data-target-type="${item._type}" style="display:flex; align-items:center; gap:16px; background:color-mix(in srgb, var(--card-color) 60%, transparent); padding:8px 12px; border-radius:var(--radius-md); margin-bottom:8px; border:1px solid color-mix(in srgb, var(--border-color) 50%, transparent); cursor:pointer;">
+                    <img src="${item.poster || POSTER_PLACEHOLDER}" style="width:36px; height:54px; object-fit:cover; border-radius:4px; opacity:0.8;">
+                    <div style="flex-grow:1; min-width:0;">
+                        <div style="font-weight:700; font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(item.title)}</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);">Dodano do historii o ${timeStr}</div>
+                    </div>
+                </div>`;
+            }).join('') + `</div>`;
+        }
+
+        const noteKey = getNoteKey(window.calSelectedDate);
+        const currentNote = (data.calendarNotes && data.calendarNotes[noteKey]) ? data.calendarNotes[noteKey] : '';
+        const noteSection = `
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px dashed color-mix(in srgb, var(--border-color) 60%, transparent);">
+                <div style="font-size:0.85rem; font-weight:800; color:var(--text-secondary); text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                    <svg viewBox="0 0 24 24" style="width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2.5; stroke-linecap:round;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    Notatka
+                </div>
+                <textarea id="cal-day-note-input" placeholder="Obejrzane filmy, przemyślenia z dzisiaj..." style="width: 100%; min-height: 100px; padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: color-mix(in srgb, var(--bg-color) 40%, transparent); color: var(--text-color); font-family: inherit; font-size: 0.95rem; resize: vertical; line-height: 1.5; outline: none; transition: border-color 0.2s;">${escapeHTML(currentNote)}</textarea>
+                <div id="cal-note-saved-status" style="font-size: 0.75rem; color: var(--success-color); text-align: right; margin-top: 6px; opacity: 0; transition: opacity 0.3s; font-weight: 600;">Zapisano ✓</div>
+            </div>
+        `;
+
+        return plannedHTML + historyHTML + noteSection;
+    };
+
+    const updateUI = () => {
+        const gridContainer = page.querySelector('#modal-cal-grid');
+        const eventsContainer = page.querySelector('#modal-cal-events');
+        const addBtn = page.querySelector('#btn-add-to-date');
+
+        if(gridContainer) gridContainer.innerHTML = renderGrid();
+        if(eventsContainer) eventsContainer.innerHTML = renderEvents();
+
+        if (addBtn) {
+            const todayObj = new Date(); todayObj.setHours(0, 0, 0, 0);
+            const selectedObj = new Date(window.calSelectedDate); selectedObj.setHours(0, 0, 0, 0);
+            if (selectedObj < todayObj) addBtn.style.display = 'none';
+            else addBtn.style.display = 'block'; 
+        }
+    };
+
+    page.innerHTML = `
+    <style>
+        @keyframes pulseGesture { 0% { opacity: 0.3; } 50% { opacity: 0.8; } 100% { opacity: 0.3; } }
+        .gesture-bar-hint { animation: pulseGesture 2s infinite ease-in-out; }
+        #cal-day-note-input:focus { border-color: var(--primary-color); }
+        label:active { transform: scale(0.95); }
+        /* UKRYWAMY ORYGINALNĄ KROPKĘ Z CSS - TERAZ RZĄDZI JĄ JAVASCRIPT W FLEXBOXIE */
+        .cal-day-cell.has-event::after { display: none !important; }
+    </style>
+    <div class="gesture-bar-hint" style="position:absolute; left:4px; top:50%; transform:translateY(-50%); width:5px; height:70px; background:var(--text-secondary); border-radius:6px; pointer-events:none; z-index:9999;"></div>
+        <div style="position: sticky; top: 0; background: var(--bg-color); z-index: 10; padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding-top: calc(16px + var(--safe-top));">
+            <button id="close-cal-page" style="background:none; border:none; color:var(--primary-color); font-size:1rem; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                <svg viewBox="0 0 24 24" style="width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:2.5;"><polyline points="15 18 9 12 15 6"></polyline></svg> Wróć
+            </button>
+            <h2 style="margin: 0 auto; transform: translateX(-30px); font-size:1.2rem;">Harmonogram</h2>
+        </div>
+        <div class="modern-modal-scroll" style="flex-grow: 1; padding: 24px; padding-bottom: 100px;">
+            <div id="modal-cal-grid">${renderGrid()}</div>
+            <button id="btn-add-to-date" class="modal-btn primary" style="width:100%; margin-top:20px; background:var(--info-color); box-shadow:0 4px 16px color-mix(in srgb, var(--info-color) 40%, transparent);">+ Zaplanuj seans na ten dzień</button>
+            <div id="modal-cal-events">${renderEvents()}</div>
+        </div>
+    `;
+
+    // WYWOŁANIE ANIMACJI OTWIERANIA
+    page.style.transform = ''; 
+    requestAnimationFrame(() => { 
+        page.classList.add('active'); 
+    });
+    updateUI(); 
+
+    // --- ZAMYKANIE Z WYKORZYSTANIEM KLAS CSS (JAK W STATYSTYKACH) ---
+    let isClosingCalendar = false;
+    
+    // Cicha aktualizacja guzika profilu bez przeładowywania widoku!
+    const silentProfileUpdate = () => {
+        const calBtn = document.getElementById('btn-open-calendar-modal');
+        if (calBtn) {
+            const upcomingCount = (data.calendarEvents || []).filter(ev => !ev.notified).length;
+            const badgeHTML = upcomingCount > 0 ? `<span style="background:var(--info-color);color:#fff;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:bold;margin-left:8px;">${upcomingCount}</span>` : '';
+            const titleEl = calBtn.querySelector('div[style*="font-size:1.1rem"]');
+            if (titleEl) titleEl.innerHTML = `Harmonogram ${badgeHTML}`;
+        }
+    };
+    
+    const closePage = () => {
+        if (isClosingCalendar) return;
+        isClosingCalendar = true;
+        
+        if (history.state && history.state.calendarPageOpen) { 
+            history.back(); 
+        } else { 
+            page.style.transform = '';
+            page.style.transition = '';
+            page.classList.remove('active'); 
+            
+            toggleAppDepthEffect(false); 
+            silentProfileUpdate(); 
+            
+            setTimeout(() => { if (page.parentNode) page.remove(); }, 400); 
+        }
+    };
+
+    const handleCalPop = (e) => {
+        if (!e.state || !e.state.calendarPageOpen) {
+            window.removeEventListener('popstate', handleCalPop);
+            isClosingCalendar = true;
+            
+            page.style.transform = '';
+            page.style.transition = '';
+            page.classList.remove('active'); 
+            
+            toggleAppDepthEffect(false); 
+            silentProfileUpdate(); 
+            
+            setTimeout(() => { if (page.parentNode) page.remove(); }, 400);
+        }
+    };
+    window.addEventListener('popstate', handleCalPop);
+
+    if (!page.dataset.eventsBound) {
+        page.dataset.eventsBound = 'true';
+        
+        let noteSaveTimeout;
+        page.addEventListener('input', (e) => {
+            if (e.target.id === 'cal-day-note-input') {
+                clearTimeout(noteSaveTimeout);
+                const statusEl = page.querySelector('#cal-note-saved-status');
+                if(statusEl) statusEl.style.opacity = '0';
+
+                noteSaveTimeout = setTimeout(async () => {
+                    if (!data.calendarNotes) data.calendarNotes = {};
+                    const noteKey = getNoteKey(window.calSelectedDate);
+                    const val = e.target.value.trim();
+                    if (val) data.calendarNotes[noteKey] = val;
+                    else delete data.calendarNotes[noteKey];
+                    
+                    await saveData();
+                    if(statusEl) { statusEl.style.opacity = '1'; setTimeout(() => statusEl.style.opacity = '0', 2000); }
+
+                    const dayCell = page.querySelector(`.cal-day-cell.selected`);
+                    if (dayCell) {
+                        const existingDot = dayCell.querySelector('.note-dot');
+                        if (val && !existingDot) dayCell.insertAdjacentHTML('beforeend', '<div class="note-dot" style="position:absolute; top:4px; right:4px; width:5px; height:5px; border-radius:50%; background:var(--warning-color); box-shadow: 0 0 4px var(--warning-color);"></div>');
+                        else if (!val && existingDot) existingDot.remove();
+                    }
+                }, 800); 
+            }
+        });
+
+        page.addEventListener('change', (e) => {
+            if (e.target.id === 'cal-fast-picker') {
+                const val = e.target.value; 
+                if (val) {
+                    const parts = val.split('-');
+                    const newDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                    window.calCurrentDate = newDate;
+                    window.calSelectedDate = newDate;
+                    updateUI();
+                }
+            }
+        });
+    }
+
+    let startX = 0; let currentX = 0; let startY = 0; let isDragging = false; let swipeStartTime = 0;
+
+    page.addEventListener('touchstart', (e) => {
+        if (e.target.id === 'cal-day-note-input') return;
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY; swipeStartTime = Date.now();
+        isDragging = true; page.style.transition = 'none';
+    }, { passive: true });
+
+    page.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const deltaX = e.touches[0].clientX - startX; const deltaY = e.touches[0].clientY - startY;
+        if (Math.abs(deltaY) > Math.abs(deltaX) + 10) { isDragging = false; page.style.transform = ''; return; }
+        if (startX < 40 && deltaX > 0) { e.preventDefault(); currentX = deltaX; page.style.transform = `translateX(${currentX}px)`; }
+    }, { passive: false });
+
+    page.addEventListener('touchend', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        page.style.transition = ''; 
+        const deltaX = e.changedTouches[0].clientX - startX; const timeElapsed = Date.now() - swipeStartTime;
+        if (startX < 40 && (deltaX > 80 || (deltaX > 40 && timeElapsed < 250))) { closePage(); currentX = 0; } 
+        else { page.style.transform = ''; }
+    });
+
+    page.addEventListener('click', async (e) => {
+        if (e.target.closest('#close-cal-page')) { closePage(); return; }
+        
+        if (e.target.closest('#cal-prev-month')) { triggerHaptic('light'); window.calCurrentDate.setMonth(window.calCurrentDate.getMonth() - 1); updateUI(); return; }
+        if (e.target.closest('#cal-next-month')) { triggerHaptic('light'); window.calCurrentDate.setMonth(window.calCurrentDate.getMonth() + 1); updateUI(); return; }
+        
+        const dayCell = e.target.closest('.cal-day-cell:not(.empty)');
+        if (dayCell) {
+            triggerHaptic('light');
+            window.calSelectedDate = new Date(window.calCurrentDate.getFullYear(), window.calCurrentDate.getMonth(), parseInt(dayCell.dataset.day));
+            updateUI(); return;
+        }
+
+        if (e.target.closest('#btn-add-to-date')) { 
+            triggerHaptic('medium'); 
+            openFullScreenPlanner(window.calSelectedDate, updateUI); 
+            return; 
+        }
+
+        const delEventBtn = e.target.closest('.delete-event-btn');
+        if (delEventBtn) {
+            e.stopPropagation();
+            if (await showCustomConfirm('Anulować seans?', 'Czy usunąć ten tytuł z kalendarza?')) {
+                data.calendarEvents = data.calendarEvents.filter(ev => ev.id !== delEventBtn.dataset.eventId);
+                await saveData(); updateUI();
+            }
+            return;
+        }
+
+        const eventCard = e.target.closest('.calendar-event-card');
+        if (eventCard && !delEventBtn) {
+            triggerHaptic('light'); 
+            const tId = eventCard.dataset.targetId; 
+            const tType = eventCard.dataset.targetType;
+            closePage();
+            setTimeout(() => {
+                if (Object.values(data).flat().some(i => String(i.id) === String(tId))) openDetailsModal(tId, tType);
+                else openPreviewModal(tId, tType);
+            }, 350);
+            return;
+        }
+
+        const histCard = e.target.closest('.calendar-history-card');
+        if (histCard) {
+            triggerHaptic('light'); 
+            const tId = histCard.dataset.targetId; 
+            const tType = histCard.dataset.targetType;
+            closePage(); 
+            setTimeout(() => { openDetailsModal(tId, tType); }, 350); 
+            return;
+        }
+    });
+}
+// ==========================================
+// PEŁNOEKRANOWY PLANER (ZGODNY Z CSS STATYSTYK)
+// ==========================================
+function openFullScreenPlanner(selectedDateObj, onSuccessCallback) {
+    history.pushState({ plannerPageOpen: true }, '');
+
+    let page = document.getElementById('full-planner-page');
+    if (!page) {
+        page = document.createElement('div');
+        page.id = 'full-planner-page';
+        
+        const statsPage = document.getElementById('full-stats-page');
+        if (statsPage && statsPage.className) {
+            page.className = statsPage.className.replace('active', '').trim();
+        } else {
+            page.className = 'full-page-modal'; 
+        }
+
+        page.style.zIndex = '3100'; 
+        page.style.background = 'var(--bg-color)';
+        page.style.display = 'flex';
+        page.style.flexDirection = 'column';
+        
+        document.body.appendChild(page);
+    }
+
+    const backlogItems = [...(data.moviesToWatch || []), ...(data.seriesToWatch || [])];
+    
+    let moviesRowHTML = '';
+    if (backlogItems.length === 0) {
+        moviesRowHTML = `<div style="text-align:center; padding: 20px; color:var(--text-secondary); width:100%;">Brak tytułów do obejrzenia. Wpisz własny tytuł poniżej!</div>`;
+    } else {
+        moviesRowHTML = backlogItems.map(i => `
+            <div class="movie-picker-item" data-val="${i.id}_${i.type}" data-title="${escapeHTML(i.title).toLowerCase()}">
+                <img src="${i.poster ? i.poster.replace('w500', 'w154') : POSTER_PLACEHOLDER}" alt="Poster" loading="lazy">
+                <div style="font-size:0.7rem; font-weight:700; text-align:center; padding:4px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(i.title)}</div>
+            </div>
+        `).join('');
+    }
+
+    const formattedDateTitle = selectedDateObj.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    page.innerHTML = `
+    <style>
+        @keyframes pulseGesture {
+            0% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0.3; }
+        }
+        .gesture-bar-hint {
+            animation: pulseGesture 2s infinite ease-in-out;
+        }
+    </style>
+    <div class="gesture-bar-hint" style="position:absolute; left:4px; top:50%; transform:translateY(-50%); width:5px; height:70px; background:var(--text-secondary); border-radius:6px; pointer-events:none; z-index:9999;"></div>
+        <div style="position: sticky; top: 0; background: var(--bg-color); z-index: 10; padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding-top: calc(16px + var(--safe-top));">
+            <button id="close-planner-page" style="background:none; border:none; color:var(--primary-color); font-size:1rem; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                <svg viewBox="0 0 24 24" style="width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:2.5;"><polyline points="15 18 9 12 15 6"></polyline></svg> Wróć
+            </button>
+            <h2 style="margin: 0 auto; transform: translateX(-30px); font-size:1.2rem;">Zaplanuj Seans</h2>
+        </div>
+        
+        <div class="modern-modal-scroll" style="flex-grow: 1; padding: 24px; padding-bottom: 100px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <p style="margin:0; font-size:1rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">${formattedDateTitle}</p>
+            </div>
+
+            <div style="font-size:0.8rem; font-weight:800; color:var(--text-secondary); margin-bottom:12px; text-transform:uppercase;">1. Wpisz lub wybierz tytuł</div>
+            
+            <div style="position: relative; margin-bottom: 16px; display: flex; align-items: center;">
+                <svg viewBox="0 0 24 24" style="position: absolute; left: 16px; width: 20px; height: 20px; stroke: var(--text-secondary); fill: none; stroke-width: 2.5; pointer-events: none; z-index: 2;">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                
+                <input type="text" id="cal-custom-search" class="custom-input" placeholder="Czego szukasz?" style="width: 100%; height: 50px; padding-left: 48px !important; padding-right: 16px !important; box-sizing: border-box; background: color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.05)); border: 1px solid var(--border-color); border-radius: 12px; font-size: 1rem; color: var(--text-color); outline: none; transition: border-color 0.2s;">
+            </div>
+
+            <div class="movie-picker-row" id="cal-movie-picker">
+                ${moviesRowHTML}
+            </div>
+            
+            <div style="font-size:0.8rem; font-weight:800; color:var(--text-secondary); margin-top:32px; margin-bottom:12px; text-transform:uppercase;">2. Ustal Godzinę (Przewijaj)</div>
+            
+            <div class="time-wheel-container">
+                <div class="time-wheel-overlay"></div>
+                <div class="time-wheel-selection-bar"></div>
+                <ul class="time-wheel" id="wheel-hours"></ul>
+                <div style="font-size:1.5rem; font-weight:800; color:var(--text-color); z-index:4; position:relative; margin-bottom: 4px;">:</div>
+                <ul class="time-wheel" id="wheel-minutes"></ul>
+            </div>
+            
+            <button id="cal-save-event-btn" class="modal-btn primary" style="width:100%; margin-top: 32px; background: var(--info-color); box-shadow:0 4px 12px color-mix(in srgb, var(--info-color) 30%, transparent);" disabled>Gotowe</button>
+        </div>
+    `;
+
+    page.style.transform = '';
+    requestAnimationFrame(() => { 
+        page.classList.add('active'); 
+    });
+
+    let isClosingPlanner = false;
+    
+    const closePlannerPage = () => {
+        if (isClosingPlanner) return;
+        isClosingPlanner = true;
+        
+        if (history.state && history.state.plannerPageOpen) { 
+            history.back(); 
+        } else { 
+            page.classList.remove('active'); 
+            setTimeout(() => { if (page.parentNode) page.remove(); }, 400); 
+        }
+    };
+
+    const handlePlannerPop = (e) => {
+        if (!e.state || !e.state.plannerPageOpen) {
+            window.removeEventListener('popstate', handlePlannerPop);
+            isClosingPlanner = true;
+
+            page.classList.remove('active');
+            setTimeout(() => { if (page.parentNode) page.remove(); }, 400);
+        }
+    };
+    window.addEventListener('popstate', handlePlannerPop);
+
+    page.querySelector('#close-planner-page').addEventListener('click', closePlannerPage);
+
+    let startX = 0; let currentX = 0; let startY = 0; let isDragging = false; let swipeStartTime = 0;
+
+    page.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.time-wheel-container, .movie-picker-row')) return; 
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY; swipeStartTime = Date.now();
+        isDragging = true; page.style.transition = 'none';
+    }, { passive: true });
+
+    page.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const deltaX = e.touches[0].clientX - startX; const deltaY = e.touches[0].clientY - startY;
+        if (Math.abs(deltaY) > Math.abs(deltaX) + 10) { isDragging = false; page.style.transform = ''; return; }
+        if (startX < 40 && deltaX > 0) { e.preventDefault(); currentX = deltaX; page.style.transform = `translateX(${currentX}px)`; }
+    }, { passive: false });
+
+    page.addEventListener('touchend', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        page.style.transition = ''; 
+        const deltaX = e.changedTouches[0].clientX - startX; const timeElapsed = Date.now() - swipeStartTime;
+        if (startX < 40 && (deltaX > 80 || (deltaX > 40 && timeElapsed < 250))) { closePlannerPage(); currentX = 0; } 
+        else { page.style.transform = ''; }
+    });
+
+    const searchInput = page.querySelector('#cal-custom-search');
+    const saveBtn = page.querySelector('#cal-save-event-btn'); // <-- NAPRAWIONE: Łapiemy właściwy przycisk
+    let selectedItemVal = null;
+
+    searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        page.querySelectorAll('.movie-picker-item').forEach(item => {
+            const title = item.dataset.title || '';
+            item.style.display = title.includes(query) ? 'block' : 'none';
+        });
+        page.querySelectorAll('.movie-picker-item').forEach(i => i.classList.remove('active'));
+        selectedItemVal = null;
+        saveBtn.disabled = query.length === 0;
+    });
+
+    page.querySelectorAll('.movie-picker-item').forEach(item => {
+        item.addEventListener('click', () => {
+            triggerHaptic('light');
+            page.querySelectorAll('.movie-picker-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            selectedItemVal = item.dataset.val;
+            searchInput.value = ''; 
+            saveBtn.disabled = false;
+        });
+    });
+
+    function setupInfiniteWheel(wheelId, maxItems, startValue) {
+        const wheel = page.querySelector(`#${wheelId}`);
+        if (!wheel) return;
+        let itemsHTML = '';
+        for (let i = 0; i < maxItems; i++) { itemsHTML += `<li>${String(i).padStart(2, '0')}</li>`; }
+        wheel.innerHTML = itemsHTML.repeat(7) + `<li style="color:transparent; pointer-events:none;"></li>`;
+        
+        const itemHeight = 44; 
+        const blockHeight = maxItems * itemHeight;
+        const middleOffset = blockHeight * 3; 
+
+        const allItemsList = Array.from(wheel.querySelectorAll('li'));
+        
+        let lastActiveIdx = -1;
+
+        const highlight = () => {
+            const idx = Math.round(wheel.scrollTop / itemHeight);
+            if (idx === lastActiveIdx) return; 
+
+            if (lastActiveIdx !== -1 && allItemsList[lastActiveIdx]) {
+                allItemsList[lastActiveIdx].style.opacity = '0.3';
+                allItemsList[lastActiveIdx].style.transform = 'scale(1)';
+            }
+            
+            if (allItemsList[idx]) {
+                allItemsList[idx].style.opacity = '1';
+                allItemsList[idx].style.transform = 'scale(1.2)';
+            }
+            lastActiveIdx = idx; 
+        };
+
+        setTimeout(() => { wheel.scrollTop = middleOffset + (startValue * itemHeight); highlight(); }, 50);
+
+        let isJumping = false;
+        let scrollRAF = null; 
+
+        wheel.addEventListener('scroll', () => {
+            if (isJumping) return;
+            
+            if (wheel.scrollTop < blockHeight) {
+                isJumping = true; wheel.style.scrollSnapType = 'none'; wheel.scrollTop += blockHeight * 3; wheel.style.scrollSnapType = 'y mandatory'; setTimeout(() => isJumping = false, 50);
+            } else if (wheel.scrollTop > blockHeight * 5) {
+                isJumping = true; wheel.style.scrollSnapType = 'none'; wheel.scrollTop -= blockHeight * 3; wheel.style.scrollSnapType = 'y mandatory'; setTimeout(() => isJumping = false, 50);
+            }
+            
+            if (scrollRAF) cancelAnimationFrame(scrollRAF);
+            scrollRAF = requestAnimationFrame(() => {
+                highlight();
+            });
+        }, { passive: true }); 
+    }
+
+    const now = new Date();
+    now.setHours(now.getHours() + 1);
+    
+    setupInfiniteWheel('wheel-hours', 24, now.getHours());
+    setupInfiniteWheel('wheel-minutes', 60, 0);
+
+    // <-- NAPRAWIONE: Brak klonowania, przycisk jest na żywo podpięty pod input!
+    saveBtn.addEventListener('click', async () => {
+        triggerHaptic('success');
+        
+        let targetId, targetType, targetTitle, targetImage;
+
+        if (selectedItemVal) {
+            [targetId, targetType] = selectedItemVal.split('_');
+            const targetItem = backlogItems.find(i => String(i.id) === String(targetId) && i.type === targetType);
+            targetTitle = targetItem.title;
+            targetImage = targetItem.poster || POSTER_PLACEHOLDER;
+        } else if (searchInput && searchInput.value.trim() !== '') {
+            targetId = `custom_cal_${Date.now()}`;
+            targetType = 'custom'; 
+            targetTitle = searchInput.value.trim();
+            targetImage = POSTER_PLACEHOLDER;
+        } else { return; }
+        
+        const wheelHours = page.querySelector('#wheel-hours');
+        const wheelMinutes = page.querySelector('#wheel-minutes');
+        
+        const itemHeight = 44; 
+        const selectedHour = Math.round(wheelHours.scrollTop / itemHeight) % 24;
+        const selectedMinute = Math.round(wheelMinutes.scrollTop / itemHeight) % 60;
+        
+        const finalDate = new Date(selectedDateObj);
+        finalDate.setHours(selectedHour, selectedMinute, 0, 0);
+
+        const currentRealTime = new Date();
+        if (finalDate < currentRealTime) {
+            triggerHaptic('error');
+            if (typeof showCustomAlert === 'function') {
+                showCustomAlert('Błąd', 'Ta godzina już minęła. Wybierz późniejszy czas.', 'error');
+            } else {
+                alert('Ta godzina już minęła. Wybierz późniejszy czas.');
+            }
+            return;
+        }
+        
+        if (!data.calendarEvents) data.calendarEvents = [];
+        data.calendarEvents.push({
+            id: `cal_event_${Date.now()}`,
+            targetId: targetId,
+            targetType: targetType,
+            title: targetTitle,
+            image: targetImage,
+            dateTime: finalDate.toISOString(),
+            notifiedMorning: false, 
+            notified: false
+        });
+
+        await saveData();
+        closePlannerPage(); 
+        
+        if (onSuccessCallback) onSuccessCallback(); 
+        
+        if (typeof showCustomAlert === 'function') {
+            showCustomAlert('Zaplanowano!', `Zapisano w kalendarzu.`, 'success');
+        }
+        
+        if (typeof NotificationManager !== 'undefined') NotificationManager.checkCalendarEvents();
+    });
+}
+
+// ==========================================
+// GLOBALNE WYBUDZENIE APLIKACJI (RESUME)
+// ==========================================
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        
+        // 1. Zawsze przerysuj aktywną listę, by odświeżyć daty (dzisiaj, jutro, za 2 dni)
+        const activeListId = getActiveListId();
+        if (activeListId && data[activeListId]) {
+            // true oznacza preserveLimit (nie zwijamy wczytanej w dół listy)
+            renderList(data[activeListId], activeListId, true); 
+        }
+        
+        // 2. Uruchom powiadomienia i aktualizacje TMDB w tle
+        if (typeof smartNotificationsEnabled !== 'undefined' && smartNotificationsEnabled) {
+            if (typeof updateDatesAndRunNotifications === 'function') {
+                updateDatesAndRunNotifications();
+            }
+        } else if (typeof NotificationManager !== 'undefined') {
+            NotificationManager.runEngine();
+        }
+
+        // 3. Opcjonalnie: WakeLock jeśli był włączony
+        if (typeof WakeLockManager !== 'undefined' && WakeLockManager.enabled) {
+            WakeLockManager.request();
+        }
+    }
+});
+// ==========================================
+// DYNAMICZNA AKTUALIZACJA PASKA AKTORA
+// ==========================================
+async function updateActorProgressInModal(wrapperElement = null) {
+    let wrapper = wrapperElement;
+    if (!wrapper) {
+        const overlay = document.querySelector('.actor-modal-overlay:not(.modal-stacked-hidden)');
+        if (overlay) wrapper = overlay.querySelector('.modern-modal-wrapper[data-current-actor]');
+    } else {
+        wrapper = wrapper.querySelector('.modern-modal-wrapper[data-current-actor]');
+    }
+    
+    if (!wrapper) return;
+
+    const actorId = wrapper.dataset.currentActor;
+    if (!actorId) return;
+
+    // Pobieramy z szybkiego cache'u IndexedDB (nie obciąża sieci)
+    const ad = await getActorDetails(actorId); 
+    if (!ad) return;
+
+    const watchedIds = new Set([...data.moviesWatched, ...data.seriesWatched].map(i => String(i.id)));
+    let watchedCount = 0;
+    const totalCredits = ad.full_filmography ? ad.full_filmography.length : 0;
+
+    if (totalCredits > 0) {
+        ad.full_filmography.forEach(credit => {
+            if (watchedIds.has(String(credit.id))) watchedCount++;
+        });
+    }
+
+    const progressPct = totalCredits > 0 ? Math.round((watchedCount / totalCredits) * 100) : 0;
+    
+    let levelText = '';
+    if (watchedCount === 0) levelText = 'Nie znasz jeszcze tego twórcy';
+    else if (progressPct < 15) levelText = 'Początki znajomości';
+    else if (progressPct < 40) levelText = 'Dobrze kojarzysz tę twarz/styl';
+    else if (progressPct < 70) levelText = 'Solidny fan!';
+    else if (progressPct < 100) levelText = 'Znasz tę filmografię na wylot';
+    else levelText = 'Obejrzano absolutnie wszystko! 👑';
+
+    // Aktualizujemy bezpośrednio elementy w DOM bez przeładowywania okna
+    const countEl = wrapper.querySelector('.actor-watched-count-el');
+    const textEl = wrapper.querySelector('.actor-level-text-el');
+    const barEl = wrapper.querySelector('.actor-progress-bar-el');
+
+    if (countEl) countEl.textContent = watchedCount;
+    if (textEl) textEl.textContent = levelText;
+    if (barEl) barEl.style.width = `${progressPct}%`;
+}
