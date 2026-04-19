@@ -495,19 +495,17 @@ main#app,
     align-items: center;
 }
 
-/* GÓRNE ZAKŁADKI (Wypukła Karta 3D) */
 /* Pojemnik (korytko) */
 .segmented-control {
     display: flex;
     width: 100%;
     max-width: 400px;
-    background: color-mix(in srgb,
-            var(--bg-color) 70%,
-            rgba(0, 0, 0, 0.2)) !important;
+    background: color-mix(in srgb, var(--bg-color) 70%, rgba(0, 0, 0, 0.2)) !important;
     box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2) !important;
     border: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent) !important;
     border-radius: 12px !important;
     padding: 4px !important;
+    overflow: hidden; /* Zapewnia, że nic nie wystaje */
 }
 
 /* Nieaktywny przycisk */
@@ -516,44 +514,40 @@ main#app,
     padding: 8px 12px;
     font-size: 0.85rem;
     font-weight: 600;
-    border: none;
     cursor: pointer;
     background: transparent !important;
     border-radius: 8px !important;
     color: var(--text-secondary) !important;
+    /* Stała ramka 1px zapobiega przeskokom i białym obwódkom przy animacji */
+    border: 1px solid transparent !important; 
     transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+    outline: none !important;
+    -webkit-tap-highlight-color: transparent !important;
 }
 
-/* Aktywny przycisk (Tryb Ciemny - Półprzezroczysta czerwień z mocnym tekstem) */
+/* Aktywny przycisk - PRZYWRÓCENIE KOLORÓW */
 .seg-btn.active {
-    background: color-mix(in srgb,
-            var(--primary-color) 15%,
-            transparent) !important;
+    background: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
     color: var(--primary-color) !important;
-    /* Czerwony tekst akcentowy */
-    border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
+    /* Ramka w tym samym kolorze co tekst, ale lekko przezroczysta */
+    border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent) !important;
     box-shadow: none !important;
     transform: scale(1) !important;
 }
 
-/* --- POPRAWKA DLA TRYBU JASNEGO (LIGHT MODE) --- */
-[data-theme="light"] .segmented-control {
-    background: rgba(0,
-            0,
-            0,
-            0.04) !important;
-    /* Bardzo delikatna szarość w tle */
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05) !important;
-    border-color: transparent !important;
+/* Fix dla trybu jasnego */
+[data-theme="light"] .seg-btn.active {
+    background: color-mix(in srgb, var(--primary-color) 12%, transparent) !important;
+    color: var(--primary-color) !important;
+    border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent) !important;
 }
 
-[data-theme="light"] .seg-btn.active {
-    /* W trybie jasnym też używamy miękkiej czerwieni, żeby utrzymać spójność marki */
-    background: color-mix(in srgb,
-            var(--primary-color) 12%,
-            transparent) !important;
-    color: var(--primary-color) !important;
-    border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
+/* Całkowite wyłączenie focusa dla wszystkich stanów */
+.seg-btn:focus, 
+.seg-btn:focus-visible, 
+.seg-btn:active {
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 /* LIQUID GLASS BOTTOM NAV */
