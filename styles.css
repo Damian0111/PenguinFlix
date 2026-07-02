@@ -6301,3 +6301,26 @@ main#app,
 .movie-picker-item img { width: 100%; height: 150px; object-fit: cover; display: block; }
 .movie-picker-item.active { border-color: var(--info-color); transform: scale(0.95); }
 .movie-picker-item.active::after { content: '✓'; position: absolute; top: 4px; right: 4px; background: var(--info-color); color: #fff; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+.keyword-suggestion {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 40%, transparent);
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.keyword-suggestion:last-child {
+    border-bottom: none;
+}
+.keyword-suggestion:hover, .keyword-suggestion:active {
+    background: color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+.keyword-suggestion::before {
+    content: "#";
+    color: var(--primary-color);
+    font-weight: 800;
+}
