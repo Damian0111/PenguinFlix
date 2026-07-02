@@ -976,20 +976,35 @@ function setupEventListeners() {
     document.getElementById('tab-movies').addEventListener('click', handleListItemClick);
     document.getElementById('tab-series').addEventListener('click', handleListItemClick);
 
-    // --- ZAKŁADKA ODKRYWAJ (Kategorie i Rok) ---
+         // --- ZAKŁADKA ODKRYWAJ (Rok i Słowa Kluczowe) ---
     const discoverYearContainer = document.getElementById('discover-year-container');
+    
+    // Rocznik
     const discoverYearInputLive = document.getElementById('discover-year-input');
     const discoverYearClearLive = document.getElementById('discover-year-clear');
     const discoverYearWrapLive = document.getElementById('discover-year-wrapper');
+    
+    // Keywords
+    const keywordInput = document.getElementById('discover-keyword-input');
+    const keywordResults = document.getElementById('discover-keyword-results');
+    const keywordClear = document.getElementById('discover-keyword-clear');
+    const keywordWrap = document.getElementById('discover-keyword-wrapper');
+    const keywordToggleBtn = document.getElementById('keyword-media-toggle-btn');
 
-      const handlePillClick = (e) => {
+    // 1. GŁÓWNY HANDLER KLIKNIĘĆ W PIGUŁKI
+    const handlePillClick = (e) => {
         const pill = e.target.closest('.discover-pill');
         if (!pill) return;
 
+        // Kliknięcie w dowolny inny filtr (Gatunek/Trend) czyści pole Słowa Kluczowego
+        if (keywordInput && keywordInput.value !== '') {
+            keywordInput.value = '';
+            delete keywordInput.dataset.activeKeywordId;
+            if (keywordClear) keywordClear.style.display = 'none';
+        }
+
         if (pill.id === 'btn-more-genres') {
-            triggerHaptic('light');
-            openAllGenresModal();
-            return;
+            triggerHaptic('light'); openAllGenresModal(); return;
         }
         
         if (!pill.classList.contains('active')) {
@@ -1009,35 +1024,29 @@ function setupEventListeners() {
                 if (discoverYearContainer) discoverYearContainer.style.display = 'none';
                 if (discoverYearInputLive) discoverYearInputLive.value = '';
                 if (discoverYearClearLive) discoverYearClearLive.style.display = 'none';
-                if (discoverYearWrapLive) {
-                    discoverYearWrapLive.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
-                    discoverYearWrapLive.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
-                    discoverYearWrapLive.style.borderColor = 'transparent';
-                }
                 currentDiscoverYear = 'all'; 
-                
                 loadDiscoverTab(pill.dataset.endpoint, false, 1);
             }
         }
     };
+
     const catsContainer = document.getElementById('discover-categories');
     if (catsContainer) catsContainer.addEventListener('click', handlePillClick);
     const genresContainer = document.getElementById('discover-genres');
     if (genresContainer) genresContainer.addEventListener('click', handlePillClick);
 
+    // 2. LOGIKA POLA ROCZNIKA
     if (discoverYearInputLive) {
         discoverYearInputLive.addEventListener('focus', () => {
             if (discoverYearWrapLive) {
                 discoverYearWrapLive.style.background = 'var(--card-color)';
-                discoverYearWrapLive.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 4px color-mix(in srgb, var(--primary-color) 15%, transparent)';
-                discoverYearWrapLive.style.borderColor = 'var(--primary-color)';
+                discoverYearWrapLive.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent)';
             }
         });
         discoverYearInputLive.addEventListener('blur', () => {
             if (discoverYearWrapLive) {
                 discoverYearWrapLive.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
                 discoverYearWrapLive.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
-                discoverYearWrapLive.style.borderColor = 'transparent';
             }
         });
 
@@ -1047,6 +1056,14 @@ function setupEventListeners() {
 
             if (val.length === 4 || val.length === 0) {
                 currentDiscoverYear = val.length === 4 ? val : 'all';
+                
+                // Szukaj z keywords
+                if (keywordInput && keywordInput.dataset.activeKeywordId) {
+                    const mediaType = keywordToggleBtn.dataset.type;
+                    loadDiscoverTab(`keyword_${keywordInput.dataset.activeKeywordId}`, false, 1, mediaType);
+                    return;
+                }
+                // Szukaj z gatunkami
                 const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
                 if (activeCatPill && activeCatPill.dataset.genre) loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
             }
@@ -1059,19 +1076,123 @@ function setupEventListeners() {
                 e.stopPropagation();
                 discoverYearInputLive.value = '';
                 discoverYearClearLive.style.display = 'none';
-                if (discoverYearWrapLive) {
-                    discoverYearWrapLive.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
-                    discoverYearWrapLive.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
-                    discoverYearWrapLive.style.borderColor = 'transparent';
-                }
                 currentDiscoverYear = 'all';
+
+                if (keywordInput && keywordInput.dataset.activeKeywordId) {
+                    loadDiscoverTab(`keyword_${keywordInput.dataset.activeKeywordId}`, false, 1, keywordToggleBtn.dataset.type);
+                    return;
+                }
                 const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
                 if (activeCatPill && activeCatPill.dataset.genre) loadDiscoverTab(activeCatPill.dataset.genre, true, 1); 
             });
         }
-        
     }
 
+    // 3. LOGIKA POLA SŁÓW KLUCZOWYCH (Minimalistyczna)
+    if (keywordInput) {
+        keywordInput.addEventListener('focus', () => {
+            if (keywordWrap) {
+                keywordWrap.style.background = 'var(--card-color)';
+                keywordWrap.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1), 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent)';
+            }
+            if (keywordInput.value.length >= 2) keywordResults.style.display = 'block';
+            
+            // Auto-Pokaż pasek (na wypadek gdybyś zjechał z Odkrywaj do góry)
+            if (discoverYearContainer) discoverYearContainer.style.display = 'block';
+        });
+
+        keywordInput.addEventListener('blur', () => {
+            if (keywordWrap) {
+                keywordWrap.style.background = 'color-mix(in srgb, var(--bg-color) 70%, rgba(0,0,0,0.2))';
+                keywordWrap.style.boxShadow = 'inset 0 2px 6px rgba(0,0,0,0.3)';
+            }
+            setTimeout(() => { if (keywordResults) keywordResults.style.display = 'none'; }, 200);
+        });
+
+        const fetchKeywords = debounce(async (e) => {
+            const query = e.target.value.trim();
+            if (keywordClear) keywordClear.style.display = query.length > 0 ? 'flex' : 'none';
+
+            if (query.length < 2) {
+                keywordResults.style.display = 'none';
+                return;
+            }
+
+            const res = await fetchFromTMDB('/search/keyword', { query: query, page: 1 });
+            
+            if (res && res.results && res.results.length > 0) {
+                keywordResults.innerHTML = res.results.slice(0, 6).map(k => 
+                    `<div class="keyword-suggestion" data-id="${k.id}" data-name="${escapeHTML(k.name)}">${escapeHTML(k.name)}</div>`
+                ).join('');
+                keywordResults.style.display = 'block';
+            } else {
+                keywordResults.innerHTML = `<div style="padding: 10px; color: var(--text-secondary); text-align: center; font-size: 0.75rem;">Używaj ang. tagów (np. zombie)</div>`;
+                keywordResults.style.display = 'block';
+            }
+        }, 400);
+
+        keywordInput.addEventListener('input', fetchKeywords);
+
+        // Wybór tagu
+        keywordResults.addEventListener('click', (e) => {
+            const suggestion = e.target.closest('.keyword-suggestion');
+            if (suggestion) {
+                triggerHaptic('light');
+                const kwId = suggestion.dataset.id;
+                
+                keywordInput.value = suggestion.dataset.name;
+                keywordInput.dataset.activeKeywordId = kwId; 
+                keywordResults.style.display = 'none';
+                
+                document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
+                
+                loadDiscoverTab(`keyword_${kwId}`, false, 1, keywordToggleBtn.dataset.type);
+            }
+        });
+
+        // Przełącznik Film/Serial (Minimalistyczny emoji)
+        if (keywordToggleBtn) {
+            keywordToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                triggerHaptic('light');
+                const currentType = keywordToggleBtn.dataset.type;
+                
+                if (currentType === 'movie') {
+                    keywordToggleBtn.dataset.type = 'tv';
+                    keywordToggleBtn.textContent = '📺';
+                } else {
+                    keywordToggleBtn.dataset.type = 'movie';
+                    keywordToggleBtn.textContent = '🎬';
+                }
+
+                // Jeśli mamy aktywny tag, przelicz na nowo!
+                const kwId = keywordInput.dataset.activeKeywordId;
+                if (kwId && keywordInput.value !== '') {
+                    loadDiscoverTab(`keyword_${kwId}`, false, 1, keywordToggleBtn.dataset.type);
+                }
+            });
+        }
+
+        // Czyszczenie
+        if (keywordClear) {
+            keywordClear.addEventListener('click', () => {
+                triggerHaptic('light');
+                keywordInput.value = '';
+                delete keywordInput.dataset.activeKeywordId;
+                keywordClear.style.display = 'none';
+                keywordResults.style.display = 'none';
+                
+                // Brak aktywnego tagu i aktywnego gatunku -> Wróć do trendów
+                const activeCatPill = document.querySelector('.discover-pill.genre-pill.active');
+                if (!activeCatPill) {
+                    if (discoverYearContainer) discoverYearContainer.style.display = 'none';
+                    const trendingPill = document.querySelector('.discover-pill[data-endpoint="trending"]');
+                    if (trendingPill) trendingPill.classList.add('active');
+                    loadDiscoverTab('trending', false, 1);
+                }
+            });
+        }
+    }
    
     // --- LOSOWA KOSTKA (FAB) - INTELIGENTNE GESTY ---
     const fabBtn = document.getElementById('fab-randomize');
@@ -1941,7 +2062,7 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     
     currentDiscoverEndpoint = endpoint;
     currentDiscoverPage = page;
-    currentDiscoverMediaType = mediaType; // Zapisujemy typ na wypadek przewijania w dół!
+    currentDiscoverMediaType = mediaType; 
     
     const gridContainer = document.getElementById('main-discover-grid');
     
@@ -1962,13 +2083,21 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     }
 
     try {
-        if (isGenre) { 
+        // --- NOWOŚĆ: Obsługa Słów Kluczowych (Keywords) ---
+        if (String(endpoint).startsWith('keyword_')) {
             params.sort_by = 'popularity.desc';
-            params.with_genres = endpoint;
-            // TERA SZUKAMY DYNAMICZNIE W FILMIACH LUB SERIALACH!
+            params.with_keywords = endpoint.replace('keyword_', '');
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); 
             typeOver = mediaType; 
         }
+        // Zwykłe gatunki
+        else if (isGenre) { 
+            params.sort_by = 'popularity.desc';
+            params.with_genres = endpoint;
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); 
+            typeOver = mediaType; 
+        }
+        // Kategorie (Trendujące, W kinach itp.)
         else {
             switch(endpoint) {
                 case 'movies_popular': 
@@ -2014,7 +2143,7 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     }
     
     isDiscoverLoading = false;
-     return true;
+    return true;
 }
 
 function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
