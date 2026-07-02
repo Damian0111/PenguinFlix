@@ -3326,6 +3326,8 @@ function showAllResultsModal() {
     });
 }
 
+
+
 function getModalHeaderHTML(item, isAdded) {
     const bgImage = item.backdrop || item.poster || POSTER_PLACEHOLDER;
     const bgFilter = item.backdrop ? '' : 'filter: blur(20px) brightness(0.5); transform: scale(1.1);';
