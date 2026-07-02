@@ -3251,9 +3251,10 @@ function displaySearchResults(results) {
 
 function showAllResultsModal() {
     toggleAppDepthEffect(true);
-    const query = escapeHTML(document.getElementById('searchInput').value); const modalContainer = document.getElementById('detailsModalContainer');
+    const query = escapeHTML(document.getElementById('searchInput').value); 
+    const modalContainer = document.getElementById('detailsModalContainer');
     
-    // Filtrujemy dokładnie tak samo
+    // Filtrujemy wyniki (Filmy, Seriale, Osoby)
     const filtered = fullSearchResults.filter(item => 
         ((item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path) || 
         (item.media_type === 'person' && item.profile_path)
@@ -3265,50 +3266,63 @@ function showAllResultsModal() {
         if (item.media_type === 'person') {
             const profileSrc = IMAGE_BASE_URL.replace('w500', 'w200') + item.profile_path;
             const knownFor = item.known_for ? item.known_for.map(k => k.title || k.name).join(', ') : '';
-            return `<div class="search-item" data-id="${item.id}" data-type="person"><img class="fade-image" src="${profileSrc}" style="border-radius:50%; width:40px; height:40px; object-fit:cover; align-self:center;" onload="this.classList.add('loaded')"><div class="info"><strong>${safeTitle}</strong><span>Osoba • ${escapeHTML(knownFor)}</span></div></div>`;
+            return `<div class="search-item" data-id="${item.id}" data-type="person"><img class="fade-image loaded" src="${profileSrc}" style="border-radius:50%; width:40px; height:40px; object-fit:cover; align-self:center;" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>Osoba • ${escapeHTML(knownFor)}</span></div></div>`;
         } else {
             const posterSrc = IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path;
-            let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
+            let isReleased = false; 
+            if (item.release_date || item.first_air_date) { 
+                const rd = new Date(item.release_date || item.first_air_date); 
+                const td = new Date(); td.setHours(0, 0, 0, 0); 
+                isReleased = rd <= td; 
+            }
             const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
-            return `<div class="search-item" data-id="${item.id}" data-type="${item.media_type}"><img class="fade-image" src="${posterSrc}" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div></div>`;
+            return `<div class="search-item" data-id="${item.id}" data-type="${item.media_type}"><img class="fade-image loaded" src="${posterSrc}" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div></div>`;
         }
     }).join('');
     
-    modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="max-width: 700px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border-color); text-align: center;"><h2 style="margin: 0; font-size: 1.2rem;">Wyniki dla: "${query}"</h2></div><div class="modern-modal-scroll" style="padding: 0;"><div class="all-results-list">${rHTML}</div></div></div></div>`;
-    document.getElementById('searchResults').style.display = 'none';
+    // USYPIAMY TŁO
+    window.pushModalToStack();
+    
+    const modalNode = document.createElement('div');
+    modalNode.style.display = 'contents';
+    modalContainer.appendChild(modalNode);
+    globalModalZIndex += 10;
+    
+    modalNode.innerHTML = `<div class="modal-overlay" style="z-index: ${globalModalZIndex};"><div class="modern-modal-wrapper" style="max-width: 700px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border-color); text-align: center;"><h2 style="margin: 0; font-size: 1.2rem;">Wyniki dla: "${query}"</h2></div><div class="modern-modal-scroll" style="padding: 0;"><div class="all-results-list">${rHTML}</div></div></div></div>`;
 
-    const modal = modalContainer.querySelector('.modal-overlay'); const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
-    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
+    const modal = modalNode.querySelector('.modal-overlay'); 
+    const close = () => { 
+        modalNode.remove(); 
+        window.popModalFromStack(); // Budzimy tło
+    };
+    
+    modal.addEventListener('click', e => { if (e.target === modal) close(); }); 
+    modal.querySelector('.modal-top-close-btn').addEventListener('click', close); 
+    setupSwipeToClose(modal, close);
+    
     modal.querySelector('.all-results-list').addEventListener('click', (e) => {
-        const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
-        if (addBtn) { e.stopPropagation(); handleQuickAddItem(addBtn); close(); } 
+        const addBtn = e.target.closest('.add-item'); 
+        const item = e.target.closest('.search-item');
+        
+        if (addBtn) { 
+            e.stopPropagation(); 
+            handleQuickAddItem(addBtn); 
+        } 
         else if (item) { 
-            if (item.dataset.id && item.dataset.type) { 
-                if (item.dataset.type === 'person') { openActorDetailsModal(item.dataset.id); close(); }
-                else { openPreviewModal(item.dataset.id, item.dataset.type); close(); }
+            const rId = item.dataset.id;
+            const rType = item.dataset.type;
+            
+            if (rId && rType) { 
+                if (rType === 'person') { 
+                    openActorDetailsModal(rId); 
+                } else { 
+                    const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(rId) && i.type === rType);
+                    if (isInLibrary) openDetailsModal(rId, rType);
+                    else openPreviewModal(rId, rType);
+                }
+                // BRAK CLOSE() TUTAJ! DZIĘKI TEMU OKNA SIĘ NAKŁADAJĄ!
             } 
         }
-    });
-}
-
-function showAllResultsModal() {
-    toggleAppDepthEffect(true);
-    const query = escapeHTML(document.getElementById('searchInput').value); const modalContainer = document.getElementById('detailsModalContainer');
-    const filtered = fullSearchResults.filter(item => (item.media_type === 'movie' || item.media_type === 'tv') && item.poster_path);
-    const rHTML = filtered.map(item => {
-        const safeTitle = escapeHTML(item.title || item.name); const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w200') + item.poster_path : POSTER_PLACEHOLDER;
-        let isReleased = false; if (item.release_date || item.first_air_date) { const rd = new Date(item.release_date || item.first_air_date); const td = new Date(); td.setHours(0, 0, 0, 0); isReleased = rd <= td; }
-        const wBtn = isReleased ? `<button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="watched" title="Obejrzane"><svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.09,8.59L17.5,10L11,16.5Z"/></svg></button>` : ``;
-        return `<div class="search-item" data-id="${item.id}" data-type="${item.media_type}"><img class="fade-image" src="${posterSrc}" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';"><div class="info"><strong>${safeTitle}</strong><span>${((item.release_date || item.first_air_date) || 'Brak daty').substring(0, 4)}</span></div><div class="actions"><button class="icon-button add-item" data-id="${item.id}" data-type="${item.media_type}" data-list="toWatch"><svg viewBox="0 0 24 24"><path d="M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17M11,14H9V12H11V14M15,14H13V12H15V14M11,10H9V8H11V10M15,10H13V8H15V10Z"/></svg></button>${wBtn}</div></div>`;
-    }).join('');
-    modalContainer.innerHTML = `<div class="modal-overlay"><div class="modern-modal-wrapper" style="max-width: 700px;"><div class="modal-drag-handle"></div><button class="modal-top-close-btn" title="Zamknij">${ICONS.close}</button><div style="padding: 24px 24px 16px; border-bottom: 1px solid var(--border-color); text-align: center;"><h2 style="margin: 0; font-size: 1.2rem;">Wyniki dla: "${query}"</h2></div><div class="modern-modal-scroll" style="padding: 0;"><div class="all-results-list">${rHTML}</div></div></div></div>`;
-    document.getElementById('searchResults').style.display = 'none';
-
-    const modal = modalContainer.querySelector('.modal-overlay'); const close = () => { modalContainer.innerHTML = ''; toggleAppDepthEffect(false); };
-    modal.addEventListener('click', e => { if (e.target === modal) close(); }); modal.querySelector('.modal-top-close-btn').addEventListener('click', close); setupSwipeToClose(modal, close);
-    modal.querySelector('.all-results-list').addEventListener('click', (e) => {
-        const addBtn = e.target.closest('.add-item'); const item = e.target.closest('.search-item');
-        if (addBtn) { e.stopPropagation(); handleQuickAddItem(addBtn); close(); } else if (item) { if (item.dataset.id) { openPreviewModal(item.dataset.id, item.dataset.type); close(); } }
     });
 }
 
