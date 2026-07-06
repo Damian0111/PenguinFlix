@@ -8470,7 +8470,7 @@ function renderSmartHub(container) {
         .filter(i => i.rating >= 4)
         .sort((a, b) => b.rating - a.rating);
 
-    // 2. Przełącznik ląduje na samej górze, sterując CAŁYM hubem
+    // 2. Przełącznik na górze
     const toggleHTML = `
         <div class="hub-animated-item" style="display: flex; justify-content: center; margin: 10px 20px 24px; animation-delay: 0s;">
             <div class="segmented-control" style="width: 100%; max-width: 320px; margin: 0;">
@@ -8493,18 +8493,15 @@ function renderSmartHub(container) {
             </div>`;
         }).join('');
 
+        // NOWY, MINIMALISTYCZNY PRZYCISK LOSOWANIA
         topSectionHTML = `
-            <div class="hub-animated-item" style="animation-delay: 0.1s;">
-                <div class="premium-random-btn" id="hub-random-btn" style="margin: 0 20px 24px;">
-                    <div style="width: 44px; height: 44px; background: color-mix(in srgb, var(--primary-color) 20%, transparent); color: var(--primary-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><circle cx="15.5" cy="15.5" r="1.5"></circle></svg>
-                    </div>
-                    <div style="flex-grow: 1; display: flex; flex-direction: column;">
-                        <span style="font-size:1.05rem; font-weight:800; color:var(--text-color);">Zaskocz mnie</span>
-                        <span style="font-size:0.8rem; color:var(--text-secondary);">Losuj na bazie moich ocen</span>
-                    </div>
-                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                </div>
+            <div class="hub-animated-item" style="animation-delay: 0.1s; display: flex; justify-content: center; margin-bottom: 24px;">
+                <button id="hub-random-btn" class="compact-random-btn">
+                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z"></path>
+                    </svg>
+                    Zaskocz mnie czymś dobrym
+                </button>
             </div>
             
             <div class="hub-animated-item" style="animation-delay: 0.15s; margin-bottom: 24px;">
@@ -8522,13 +8519,13 @@ function renderSmartHub(container) {
         </div>`;
     }
 
-    // LISTA PLAYLIST
+    // LISTA PLAYLIST (Ikona Rakiety dla Sci-Fi)
     const playlists = [
         { id: 'smart_mood_gems', title: 'Ukryte Perełki', desc: 'Wysoko oceniane, mało popularne', color: '#0ea5e9', icon: '<path d="M6 3h12l4 6-10 13L2 9Z"></path>' },
         { id: 'smart_mood_mindfuck', title: 'Zawiła Intryga', desc: 'Plot twisty i thrillery psychologiczne', color: '#8b5cf6', icon: '<polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline>' },
         { id: 'smart_mood_crime', title: 'Zbrodnia i Tajemnica', desc: 'Kryminały i detektywi w akcji', color: '#eab308', icon: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>' },
         { id: 'smart_mood_chill', title: 'Kocyk i Chill', desc: 'Lekkie kino na spokojny wieczór', color: '#f97316', icon: '<path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line>' },
-        { id: 'smart_mood_scifi', title: 'Wizje Przyszłości', desc: 'Cyberpunk, dystopia i kosmos', color: '#22c55e', icon: '<path d="M12 2a10 10 0 0 0-10 10c0 4.4 2.8 8.1 6.8 9.5a1 1 0 0 0 1.2-1v-2c0-1-.3-1.6-.7-1.9-2.6-.5-3.1-1.3-3.1-1.3-.4-1.2-1.1-1.5-1.1-1.5-1-.6.1-.6.1-.6 1.1.1 1.7 1.1 1.7 1.1 1 1.6 2.5 1.2 3.1.9.1-.7.4-1.2.7-1.5-2.2-.2-4.5-1.1-4.5-4.8 0-1.1.4-2 1-2.7-.1-.2-.4-1.3.1-2.6 0 0 .8-.3 2.8 1.1a10 10 0 0 1 5 0c2-1.4 2.8-1.1 2.8-1.1.5 1.3.2 2.4.1 2.6.6.7 1 1.6 1 2.7 0 3.7-2.3 4.6-4.5 4.8.4.3.7.9.7 1.9v2.8c0 .6.8 1 1.2 1A10 10 0 0 0 12 2z"></path>' },
+        { id: 'smart_mood_scifi', title: 'Wizje Przyszłości', desc: 'Cyberpunk, dystopia i kosmos', color: '#22c55e', icon: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>' },
         { id: 'smart_mood_horror', title: 'Mocne Nerwy', desc: 'Horrory i kino grozy', color: '#ef4444', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>' }
     ];
 
@@ -8555,8 +8552,6 @@ function renderSmartHub(container) {
     container.innerHTML = `<div style="grid-column: 1/-1; padding-top: 10px; width: 100%; overflow: hidden;">${toggleHTML}${topSectionHTML}${playlistsHTML}</div>`;
 
     // --- PODPINANIE EVENTÓW ---
-
-    // 1. Zdarzenia przełącznika na samej górze
     const toggleMovieBtn = container.querySelector('#hub-main-toggle-movie');
     const toggleTvBtn = container.querySelector('#hub-main-toggle-tv');
 
@@ -8565,19 +8560,18 @@ function renderSmartHub(container) {
             if (currentDiscoverMediaType !== 'movie') {
                 triggerHaptic('light');
                 currentDiscoverMediaType = 'movie';
-                renderSmartHub(container); // PRZERYSOWUJE CAŁY HUB
+                renderSmartHub(container);
             }
         });
         toggleTvBtn.addEventListener('click', () => {
             if (currentDiscoverMediaType !== 'tv') {
                 triggerHaptic('light');
                 currentDiscoverMediaType = 'tv';
-                renderSmartHub(container); // PRZERYSOWUJE CAŁY HUB
+                renderSmartHub(container);
             }
         });
     }
 
-    // 2. Reszta zdarzeń (DODANO czwarty argument "currentDiscoverMediaType")
     const randomBtn = container.querySelector('#hub-random-btn');
     if (randomBtn) {
         randomBtn.addEventListener('click', () => {
