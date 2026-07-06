@@ -2066,6 +2066,13 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     
     const gridContainer = document.getElementById('main-discover-grid');
     
+    // 1. OTWARCIE HUBU "DLA CIEBIE"
+    if (endpoint === 'smart_hub') {
+        renderSmartHub(gridContainer);
+        isDiscoverLoading = false;
+        return true;
+    }
+
     if (page === 1) {
         gridContainer.innerHTML = `<div style="text-align:center; padding: 40px 0; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Ładowanie...</div>`;
     } else {
@@ -2075,7 +2082,8 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     }
 
     let res, typeOver = null;
-    let params = { page: page };
+    let params = { page: page, language: 'pl-PL' };
+    let isSmartRecs = false; // Mówi rendererowi, by wyświetlił baner Powrotu
 
     if (currentDiscoverYear && currentDiscoverYear !== 'all') {
         params.primary_release_year = currentDiscoverYear; 
@@ -2083,63 +2091,87 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     }
 
     try {
-        // --- NOWOŚĆ: Obsługa Słów Kluczowych (Keywords) ---
-        if (String(endpoint).startsWith('keyword_')) {
-            params.sort_by = 'popularity.desc';
-            params.with_keywords = endpoint.replace('keyword_', '');
-            res = await fetchFromTMDB(`/discover/${mediaType}`, params); 
-            typeOver = mediaType; 
+        // 2. OBSŁUGA ZAPYTAŃ Z HUBU (Klimatyczne kolekcje i rekomendacje)
+        if (String(endpoint).startsWith('smart_similar_')) {
+            const parts = endpoint.split('_');
+            const targetType = parts[2]; const targetId = parts[3];
+            res = await fetchFromTMDB(`/${targetType}/${targetId}/recommendations`, params);
+            if (!res || res.results.length === 0) res = await fetchFromTMDB(`/${targetType}/${targetId}/similar`, params);
+            typeOver = targetType; isSmartRecs = true;
         }
-        // Zwykłe gatunki
+        else if (endpoint === 'smart_mood_gems') {
+            params.sort_by = 'vote_average.desc'; 
+            params['vote_count.gte'] = mediaType === 'tv' ? 50 : 100; // Seriale z natury mają mniej ocen na TMDB
+            params['vote_count.lte'] = 1500; 
+            params['vote_average.gte'] = 7.0;
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
+        }
+        else if (endpoint === 'smart_mood_mindfuck') {
+            params.sort_by = 'popularity.desc'; 
+            // Używamy LUB (|). Szukamy w Tajemnicy, Sci-Fi lub Thrillerze
+            params.with_genres = mediaType === 'tv' ? '9648|10765|18' : '53|9648|878'; 
+            // Słowa kluczowe: mind-bending LUB plot twist LUB psychologiczny LUB nieliniowa linia czasu
+            params.with_keywords = '3205|10078|9714|24526'; 
+            params['vote_count.gte'] = 30; // Zabezpieczenie przed amatorskimi produkcjami
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
+        }
+        else if (endpoint === 'smart_mood_chill') {
+            params.sort_by = 'popularity.desc'; 
+            params.with_genres = mediaType === 'tv' ? '35' : '35|10749'; // Komedia LUB Romans
+            params['vote_count.gte'] = 100;
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
+        }
+        else if (endpoint === 'smart_mood_scifi') {
+            params.sort_by = 'popularity.desc'; 
+            params.with_genres = mediaType === 'tv' ? '10765' : '878'; 
+            params.with_keywords = '4565|9882|161176'; // Dystopia LUB Kosmos LUB Kosmici
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
+        }
+        else if (endpoint === 'smart_mood_crime') {
+            params.sort_by = 'popularity.desc'; 
+            params.with_genres = mediaType === 'tv' ? '80|9648' : '80|9648|53'; // Kryminał LUB Tajemnica LUB Thriller
+            params['vote_count.gte'] = 100;
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
+        }
+        else if (endpoint === 'smart_mood_horror') {
+            params.sort_by = 'popularity.desc'; 
+            if (mediaType === 'tv') {
+                // Poszerzono kody dla seriali: Nadprzyrodzone, Potwory, Duchy itp.
+                params.with_keywords = '3358|9706|3248|4350|12377|170362'; 
+            } else {
+                params.with_genres = '27'; // Filmy mają dedykowany mocny gatunek Horror
+            }
+            params['vote_average.gte'] = 5.5; // Lekko obniżone, horrory często mają zaniżane oceny
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
+        }
+        // 3. STANDARDOWE FILTRY GATUNKÓW
         else if (isGenre) { 
-            params.sort_by = 'popularity.desc';
-            params.with_genres = endpoint;
-            res = await fetchFromTMDB(`/discover/${mediaType}`, params); 
-            typeOver = mediaType; 
+            params.sort_by = 'popularity.desc'; params.with_genres = endpoint;
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; 
         }
-        // Kategorie (Trendujące, W kinach itp.)
         else {
             switch(endpoint) {
-                case 'movies_popular': 
-                    params.region = 'PL'; params.sort_by = 'popularity.desc';
-                    res = await fetchFromTMDB('/discover/movie', params); 
-                    typeOver = 'movie'; 
-                    break;
-                case 'series_popular': 
-                    params.sort_by = 'popularity.desc';
-                    res = await fetchFromTMDB('/discover/tv', params); 
-                    typeOver = 'tv'; 
-                    break;
-                case 'in_theaters': 
-                    params.region = 'PL'; 
-                    res = await fetchFromTMDB('/movie/now_playing', params); 
-                    typeOver = 'movie'; 
-                    break;
-                case 'top_rated': 
-                    params.region = 'PL'; params.sort_by = 'vote_average.desc'; params['vote_count.gte'] = 200;
-                    res = await fetchFromTMDB('/discover/movie', params); 
-                    typeOver = 'movie'; 
-                    break;
-                default: 
-                    res = await fetchFromTMDB(`/trending/all/week`, {page: page}); 
-                    break;
+                case 'movies_popular': params.region = 'PL'; params.sort_by = 'popularity.desc'; res = await fetchFromTMDB('/discover/movie', params); typeOver = 'movie'; break;
+                case 'series_popular': params.sort_by = 'popularity.desc'; res = await fetchFromTMDB('/discover/tv', params); typeOver = 'tv'; break;
+                case 'in_theaters': params.region = 'PL'; res = await fetchFromTMDB('/movie/now_playing', params); typeOver = 'movie'; break;
+                case 'top_rated': params.region = 'PL'; params.sort_by = 'vote_average.desc'; params['vote_count.gte'] = 200; res = await fetchFromTMDB('/discover/movie', params); typeOver = 'movie'; break;
+                default: res = await fetchFromTMDB(`/trending/all/week`, {page: page}); break;
             }
         }
 
-        const loader = document.getElementById('discover-loading-more');
-        if (loader) loader.remove();
+        const loader = document.getElementById('discover-loading-more'); if (loader) loader.remove();
 
         if (res && res.results) {
             let results = res.results.filter(i => i.poster_path);
             if(typeOver) results.forEach(i => i.media_type = typeOver); 
             else results = results.filter(i => i.media_type === 'movie' || i.media_type === 'tv');
 
-            renderDiscoverGridHTML(results, gridContainer, page, isGenre);
+            renderDiscoverGridHTML(results, gridContainer, page, isGenre, isSmartRecs);
         } else if (page === 1) { 
-            gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Brak wyników.</div>`; 
+            gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1; padding: 40px 0;">Brak wyników.</div>`; 
         }
-    } catch { 
-        if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Sprawdź połączenie sieciowe.</div>`; 
+    } catch (e) { 
+        if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--primary-color); width:100%; grid-column: 1 / -1; padding: 40px 0;">Błąd połączenia z siecią.</div>`; 
     }
     
     isDiscoverLoading = false;
@@ -3844,6 +3876,13 @@ async function openDetailsModal(id, type) {
             triggerHaptic('light'); noteWrapper.classList.toggle('active');
             if (noteWrapper.classList.contains('active')) noteTextarea.focus();
         });
+                noteTextarea.addEventListener('focus', () => {
+            const scrollArea = modalNode.querySelector('.modern-modal-scroll');
+            if (scrollArea) {
+                scrollArea.style.paddingBottom = '60vh'; 
+                setTimeout(() => noteTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+            }
+        });
         noteTextarea.addEventListener('blur', async (e) => {
             const newVal = e.target.value.trim();
             if (item.privateNote !== newVal) { item.privateNote = newVal; await saveData(); if (newVal !== '') { noteBtn.classList.add('note-btn-active'); } else { noteBtn.classList.remove('note-btn-active'); noteWrapper.classList.remove('active'); } }
@@ -3865,7 +3904,34 @@ async function openDetailsModal(id, type) {
     const shareBtn = modalNode.querySelector('#modal-share-btn');
     if(shareBtn) { shareBtn.addEventListener('click', (e) => { handleNativeShare(decodeURIComponent(e.currentTarget.dataset.title || ''), e.currentTarget.dataset.poster, e.currentTarget.dataset.year, e.currentTarget.dataset.rating, decodeURIComponent(e.currentTarget.dataset.overview || '')); }); }
 
-    if (isWatched) { const rTx = modalNode.querySelector('#reviewText'); if (rTx) rTx.value = item.review || ''; }
+       if (isWatched) {
+        const rTx = modalNode.querySelector('#reviewText'); 
+        if (rTx) {
+            rTx.value = item.review || '';
+            
+            // --- NAPRAWA: ZASŁANIANIE PRZEZ KLAWIATURĘ ---
+            rTx.addEventListener('focus', () => {
+                const scrollArea = modalNode.querySelector('.modern-modal-scroll');
+                if (scrollArea) {
+                    // Dajemy duży zapas miejsca na dole, by pole mogło uciec przed klawiaturą
+                    scrollArea.style.paddingBottom = '60vh'; 
+                    
+                    // Czekamy 300ms, aż klawiatura systemowa fizycznie wyjedzie na ekran
+                    setTimeout(() => {
+                        rTx.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 300); 
+                }
+            });
+
+            rTx.addEventListener('blur', () => {
+                const scrollArea = modalNode.querySelector('.modern-modal-scroll');
+                if (scrollArea) {
+                    // Klawiatura chowa się -> zabieramy sztuczny zapas miejsca
+                    scrollArea.style.paddingBottom = ''; 
+                }
+            });
+        }
+    }
     const fC = modalNode.querySelector('#hero-fav-container');
     if (fC) {
         fC.innerHTML = `<button id="modal-favorite-btn" class="hero-fav-btn ${item.isFavorite ? 'active' : ''}">${ICONS.star}</button>`;
@@ -8394,4 +8460,222 @@ async function updateActorProgressInModal(wrapperElement = null) {
     if (countEl) countEl.textContent = watchedCount;
     if (textEl) textEl.textContent = levelText;
     if (barEl) barEl.style.width = `${progressPct}%`;
+}
+// --- KREATOR WIDOKU HUBU (Kaskadowe animacje) ---
+function renderSmartHub(container) {
+    // 1. Zależnie od wybranego przełącznika, bierzemy tylko filmy ALBO tylko seriale
+    const sourceData = currentDiscoverMediaType === 'movie' ? (data.moviesWatched || []) : (data.seriesWatched || []);
+    
+    const favorites = [...sourceData]
+        .filter(i => i.rating >= 4)
+        .sort((a, b) => b.rating - a.rating);
+
+    // 2. Przełącznik ląduje na samej górze, sterując CAŁYM hubem
+    const toggleHTML = `
+        <div class="hub-animated-item" style="display: flex; justify-content: center; margin: 10px 20px 24px; animation-delay: 0s;">
+            <div class="segmented-control" style="width: 100%; max-width: 320px; margin: 0;">
+                <button class="seg-btn ${currentDiscoverMediaType === 'movie' ? 'active' : ''}" id="hub-main-toggle-movie">🎬 Filmy</button>
+                <button class="seg-btn ${currentDiscoverMediaType === 'tv' ? 'active' : ''}" id="hub-main-toggle-tv">📺 Seriale</button>
+            </div>
+        </div>
+    `;
+
+    let topSectionHTML = '';
+
+    if (favorites.length > 0) {
+        const itemsHTML = favorites.slice(0, 15).map(item => {
+            const pSrc = item.poster ? item.poster.replace('w500', 'w154') : POSTER_PLACEHOLDER;
+            return `
+            <div class="recommendation-item smart-pick-btn" data-id="${item.id}" data-type="${item.type}" data-title="${escapeHTML(item.title)}" style="cursor:pointer;">
+                <img src="${pSrc}" alt="Okładka" onerror="this.src='${POSTER_PLACEHOLDER}';">
+                <strong style="margin-top:6px;">${escapeHTML(item.title)}</strong>
+                <span style="font-size:0.7rem; color:var(--warning-color); font-weight:800;">⭐ ${item.rating}</span>
+            </div>`;
+        }).join('');
+
+        topSectionHTML = `
+            <div class="hub-animated-item" style="animation-delay: 0.1s;">
+                <div class="premium-random-btn" id="hub-random-btn" style="margin: 0 20px 24px;">
+                    <div style="width: 44px; height: 44px; background: color-mix(in srgb, var(--primary-color) 20%, transparent); color: var(--primary-color); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><circle cx="15.5" cy="15.5" r="1.5"></circle></svg>
+                    </div>
+                    <div style="flex-grow: 1; display: flex; flex-direction: column;">
+                        <span style="font-size:1.05rem; font-weight:800; color:var(--text-color);">Zaskocz mnie</span>
+                        <span style="font-size:0.8rem; color:var(--text-secondary);">Losuj na bazie moich ocen</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px; stroke:var(--text-secondary); fill:none; stroke-width:2.5;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </div>
+            
+            <div class="hub-animated-item" style="animation-delay: 0.15s; margin-bottom: 24px;">
+                <div style="padding: 0 20px; margin-bottom: 12px; font-size: 0.8rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Zacznij od ulubionych:</div>
+                <div class="hub-scroller" style="padding: 0 20px;">
+                    ${itemsHTML}
+                </div>
+            </div>
+        `;
+    } else {
+        const txtLabel = currentDiscoverMediaType === 'movie' ? 'filmów' : 'seriali';
+        topSectionHTML = `
+        <div class="hub-animated-item" style="animation-delay: 0.1s; padding: 20px; text-align:center; color: var(--text-secondary); font-size: 0.85rem; background: var(--card-color); border-radius: var(--radius-md); margin: 0 20px 24px;">
+            Oceń kilka ${txtLabel} na 4-5 gwiazdek w "Obejrzanych", aby odblokować osobiste rekomendacje.
+        </div>`;
+    }
+
+    // LISTA PLAYLIST
+    const playlists = [
+        { id: 'smart_mood_gems', title: 'Ukryte Perełki', desc: 'Wysoko oceniane, mało popularne', color: '#0ea5e9', icon: '<path d="M6 3h12l4 6-10 13L2 9Z"></path>' },
+        { id: 'smart_mood_mindfuck', title: 'Zawiła Intryga', desc: 'Plot twisty i thrillery psychologiczne', color: '#8b5cf6', icon: '<polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline>' },
+        { id: 'smart_mood_crime', title: 'Zbrodnia i Tajemnica', desc: 'Kryminały i detektywi w akcji', color: '#eab308', icon: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>' },
+        { id: 'smart_mood_chill', title: 'Kocyk i Chill', desc: 'Lekkie kino na spokojny wieczór', color: '#f97316', icon: '<path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line>' },
+        { id: 'smart_mood_scifi', title: 'Wizje Przyszłości', desc: 'Cyberpunk, dystopia i kosmos', color: '#22c55e', icon: '<path d="M12 2a10 10 0 0 0-10 10c0 4.4 2.8 8.1 6.8 9.5a1 1 0 0 0 1.2-1v-2c0-1-.3-1.6-.7-1.9-2.6-.5-3.1-1.3-3.1-1.3-.4-1.2-1.1-1.5-1.1-1.5-1-.6.1-.6.1-.6 1.1.1 1.7 1.1 1.7 1.1 1 1.6 2.5 1.2 3.1.9.1-.7.4-1.2.7-1.5-2.2-.2-4.5-1.1-4.5-4.8 0-1.1.4-2 1-2.7-.1-.2-.4-1.3.1-2.6 0 0 .8-.3 2.8 1.1a10 10 0 0 1 5 0c2-1.4 2.8-1.1 2.8-1.1.5 1.3.2 2.4.1 2.6.6.7 1 1.6 1 2.7 0 3.7-2.3 4.6-4.5 4.8.4.3.7.9.7 1.9v2.8c0 .6.8 1 1.2 1A10 10 0 0 0 12 2z"></path>' },
+        { id: 'smart_mood_horror', title: 'Mocne Nerwy', desc: 'Horrory i kino grozy', color: '#ef4444', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>' }
+    ];
+
+    let delay = 0.2;
+    const playlistsHTML = `
+        <div class="hub-animated-item" style="animation-delay: ${delay}s; padding: 0 20px; margin-bottom: 12px; font-size: 0.8rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Klimatyczne Kolekcje</div>
+        <div class="premium-playlists-container">
+            ${playlists.map(p => {
+                delay += 0.05;
+                return `
+                <div class="premium-playlist-card hub-animated-item" data-endpoint="${p.id}" style="animation-delay: ${delay}s;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: color-mix(in srgb, ${p.color} 15%, transparent); color: ${p.color};">
+                        <svg viewBox="0 0 24 24" style="width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;">${p.icon}</svg>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-color);">${p.title}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${p.desc}</span>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
+
+    container.innerHTML = `<div style="grid-column: 1/-1; padding-top: 10px; width: 100%; overflow: hidden;">${toggleHTML}${topSectionHTML}${playlistsHTML}</div>`;
+
+    // --- PODPINANIE EVENTÓW ---
+
+    // 1. Zdarzenia przełącznika na samej górze
+    const toggleMovieBtn = container.querySelector('#hub-main-toggle-movie');
+    const toggleTvBtn = container.querySelector('#hub-main-toggle-tv');
+
+    if (toggleMovieBtn && toggleTvBtn) {
+        toggleMovieBtn.addEventListener('click', () => {
+            if (currentDiscoverMediaType !== 'movie') {
+                triggerHaptic('light');
+                currentDiscoverMediaType = 'movie';
+                renderSmartHub(container); // PRZERYSOWUJE CAŁY HUB
+            }
+        });
+        toggleTvBtn.addEventListener('click', () => {
+            if (currentDiscoverMediaType !== 'tv') {
+                triggerHaptic('light');
+                currentDiscoverMediaType = 'tv';
+                renderSmartHub(container); // PRZERYSOWUJE CAŁY HUB
+            }
+        });
+    }
+
+    // 2. Reszta zdarzeń (DODANO czwarty argument "currentDiscoverMediaType")
+    const randomBtn = container.querySelector('#hub-random-btn');
+    if (randomBtn) {
+        randomBtn.addEventListener('click', () => {
+            triggerHaptic('heavy');
+            const winner = favorites[Math.floor(Math.random() * favorites.length)];
+            window.currentSmartSeedTitle = winner.title;
+            loadDiscoverTab(`smart_similar_${winner.type}_${winner.id}`, false, 1, currentDiscoverMediaType);
+        });
+    }
+
+    container.querySelectorAll('.smart-pick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            triggerHaptic('light');
+            window.currentSmartSeedTitle = btn.dataset.title;
+            loadDiscoverTab(`smart_similar_${btn.dataset.type}_${btn.dataset.id}`, false, 1, currentDiscoverMediaType);
+        });
+    });
+
+    container.querySelectorAll('.premium-playlist-card').forEach(card => {
+        card.addEventListener('click', () => {
+            triggerHaptic('light');
+            const title = card.querySelector('span[style*="font-weight: 800"]').textContent;
+            window.currentSmartSeedTitle = title;
+            loadDiscoverTab(card.dataset.endpoint, false, 1, currentDiscoverMediaType);
+        });
+    });
+}
+// Zmodyfikowany render Gridu (by wyświetlić piękny przycisk Powrotu)
+function renderDiscoverGridHTML(results, gridContainer, page, isGenre, isSmartRecs = false) {
+    if (!results || results.length === 0) { 
+        if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Brak wyników.</div>`; 
+        return; 
+    }
+    
+    let html = '';
+    
+    if (page === 1) {
+        if (isSmartRecs) {
+            let bannerText = window.currentSmartSeedTitle ? `${window.currentSmartSeedTitle}` : "Wyselekcjonowane dla Ciebie";
+            
+            html += `
+            <div class="hub-animated-item" style="grid-column: 1 / -1; margin-bottom: 16px; padding: 0 16px; animation-delay: 0s;">
+                <div style="background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 15%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex-grow: 1; overflow: hidden; padding-right: 12px;">
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Kolekcja:</span>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${bannerText}</h3>
+                    </div>
+                    <!-- ZMIANA: Dodano 'currentDiscoverMediaType' do funkcji powrotu -->
+                    <button onclick="loadDiscoverTab('smart_hub', false, 1, currentDiscoverMediaType)" style="background: var(--card-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0;">← Wróć</button>
+                </div>
+            </div>`;
+        } else {
+            const heroItem = results[0];
+            if (heroItem) {
+                const bgSrc = heroItem.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + heroItem.backdrop_path : (heroItem.poster_path ? IMAGE_BASE_URL + heroItem.poster_path : POSTER_PLACEHOLDER);
+                const safeTitle = escapeHTML(heroItem.title || heroItem.name);
+                html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">W centrum uwagi</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
+                results = results.slice(1);
+            }
+        }
+    }
+
+    const gridItems = results.map((item, index) => {
+        const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w300') + item.poster_path : POSTER_PLACEHOLDER;
+        const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(item.id));
+        const badgeHTML = isAlreadyAdded ? `<div class="discover-badge-unreleased" style="background:var(--success-color);">W kolekcji</div>` : '';
+        const delay = isSmartRecs && page === 1 ? (index % 20) * 0.03 + 0.1 : (index % 20) * 0.03; 
+        
+        return `<div class="discover-item" data-id="${item.id}" data-type="${item.media_type}" title="${escapeHTML(item.title || item.name)}" style="animation: fadeIn 0.4s ease-out ${delay}s both;"><div class="discover-poster-wrapper"><img class="fade-image" src="${posterSrc}" alt="okładka" loading="lazy" decoding="async" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';">${badgeHTML}</div><div class="discover-item-title">${escapeHTML(item.title || item.name)}</div></div>`;
+    }).join('');
+
+    if (page === 1) {
+        gridContainer.innerHTML = html + gridItems;
+        gridContainer.onclick = (e) => { 
+            const item = e.target.closest('.discover-item') || e.target.closest('.discover-hero'); 
+            if (item) {
+                const id = item.dataset.id; const type = item.dataset.type;
+                const isInLibrary = Object.values(data).flat().some(i => String(i.id) === String(id) && i.type === type);
+                if (isInLibrary) openDetailsModal(id, type); 
+                else openPreviewModal(id, type);
+            }
+        };
+    } else {
+        gridContainer.insertAdjacentHTML('beforeend', gridItems);
+    }
+
+    if (discoverObserver) discoverObserver.disconnect();
+    
+    if (results.length >= 15) {
+        gridContainer.insertAdjacentHTML('beforeend', `<div id="discover-sentinel" style="width:100%; height:20px; grid-column: 1 / -1;"></div>`);
+        const sentinel = document.getElementById('discover-sentinel');
+        
+        discoverObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                loadDiscoverTab(currentDiscoverEndpoint, isGenre, currentDiscoverPage + 1, currentDiscoverMediaType);
+            }
+        }, { rootMargin: "400px" });
+        
+        discoverObserver.observe(sentinel);
+    }
 }
