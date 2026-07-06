@@ -1,4 +1,4 @@
-const CACHE_NAME = 'penguinflix-cache-v11'; // Wersja v6 wymusi aktualizację
+const CACHE_NAME = 'penguinflix-cache-v12'; // Wersja v6 wymusi aktualizację
 
 // Twarde ścieżki dla GitHub Pages - to naprawia problem ze skrótem!
 const URLS_TO_CACHE = [
