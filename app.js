@@ -1133,42 +1133,50 @@ function setupEventListeners() {
 
         keywordInput.addEventListener('input', fetchKeywords);
 
-        // Wybór tagu
+         // Wybór tagu
         keywordResults.addEventListener('click', (e) => {
             const suggestion = e.target.closest('.keyword-suggestion');
             if (suggestion) {
                 triggerHaptic('light');
                 const kwId = suggestion.dataset.id;
+                const kwName = suggestion.dataset.name;
                 
-                keywordInput.value = suggestion.dataset.name;
+                keywordInput.value = kwName;
                 keywordInput.dataset.activeKeywordId = kwId; 
                 keywordResults.style.display = 'none';
                 
                 document.querySelectorAll('.discover-pill').forEach(p => p.classList.remove('active'));
                 
+                // --- NOWOŚĆ: Ustawienie poprawnego nagłówka przed załadowaniem ---
+                window.currentSmartSeedTitle = `Tag: ${kwName}`;
+                
                 loadDiscoverTab(`keyword_${kwId}`, false, 1, keywordToggleBtn.dataset.type);
             }
         });
 
-        // Przełącznik Film/Serial (Minimalistyczny emoji)
+           // Przełącznik Film/Serial (Minimalistyczny emoji)
         if (keywordToggleBtn) {
             keywordToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 triggerHaptic('light');
                 const currentType = keywordToggleBtn.dataset.type;
+                let newType = 'movie';
                 
                 if (currentType === 'movie') {
                     keywordToggleBtn.dataset.type = 'tv';
                     keywordToggleBtn.textContent = '📺';
+                    newType = 'tv';
                 } else {
                     keywordToggleBtn.dataset.type = 'movie';
                     keywordToggleBtn.textContent = '🎬';
+                    newType = 'movie';
                 }
 
-                // Jeśli mamy aktywny tag, przelicz na nowo!
+                // --- NOWOŚĆ: Przeliczenie z zachowaniem właściwego nagłówka tagu ---
                 const kwId = keywordInput.dataset.activeKeywordId;
                 if (kwId && keywordInput.value !== '') {
-                    loadDiscoverTab(`keyword_${kwId}`, false, 1, keywordToggleBtn.dataset.type);
+                    window.currentSmartSeedTitle = `Tag: ${keywordInput.value}`;
+                    loadDiscoverTab(`keyword_${kwId}`, false, 1, newType);
                 }
             });
         }
@@ -2050,6 +2058,8 @@ async function addItemToList(id, type, list) {
 // 8. ZAKŁADKA ODKRYWAJ I STATYSTYKI
 // ==========================================
 let currentDiscoverPage = 1;
+let lastMainDiscoverEndpoint = 'trending';
+let lastMainDiscoverIsGenre = false;
 let currentDiscoverEndpoint = 'trending';
 let currentDiscoverMediaType = 'movie'; // <-- NOWOŚĆ: Pamięta czy to film czy serial
 let isDiscoverLoading = false;
@@ -2081,6 +2091,12 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
         gridContainer.insertAdjacentHTML('beforeend', `<div id="discover-loading-more" style="text-align:center; padding: 20px 0; color:var(--primary-color); width:100%; grid-column: 1 / -1;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:currentColor;animation:spin 1s linear infinite;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></div>`);
     }
 
+    // --- ZAPAMIĘTYWANIE POPRZEDNIEJ ZAKŁADKI (Trendujące, Popularne, Gatunki itp.) ---
+    if (!endpoint.startsWith('keyword_') && !endpoint.startsWith('smart_similar_') && !endpoint.startsWith('smart_mood_')) {
+        lastMainDiscoverEndpoint = endpoint;
+        lastMainDiscoverIsGenre = isGenre;
+    }
+
     let res, typeOver = null;
     let params = { page: page, language: 'pl-PL' };
     let isSmartRecs = false; // Mówi rendererowi, by wyświetlił baner Powrotu
@@ -2099,49 +2115,54 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
             if (!res || res.results.length === 0) res = await fetchFromTMDB(`/${targetType}/${targetId}/similar`, params);
             typeOver = targetType; isSmartRecs = true;
         }
+        else if (String(endpoint).startsWith('keyword_')) {
+            const kwId = endpoint.split('_')[1];
+            params.sort_by = 'popularity.desc';
+            params.with_keywords = kwId; 
+            res = await fetchFromTMDB(`/discover/${mediaType}`, params); 
+            typeOver = mediaType; 
+            isSmartRecs = true; 
+        }
         else if (endpoint === 'smart_mood_gems') {
             params.sort_by = 'vote_average.desc'; 
-            params['vote_count.gte'] = mediaType === 'tv' ? 50 : 100; // Seriale z natury mają mniej ocen na TMDB
+            params['vote_count.gte'] = mediaType === 'tv' ? 50 : 100;
             params['vote_count.lte'] = 1500; 
             params['vote_average.gte'] = 7.0;
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
         }
         else if (endpoint === 'smart_mood_mindfuck') {
             params.sort_by = 'popularity.desc'; 
-            // Używamy LUB (|). Szukamy w Tajemnicy, Sci-Fi lub Thrillerze
             params.with_genres = mediaType === 'tv' ? '9648|10765|18' : '53|9648|878'; 
-            // Słowa kluczowe: mind-bending LUB plot twist LUB psychologiczny LUB nieliniowa linia czasu
             params.with_keywords = '3205|10078|9714|24526'; 
-            params['vote_count.gte'] = 30; // Zabezpieczenie przed amatorskimi produkcjami
+            params['vote_count.gte'] = 30; 
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
         }
         else if (endpoint === 'smart_mood_chill') {
             params.sort_by = 'popularity.desc'; 
-            params.with_genres = mediaType === 'tv' ? '35' : '35|10749'; // Komedia LUB Romans
+            params.with_genres = mediaType === 'tv' ? '35' : '35|10749'; 
             params['vote_count.gte'] = 100;
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
         }
         else if (endpoint === 'smart_mood_scifi') {
             params.sort_by = 'popularity.desc'; 
             params.with_genres = mediaType === 'tv' ? '10765' : '878'; 
-            params.with_keywords = '4565|9882|161176'; // Dystopia LUB Kosmos LUB Kosmici
+            params.with_keywords = '4565|9882|161176'; 
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
         }
         else if (endpoint === 'smart_mood_crime') {
             params.sort_by = 'popularity.desc'; 
-            params.with_genres = mediaType === 'tv' ? '80|9648' : '80|9648|53'; // Kryminał LUB Tajemnica LUB Thriller
+            params.with_genres = mediaType === 'tv' ? '80|9648' : '80|9648|53'; 
             params['vote_count.gte'] = 100;
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
         }
         else if (endpoint === 'smart_mood_horror') {
             params.sort_by = 'popularity.desc'; 
             if (mediaType === 'tv') {
-                // Poszerzono kody dla seriali: Nadprzyrodzone, Potwory, Duchy itp.
                 params.with_keywords = '3358|9706|3248|4350|12377|170362'; 
             } else {
-                params.with_genres = '27'; // Filmy mają dedykowany mocny gatunek Horror
+                params.with_genres = '27'; 
             }
-            params['vote_average.gte'] = 5.5; // Lekko obniżone, horrory często mają zaniżane oceny
+            params['vote_average.gte'] = 5.5; 
             res = await fetchFromTMDB(`/discover/${mediaType}`, params); typeOver = mediaType; isSmartRecs = true;
         }
         // 3. STANDARDOWE FILTRY GATUNKÓW
@@ -2178,7 +2199,7 @@ async function loadDiscoverTab(endpoint = 'trending', isGenre = false, page = 1,
     return true;
 }
 
-function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
+function renderDiscoverGridHTML(results, gridContainer, page, isGenre, isSmartRecs = false) {
     if (!results || results.length === 0) { 
         if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Brak wyników.</div>`; 
         return; 
@@ -2187,12 +2208,33 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
     let html = '';
     
     if (page === 1) {
-        const heroItem = results[0];
-        if (heroItem) {
-            const bgSrc = heroItem.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + heroItem.backdrop_path : (heroItem.poster_path ? IMAGE_BASE_URL + heroItem.poster_path : POSTER_PLACEHOLDER);
-            const safeTitle = escapeHTML(heroItem.title || heroItem.name);
-            html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">Polecane dla Ciebie</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
-            results = results.slice(1);
+        if (isSmartRecs) {
+            let bannerText = window.currentSmartSeedTitle ? `${window.currentSmartSeedTitle}` : "Wyselekcjonowane dla Ciebie";
+            
+            // --- DYNAMICZNA ETYKIETA I CZYSZCZENIE NAZWY TAGU ---
+            const isKeyword = currentDiscoverEndpoint.startsWith('keyword_');
+            const labelText = isKeyword ? "Słowo kluczowe:" : "Kolekcja:";
+            const cleanTitle = isKeyword ? bannerText.replace('Tag: ', '') : bannerText;
+            
+            html += `
+            <div class="hub-animated-item" style="grid-column: 1 / -1; margin-bottom: 16px; padding: 0 16px; animation-delay: 0s;">
+                <div style="background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 15%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex-grow: 1; overflow: hidden; padding-right: 12px;">
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">${labelText}</span>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cleanTitle}</h3>
+                    </div>
+                    <!-- --- DYNAMICZNY POWRÓT DO POPRZEDNIEJ ZAKŁADKI --- -->
+                    <button onclick="loadDiscoverTab(lastMainDiscoverEndpoint, lastMainDiscoverIsGenre, 1, currentDiscoverMediaType)" style="background: var(--card-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0;">← Wróć</button>
+                </div>
+            </div>`;
+        } else {
+            const heroItem = results[0];
+            if (heroItem) {
+                const bgSrc = heroItem.backdrop_path ? IMAGE_BASE_URL.replace('w500', 'w780') + heroItem.backdrop_path : (heroItem.poster_path ? IMAGE_BASE_URL + heroItem.poster_path : POSTER_PLACEHOLDER);
+                const safeTitle = escapeHTML(heroItem.title || heroItem.name);
+                html += `<div style="grid-column: 1 / -1;"><div class="discover-hero" data-id="${heroItem.id}" data-type="${heroItem.media_type}"><div class="discover-hero-bg" style="background-image: url('${bgSrc}');"></div><div class="discover-hero-gradient"></div><div class="discover-hero-content"><span class="discover-hero-badge">W centrum uwagi</span><h2 class="discover-hero-title">${safeTitle}</h2><div class="discover-hero-btn"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg> Sprawdź tytuł</div></div></div></div>`;
+                results = results.slice(1);
+            }
         }
     }
 
@@ -2200,7 +2242,7 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
         const posterSrc = item.poster_path ? IMAGE_BASE_URL.replace('w500', 'w300') + item.poster_path : POSTER_PLACEHOLDER;
         const isAlreadyAdded = Object.values(data).flat().some(i => String(i.id) === String(item.id));
         const badgeHTML = isAlreadyAdded ? `<div class="discover-badge-unreleased" style="background:var(--success-color);">W kolekcji</div>` : '';
-        const delay = (index % 20) * 0.03; 
+        const delay = isSmartRecs && page === 1 ? (index % 20) * 0.03 + 0.1 : (index % 20) * 0.03; 
         
         return `<div class="discover-item" data-id="${item.id}" data-type="${item.media_type}" title="${escapeHTML(item.title || item.name)}" style="animation: fadeIn 0.4s ease-out ${delay}s both;"><div class="discover-poster-wrapper"><img class="fade-image" src="${posterSrc}" alt="okładka" loading="lazy" decoding="async" onload="this.classList.add('loaded')" onerror="this.src='${POSTER_PLACEHOLDER}';">${badgeHTML}</div><div class="discover-item-title">${escapeHTML(item.title || item.name)}</div></div>`;
     }).join('');
@@ -2228,7 +2270,6 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre) {
         
         discoverObserver = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting) {
-                // TERA INFINITE SCROLL PAMIĘTA CZY SZUKA FILMÓW CZY SERIALI
                 loadDiscoverTab(currentDiscoverEndpoint, isGenre, currentDiscoverPage + 1, currentDiscoverMediaType);
             }
         }, { rootMargin: "400px" });
@@ -8599,7 +8640,6 @@ function renderSmartHub(container) {
         });
     });
 }
-// Zmodyfikowany render Gridu (by wyświetlić piękny przycisk Powrotu)
 function renderDiscoverGridHTML(results, gridContainer, page, isGenre, isSmartRecs = false) {
     if (!results || results.length === 0) { 
         if (page === 1) gridContainer.innerHTML = `<div style="text-align:center; color:var(--text-secondary); width:100%; grid-column: 1 / -1;">Brak wyników.</div>`; 
@@ -8612,15 +8652,24 @@ function renderDiscoverGridHTML(results, gridContainer, page, isGenre, isSmartRe
         if (isSmartRecs) {
             let bannerText = window.currentSmartSeedTitle ? `${window.currentSmartSeedTitle}` : "Wyselekcjonowane dla Ciebie";
             
+            // --- DETEKCJA CZY TO SŁOWO KLUCZOWE ---
+            const isKeyword = currentDiscoverEndpoint.startsWith('keyword_');
+            const labelText = isKeyword ? "Słowo kluczowe:" : "Kolekcja:";
+            const cleanTitle = isKeyword ? bannerText.replace('Tag: ', '') : bannerText;
+            
+            // --- USUNIĘCIE PRZYCISKU COFANIA DLA SŁÓW KLUCZOWYCH ---
+            const backButtonHTML = isKeyword 
+                ? '' // Brak przycisku dla wyszukiwarki keywords
+                : `<button onclick="loadDiscoverTab(lastMainDiscoverEndpoint, lastMainDiscoverIsGenre, 1, currentDiscoverMediaType)" style="background: var(--card-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0;">← Wróć</button>`;
+            
             html += `
             <div class="hub-animated-item" style="grid-column: 1 / -1; margin-bottom: 16px; padding: 0 16px; animation-delay: 0s;">
                 <div style="background: linear-gradient(135deg, color-mix(in srgb, var(--primary-color) 15%, transparent), transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent); padding: 16px; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
                     <div style="flex-grow: 1; overflow: hidden; padding-right: 12px;">
-                        <span style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Kolekcja:</span>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${bannerText}</h3>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">${labelText}</span>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cleanTitle}</h3>
                     </div>
-                    <!-- ZMIANA: Dodano 'currentDiscoverMediaType' do funkcji powrotu -->
-                    <button onclick="loadDiscoverTab('smart_hub', false, 1, currentDiscoverMediaType)" style="background: var(--card-color); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0;">← Wróć</button>
+                    ${backButtonHTML}
                 </div>
             </div>`;
         } else {
